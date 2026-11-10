@@ -13,7 +13,7 @@ export class AgentOrchestrator {
  private readonly governance:GovernanceInterceptor;
  constructor(private readonly repository:AgentExecutionRepositoryPort,private readonly contextBuilder:AgentContextBuilderPort,private readonly eventLog:ExecutionEventLogPort,private readonly adapter:AgentAdapterPort,private readonly isolation:GitIsolationPort,private readonly validator:ExecutionValidatorPort,private readonly workspaceRoot:string,private readonly emit:ExecutionEventSink=()=>undefined){this.governance=new GovernanceInterceptor(repository,adapter,(execution,event)=>this.persistAndEmit(execution,event),execution=>this.publishStatus(execution));}
 
- listProfiles(projectId:string){return this.repository.listProfiles(projectId).map(profile=>({id:profile.id,projectId:profile.projectId,roleKey:profile.roleKey,name:profile.name,defaultProviderId:profile.defaultProviderId,providerId:profile.provider.id,providerName:profile.provider.displayName,capabilities:profile.provider.capabilities,defaultModel:profile.models?.default??null,availableModels:profile.models?.available??[]}));}
+ listProfiles(projectId:string){return this.repository.listProfiles(projectId).map(profile=>({id:profile.id,projectId:profile.projectId,roleKey:profile.roleKey,name:profile.name,defaultProviderId:profile.defaultProviderId,providerId:profile.provider.id,providerName:profile.provider.displayName,capabilities:profile.provider.capabilities,defaultModel:profile.models?.default??null,planningModel:profile.models?.planning??null,availableModels:profile.models?.available??[]}));}
  listExecutions(projectId:string){return this.repository.listExecutions(projectId);}
  listEvents(executionId:string){return this.repository.listEvents(executionId);}
 

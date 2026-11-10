@@ -13,7 +13,8 @@ Actualizado: 2026-11-10, rama `feat/claude-code`.
 | 1. Sondeo del CLI y fixtures | **Hecha.** Fixtures en `tests/fixtures/claude/`; sección 2 actualizada. Falta solo el error de límite de uso, que no se puede provocar. |
 | 4. Defectos | **Parcial.** Hechos: endurecimiento del validador (`68e0c2d`), D2 y D3 (`2a90857`), D4 y D5 (`a1c493b`). Pendientes: ver la Fase 4. |
 | 2. `ClaudeCodeAdapter` | **Hecha a nivel del núcleo** (`8a4c3d4` y siguiente). Prueba real el 2026-11-10 con `haiku` sobre una copia del proyecto `todo-app` (TASK-001, repo con `node --test` permitido): worktree aislado, 2 archivos creados, auditoría y `node --test` en verde, `COMPLETED` en 16–20 s, `modelUsed` = `claude-haiku-5-5`, repo principal intacto. La primera prueba mostró que el agente no conocía los comandos permitidos (intentó `npm test \| tail` y fue denegado); ahora el prompt incluye la política de ejecución y en la segunda prueba usó `node --test` sin denegaciones. Pendiente opcional: repetirla desde la ventana de la app. |
-| 3, 5, 6, 7 | Pendientes. |
+| 3. Planificador y D1 | **Implementada, falta la prueba real.** `ClaudeChangeSetPlanner` (`--output-format json --json-schema` con esquema normal, sin herramientas, modelo de planificación por defecto `opus` y selector en Planificar). D1: el sidecar atiende consultas y propuestas en paralelo y serializa solo los comandos que modifican estado; el host Rust asocia respuestas por `id`, no retiene el lock mientras espera, da 330 s a las propuestas (el planificador corta a 300 s) y 60 s al resto, falla al instante si el núcleo muere y guarda el `stderr` en `logs/sidecar.log`. Desviación: no hizo falta convertir la propuesta en comando asíncrono con evento; con la concurrencia ya no bloquea la UI. Pendiente: reinicio automático del sidecar y una propuesta real con Claude. |
+| 5, 6, 7 | Pendientes. |
 
 La verificación del análisis (`docs/ANALISIS_PROYECTO.md`) confirmó D1 a D6 con reproducciones y encontró defectos nuevos. Todos los defectos abiertos están asignados a una fase en la sección 4; el análisis queda como referencia del diagnóstico, no como lista de trabajo.
 
@@ -130,7 +131,7 @@ Comportamiento:
 
 - Nuevo `ClaudeChangeSetPlanner` (`claude -p --output-format json --json-schema`, herramientas deshabilitadas o solo lectura, lectura de `structured_output`, error claro si falta). Extraer `normalizeOperation` a un módulo compartido.
 - **D1 (confirmado):** con un planificador de 75 s, la UI recibe error a los 60 s pero la propuesta se guarda igual, y una consulta enviada a los 2 s responde a los 73 s. Corrección: correlacionar respuestas por `id` en `lib.rs` (mapa de pendientes, sin mantener el mutex durante la espera), atender peticiones del sidecar de forma concurrente, y convertir la propuesta en un comando que responde enseguida y notifica el resultado por evento. Subir el timeout no basta: sigue bloqueando la UI y contradice el criterio de cierre.
-- Registrar el `stderr` del sidecar en un archivo de log y reiniciarlo si muere (hoy se descarta y, si cae, todas las peticiones fallan hasta reiniciar la app).
+- Registrar el `stderr` del sidecar en un archivo de log (hecho: `logs/sidecar.log` en el directorio de datos) y reiniciarlo si muere (pendiente: hoy, si cae, las peticiones fallan enseguida con un mensaje que pide reiniciar la app).
 - Probar que un esquema JSON "normal" funciona; simplificar el actual si es posible. (Confirmado en la Fase 1.)
 - Selector de modelo en la vista Planificar, con el modelo de planificación como valor por defecto.
 

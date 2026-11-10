@@ -7,9 +7,9 @@ import { ChangeSetValidator } from './changeset-validator.js';
 export class ChangeSetPlanningService {
  private readonly validator=new ChangeSetValidator();
  constructor(private readonly projects:ProjectRepositoryPort,private readonly graph:KnowledgeGraphRepositoryPort,private readonly changes:ChangeSetRepositoryPort,private readonly planner:ChangeSetPlannerPort,private readonly applier:ChangeSetApplyPort,private readonly repositoryPath:(projectId:string)=>string|null){}
- async propose(projectId:string,prompt:string,focusEntityId?:string,contextPackage?:string):Promise<ChangeSet>{
+ async propose(projectId:string,prompt:string,focusEntityId?:string,contextPackage?:string,model?:string):Promise<ChangeSet>{
   const project=this.projects.findById(projectId);if(!project)throw new Error('Proyecto no encontrado.');if(!prompt.trim())throw new Error('Escribe qué cambios quieres proponer.');
-  const entities=this.graph.listEntities(projectId),draft=await this.planner.propose({prompt:prompt.trim(),...(contextPackage?{contextPackage}:{}),project:{name:project.props.name,description:project.props.description??null,rules:project.props.rules??[],revision:project.currentRevision},focusEntity:entities.find(e=>e.id===focusEntityId)??null,entities,relationships:this.graph.listRelationships(projectId)});
+  const entities=this.graph.listEntities(projectId),draft=await this.planner.propose({prompt:prompt.trim(),...(contextPackage?{contextPackage}:{}),...(model?{model}:{}),project:{name:project.props.name,description:project.props.description??null,rules:project.props.rules??[],revision:project.currentRevision},focusEntity:entities.find(e=>e.id===focusEntityId)??null,entities,relationships:this.graph.listRelationships(projectId)});
   const changeSet:ChangeSet={id:globalThis.crypto.randomUUID(),projectId,baseGraphRevision:project.currentRevision,originType:'AI_CHAT',title:draft.title,rationale:draft.rationale,status:'PENDING_APPROVAL',operations:draft.operations,validationIssues:[],createdAt:new Date().toISOString()};
   const validation=this.validator.validate(changeSet,project.currentRevision,entities,this.graph.listRelationships(projectId));const result={...changeSet,status:validation.status,validationIssues:validation.issues};this.changes.save(result);return result;
  }

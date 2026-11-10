@@ -23,7 +23,7 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       const config=parseConnectionConfig(row.config_json);
       const available=(config.models?.available??[]).filter((model):model is string=>typeof model==='string');
       const roleDefault=row.role_key==='PLANNER'?config.models?.planning:config.models?.execution;
-      return {...mapProfile(row),provider:mapProvider(row),models:{default:typeof roleDefault==='string'?roleDefault:null,available},connectionConfig:config as Record<string,unknown>};
+      return {...mapProfile(row),provider:mapProvider(row),models:{default:typeof roleDefault==='string'?roleDefault:null,planning:typeof config.models?.planning==='string'?config.models.planning:null,available},connectionConfig:config as Record<string,unknown>};
     });
   }
 

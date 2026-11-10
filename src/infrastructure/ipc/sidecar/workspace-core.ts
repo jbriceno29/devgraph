@@ -10,6 +10,8 @@ import type { ArtifactSyncStatusChangedEvent } from '../../../application/ports/
 import type { CreateArtifactDocumentInput, ArtifactDocumentDto, ArtifactDocumentViewDto } from '../../../shared/contracts/artifact-view.js';
 import { ChangeSetPlanningService } from '../../../application/planning/change-set-planning-service.js';
 import { CodexChangeSetPlanner } from '../../ai/codex-change-set-planner.js';
+import { ClaudeChangeSetPlanner } from '../../ai/claude-change-set-planner.js';
+import type { ChangeSetPlannerPort } from '../../../application/ports/change-set-planning-port.js';
 import { SqliteChangeSetRepository } from '../../persistence/repositories/sqlite-change-set-repository.js';
 import { SqliteChangeSetApplier } from '../../persistence/sqlite/sqlite-change-set-applier.js';
 import { TransactionalMarkdownFileStore } from '../../filesystem/transactional-markdown-file-store.js';
@@ -43,7 +45,14 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  };
  const getPlanning=(projectId:string)=>{
   const workspace=store.openProject(projectId),path=workspace.repositories.findPrimaryForProject(projectId)?.localPath??process.cwd();
-  return new ChangeSetPlanningService(workspace.projects,workspace.graph,new SqliteChangeSetRepository(workspace.database),new CodexChangeSetPlanner(path),new SqliteChangeSetApplier(workspace.database,new TransactionalMarkdownFileStore(),workspace.repositories),id=>store.openProject(id).repositories.findPrimaryForProject(id)?.localPath??null);
+  return new ChangeSetPlanningService(workspace.projects,workspace.graph,new SqliteChangeSetRepository(workspace.database),plannerFor(projectId,workspace.database,path),new SqliteChangeSetApplier(workspace.database,new TransactionalMarkdownFileStore(),workspace.repositories),id=>store.openProject(id).repositories.findPrimaryForProject(id)?.localPath??null);
+ };
+ // The planner follows the wired engine, with the provider's planning model and auth mode.
+ const providerConnection=(projectId:string,database:ConstructorParameters<typeof SqliteAgentExecutionRepository>[0])=>new SqliteAgentExecutionRepository(database,agentAdapter.providerId).listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER');
+ const plannerFor=(projectId:string,database:ConstructorParameters<typeof SqliteAgentExecutionRepository>[0],cwd:string):ChangeSetPlannerPort=>{
+  if(agentAdapter.providerId!=='claude-code')return new CodexChangeSetPlanner(cwd);
+  const profile=providerConnection(projectId,database);
+  return new ClaudeChangeSetPlanner(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription',defaultModel:profile?.models.planning??null});
  };
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
  const getExecutionService=(projectId:string)=>{
@@ -123,7 +132,9 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      const projectId=String(args[0]??''),prompt=String(args[1]??''),focusEntityId=args[2]===undefined?undefined:String(args[2]);
      const snapshotId=args[3]===undefined?undefined:String(args[3]);let contextPackage:string|undefined;
      if(snapshotId){const snapshot=getContextEngine(projectId).getSnapshot(snapshotId);if(snapshot.projectId!==projectId||snapshot.focusEntityId!==focusEntityId)throw new Error('El ContextSnapshot no corresponde al proyecto y foco seleccionados.');const currentRevision=store.openProject(projectId).projects.findById(projectId)!.currentRevision;if(snapshot.graphRevision!==currentRevision)throw new Error('El ContextSnapshot quedó desactualizado; vuelve a preparar el contexto antes de proponer cambios.');contextPackage=renderContextSnapshot(snapshot);}
-     return getPlanning(projectId).propose(projectId,prompt,focusEntityId,contextPackage);
+     const model=typeof args[4]==='string'&&args[4].trim()?args[4].trim():undefined;
+     if(model){const available=providerConnection(projectId,store.openProject(projectId).database)?.models.available??[];if(!available.includes(model))throw new Error(`El modelo ${model} no está disponible para planificar.`);}
+     return getPlanning(projectId).propose(projectId,prompt,focusEntityId,contextPackage,model);
     }
     case 'changeset:edit': return getPlanningForChangeSet(String(args[0]??'')).edit(String(args[0]??''),args[1] as ChangeOperation[]);
     case 'changeset:apply': {

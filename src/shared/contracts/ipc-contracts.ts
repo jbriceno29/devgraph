@@ -17,7 +17,7 @@ export interface WorkspaceIpcCommands {
   'repository:configure': (projectId:string,localPath:string)=>Promise<{projectId:string;localPath:string}>;
   'artifact:create': (input:CreateArtifactDocumentInput)=>Promise<ArtifactDocumentViewDto>;
   'artifact:save': (documentId:string,expectedContentHash:string,content:string)=>Promise<ArtifactDocumentViewDto>;
-  'changeset:propose_from_chat': (projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string)=>Promise<ChangeSetDto>;
+  'changeset:propose_from_chat': (projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string)=>Promise<ChangeSetDto>;
   'changeset:edit': (changeSetId:string,operations:unknown[])=>Promise<ChangeSetDto>;
   'changeset:apply': (changeSetId:string)=>Promise<{changeSet:ChangeSetDto;revision:number}>;
   'changeset:reject': (changeSetId:string)=>Promise<ChangeSetDto>;
@@ -56,7 +56,7 @@ export interface WorkspaceIpcClient {
     configureRepository(projectId:string,localPath:string):Promise<{projectId:string;localPath:string}>;
     createArtifact(input:CreateArtifactDocumentInput):Promise<ArtifactDocumentViewDto>;
     saveArtifact(documentId:string,expectedContentHash:string,content:string):Promise<ArtifactDocumentViewDto>;
-    proposeChanges(projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string):Promise<ChangeSetDto>;
+    proposeChanges(projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string):Promise<ChangeSetDto>;
     editChangeSet(changeSetId:string,operations:unknown[]):Promise<ChangeSetDto>;
     applyChangeSet(changeSetId:string):Promise<{changeSet:ChangeSetDto;revision:number}>;
     rejectChangeSet(changeSetId:string):Promise<ChangeSetDto>;

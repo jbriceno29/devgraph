@@ -72,6 +72,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'project:open': {
      const id=String(args[0]??'');const workspace=store.openProject(id);const project=workspace.projects.findById(id)!;
      await startWatcher(id);
+     getExecutionService(id).reconcileInterrupted(id);
      const graph=new GetGraphViewUseCase(workspace.projects,workspace.graph).execute(id);
      const selectedEntityId=graph.nodes.find(node=>node.type==='PROJECT_ROOT')?.id??graph.nodes[0]?.id??'';
      const loaded:WorkspaceLoadedStateDto={project:summarize(project),graph,selectedEntityId};return loaded;

@@ -27,6 +27,7 @@ export class AgentOrchestrator {
   if(!repositoryRoot||!repositoryId)throw new Error('Configura primero un repositorio Git para este proyecto.');
   const policy=this.repository.getAutonomyPolicy(input.projectId,profile.id);
   if(policy.requireWorktreeIsolation&&!this.adapter.getCapabilities().supportsWorktrees)throw new Error('La política requiere aislamiento, pero el adaptador no declara soporte para worktrees.');
+  this.reconcileInterrupted(input.projectId);
   if(this.repository.listExecutions(input.projectId).some(item=>item.workItemId===workItem.id&&!terminalStatuses.has(item.status)))throw new Error('Esta tarea ya tiene una ejecución activa.');
 
   const now=new Date().toISOString();
@@ -34,12 +35,13 @@ export class AgentOrchestrator {
   this.repository.createExecution(execution);this.publishStatus(execution);
   execution=transitionExecution(execution,'PREPARING_CONTEXT');this.repository.updateExecution(execution);this.publishStatus(execution);
   this.active.add(execution.id);let handedToConsumer=false;
+  let isolated:{workingDirectory:string;branchName:string;baseCommit:string}|null=null;
   try{
-   const isolated=await this.isolation.prepare({projectId:input.projectId,executionId:execution.id,workItemKey:workItem.displayKey,repositoryRoot,workspaceRoot:this.workspaceRoot,requireWorktree:policy.requireWorktreeIsolation});
-   const afterIsolation=this.repository.findExecution(execution.id);if(!afterIsolation||afterIsolation.status!=='PREPARING_CONTEXT')return afterIsolation??execution;
+   isolated=await this.isolation.prepare({projectId:input.projectId,executionId:execution.id,workItemKey:workItem.displayKey,repositoryRoot,workspaceRoot:this.workspaceRoot,requireWorktree:policy.requireWorktreeIsolation});
+   const afterIsolation=this.repository.findExecution(execution.id);if(!afterIsolation||afterIsolation.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterIsolation??execution,repositoryRoot,isolated);
    execution={...execution,initialCommit:isolated.baseCommit,branchOrWorktree:isolated.workingDirectory};this.repository.updateExecution(execution);
    const context=await this.contextBuilder.build({projectId:input.projectId,focusEntityId:workItem.id,repositoryRoot,executionId:execution.id});
-   const afterContext=this.repository.findExecution(execution.id);if(!afterContext||afterContext.status!=='PREPARING_CONTEXT')return afterContext??execution;
+   const afterContext=this.repository.findExecution(execution.id);if(!afterContext||afterContext.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterContext??execution,repositoryRoot,isolated);
    if(!this.adapter.getCapabilities().supportsStreaming)throw new Error('El adaptador seleccionado no soporta eventos en streaming.');
    execution={...execution,contextSnapshotId:context.snapshot.id,startedAt:now};
    execution=transitionExecution(execution,'RUNNING');this.repository.updateExecution(execution);this.publishStatus(execution);
@@ -48,20 +50,41 @@ export class AgentOrchestrator {
    handedToConsumer=true;void this.consume(execution,stream);
    return execution;
   }catch(error){
-   const current=this.repository.findExecution(execution.id);if(!current||terminalStatuses.has(current.status))return current??execution;
+   const current=this.repository.findExecution(execution.id);if(!current||terminalStatuses.has(current.status))return isolated?await this.discardIsolation(current??execution,repositoryRoot,isolated):current??execution;
    const failedEvent:AgentEvent={type:'EXECUTION_FAILED',timestamp:new Date().toISOString(),errorCode:'EXECUTION_PREPARATION_FAILED',errorMessage:error instanceof Error?error.message:String(error),isRecoverable:true};
    await this.persistAndEmit(execution,failedEvent);
-   execution=transitionExecution(execution,'FAILED');execution={...execution,resultSummary:failedEvent.errorMessage,completedAt:new Date().toISOString()};this.repository.updateExecution(execution);this.publishStatus(execution);return execution;
+   execution=transitionExecution(current,'FAILED');execution={...execution,resultSummary:failedEvent.errorMessage,completedAt:new Date().toISOString()};this.repository.updateExecution(execution);this.publishStatus(execution);
+   // The agent never ran, so the worktree holds nothing worth reviewing.
+   return isolated?await this.discardIsolation(execution,repositoryRoot,isolated):execution;
   }finally{if(!handedToConsumer)this.active.delete(execution.id);}
  }
 
  async cancel(executionId:string):Promise<AgentExecution>{
   const execution=this.repository.findExecution(executionId);
   if(!execution)throw new Error('Ejecución no encontrada.');
-  if(!this.active.has(executionId)||terminalStatuses.has(execution.status))throw new Error('La ejecución ya terminó o no está activa.');
+  if(terminalStatuses.has(execution.status))throw new Error('La ejecución ya terminó.');
+  const orphan=!this.active.has(executionId);
+  // Persist CANCELLED before waking the consumer or stopping the engine, so no later write can overwrite it.
+  const updated=transitionExecution(execution,'CANCELLED');let result={...updated,completedAt:new Date().toISOString(),resultSummary:orphan?'Ejecución interrumpida cancelada por el usuario.':'Ejecución cancelada por el usuario.'};this.repository.updateExecution(result);this.publishStatus(result);
+  if(orphan)return result;
   this.governance.cancel(executionId);
-  await this.adapter.cancel(executionId);
-  const updated=transitionExecution(execution,'CANCELLED');const result={...updated,completedAt:new Date().toISOString(),resultSummary:'Ejecución cancelada por el usuario.'};this.repository.updateExecution(result);this.publishStatus(result);return result;
+  try{await this.adapter.cancel(executionId);}
+  catch(error){result={...result,resultSummary:`${result.resultSummary} No se pudo detener el proceso del motor: ${error instanceof Error?error.message:String(error)}`};this.repository.updateExecution(result);}
+  return result;
+ }
+
+ /** Fails every non-terminal execution this process is not running: it was interrupted by a crash or restart. */
+ reconcileInterrupted(projectId:string):AgentExecution[]{
+  const interrupted:AgentExecution[]=[];
+  for(const execution of this.repository.listExecutions(projectId)){
+   if(terminalStatuses.has(execution.status)||this.active.has(execution.id))continue;
+   const errorMessage='Ejecución interrumpida: la aplicación se cerró antes de que terminara. El worktree se conserva para revisión.';
+   const event:AgentEvent={type:'EXECUTION_FAILED',timestamp:new Date().toISOString(),errorCode:'EXECUTION_INTERRUPTED',errorMessage,isRecoverable:true};
+   this.repository.appendEvent(execution.id,event);this.emit('execution:event_received',{executionId:execution.id,event});
+   const failed={...transitionExecution(execution,'FAILED'),resultSummary:errorMessage,completedAt:new Date().toISOString()};
+   this.repository.updateExecution(failed);this.publishStatus(failed);interrupted.push(failed);
+  }
+  return interrupted;
  }
 
  async resolveApproval(executionId:string,requestId:string,decision:ApprovalDecision):Promise<void>{return this.governance.resolve(executionId,requestId,decision);}
@@ -79,21 +102,33 @@ export class AgentOrchestrator {
    const repositoryId=this.repository.getRepositoryId(execution.projectId);if(!repositoryId)throw new Error('No se encontró el repositorio para auditar el diff.');
    const policy=this.repository.getAutonomyPolicy(execution.projectId,execution.profileId);const repositoryRoot=this.repository.getRepositoryRoot(execution.projectId)!;
    const result=await this.validator.validate({projectId:execution.projectId,executionId:execution.id,workingDirectory:execution.branchOrWorktree!,repositoryRoot,repositoryId,initialCommit:execution.initialCommit,policy});
+   // The user may have cancelled while validation ran; never overwrite a terminal status.
+   const latest=this.repository.findExecution(execution.id);if(!latest||latest.status!=='VALIDATING')return;
    const failure=terminal?.type==='EXECUTION_FAILED'?terminal:null;
    const passed=result.passed&&!failure;
    const finalStatus=passed?'COMPLETED':'FAILED';
-   const finished=transitionExecution(validating,finalStatus);
+   const finished=transitionExecution(latest,finalStatus);
    const resultSummary=failure?failure.errorMessage:result.resultSummary;
    const updated={...finished,finalCommit:result.finalCommit,testSummary:result.testSummary,resultSummary,completedAt:new Date().toISOString()};this.repository.updateExecution(updated);this.publishStatus(updated);
   }catch(error){
-   const current=this.repository.findExecution(execution.id);
-   if(current&&!terminalStatuses.has(current.status)){
-    const failed=transitionExecution(current,'FAILED');const result={...failed,resultSummary:error instanceof Error?error.message:String(error),completedAt:new Date().toISOString()};this.repository.updateExecution(result);this.publishStatus(result);
-   }
+   // consume() runs detached; a throw here would be an unhandled rejection that kills the sidecar.
+   // If the record cannot be updated (e.g. the database closed on shutdown), reconcileInterrupted() fixes it on the next open.
+   try{
+    const current=this.repository.findExecution(execution.id);
+    if(current&&!terminalStatuses.has(current.status)){
+     const failed=transitionExecution(current,'FAILED');const result={...failed,resultSummary:error instanceof Error?error.message:String(error),completedAt:new Date().toISOString()};this.repository.updateExecution(result);this.publishStatus(result);
+    }
+   }catch{/* left non-terminal on purpose; see above */}
   }finally{
    this.active.delete(execution.id);
    this.governance.cancel(execution.id);
   }
+ }
+
+ private async discardIsolation(execution:AgentExecution,repositoryRoot:string,isolated:{workingDirectory:string;branchName:string}):Promise<AgentExecution>{
+  try{await this.isolation.discard({repositoryRoot,workspaceRoot:this.workspaceRoot,workingDirectory:isolated.workingDirectory,branchName:isolated.branchName});}catch{return execution;}
+  if(execution.branchOrWorktree===null)return execution;
+  const latest=this.repository.findExecution(execution.id)??execution;const cleaned={...latest,branchOrWorktree:null};this.repository.updateExecution(cleaned);return cleaned;
  }
 
  private async persistAndEmit(execution:AgentExecution,event:AgentEvent):Promise<void>{const record={...this.repository.appendEvent(execution.id,event),event};await this.eventLog.append(execution.projectId,execution.id,record);this.emit('execution:event_received',{executionId:execution.id,event});}

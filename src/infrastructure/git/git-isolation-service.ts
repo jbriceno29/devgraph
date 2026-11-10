@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, realpath } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdir, realpath, rm } from 'node:fs/promises';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import type { GitIsolationPort } from '../../application/ports/agent-execution-port.js';
 
 const execFileAsync=promisify(execFile);
@@ -25,6 +25,19 @@ export class GitIsolationService implements GitIsolationPort {
    throw new Error(`Unable to create isolated Git worktree: ${error instanceof Error?error.message:String(error)}`);
   }
   return {workingDirectory,branchName,baseCommit};
+ }
+
+ async discard(input:{repositoryRoot:string;workspaceRoot:string;workingDirectory:string;branchName:string}):Promise<void> {
+  // Only ever touch what `prepare` creates: a graphdev/ branch and a worktree under the workspace worktrees folder.
+  const worktreesRoot=resolve(input.workspaceRoot,'projects');
+  const target=resolve(input.workingDirectory);
+  const rel=relative(worktreesRoot,target).split(sep);
+  if(!input.branchName.startsWith('graphdev/')||rel.length!==3||rel[0]===''||rel[0]==='..'||rel[1]!=='worktrees'||!uuid.test(rel[0]!)||!uuid.test(rel[2]!))throw new Error('Refusing to discard a worktree that Graph Workspace did not create.');
+  const repositoryRoot=await realpath(input.repositoryRoot);
+  await git(repositoryRoot,['worktree','remove','--force',target]).catch(()=>undefined);
+  await rm(target,{recursive:true,force:true});
+  await git(repositoryRoot,['worktree','prune']);
+  await git(repositoryRoot,['branch','-D',input.branchName]).catch(()=>undefined);
  }
 }
 

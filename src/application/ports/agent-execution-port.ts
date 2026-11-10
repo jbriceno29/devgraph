@@ -25,7 +25,11 @@ export interface AgentExecutionRepositoryPort {
   recordFileDiffs(executionId:string,repositoryId:string,diffs:Array<Pick<ExecutionFileDiff,'filePath'|'changeType'|'additions'|'deletions'|'diffPatch'>>):void;
 }
 
-export interface GitIsolationPort { prepare(input:{projectId:string;executionId:string;workItemKey:string;repositoryRoot:string;workspaceRoot:string;requireWorktree:boolean}):Promise<{workingDirectory:string;branchName:string;baseCommit:string}> }
+export interface GitIsolationPort {
+  prepare(input:{projectId:string;executionId:string;workItemKey:string;repositoryRoot:string;workspaceRoot:string;requireWorktree:boolean}):Promise<{workingDirectory:string;branchName:string;baseCommit:string}>;
+  /** Removes a worktree and branch created by `prepare` that never received agent work. */
+  discard(input:{repositoryRoot:string;workspaceRoot:string;workingDirectory:string;branchName:string}):Promise<void>;
+}
 export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }
 
 export interface AgentContextBuilderPort {

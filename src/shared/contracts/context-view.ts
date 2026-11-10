@@ -4,4 +4,4 @@ export interface ContextSourceEntryDto {sourceId:string;entityKey?:string;source
 export interface ExcludedSourceEntryDto {sourceId:string;titleOrPath:string;authorityTier:ContextAuthorityTier;exclusionReason:'TOKEN_BUDGET_EXCEEDED'|'SUPERSEDED_DECISION'|'LOW_RELEVANCE_SCORE'|'DRIFTED_UNVERIFIED'}
 export interface ContextSnapshotDto {id:string;projectId:string;executionId:string|null;focusEntityId:string;repositoryCommit:string;graphRevision:number;createdAt:string;tokenUsage:{maxAllowedTokens:number;totalUsedTokens:number};constraints:string[];includedSources:ContextSourceEntryDto[];excludedSources:ExcludedSourceEntryDto[]}
 export interface ContextPackageDto {snapshot:ContextSnapshotDto;packageText:string}
-export interface PreviewContextInput {projectId:string;focusEntityId:string;maxAllowedTokens?:number;query?:string;maxHops?:number;recentNotes?:string[]}
+export interface PreviewContextInput {projectId:string;focusEntityId:string;maxAllowedTokens?:number;query?:string;maxHops?:number;recentNotes?:string[];executionId?:string}

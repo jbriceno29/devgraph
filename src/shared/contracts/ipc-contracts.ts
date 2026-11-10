@@ -1,6 +1,7 @@
 import type { GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
@@ -20,6 +21,8 @@ export interface WorkspaceIpcCommands {
   'changeset:edit': (changeSetId:string,operations:unknown[])=>Promise<ChangeSetDto>;
   'changeset:apply': (changeSetId:string)=>Promise<{changeSet:ChangeSetDto;revision:number}>;
   'changeset:reject': (changeSetId:string)=>Promise<ChangeSetDto>;
+  'execution:start': (input:StartAgentExecutionInput)=>Promise<AgentExecutionDto>;
+  'execution:cancel': (executionId:string)=>Promise<AgentExecutionDto>;
 }
 export interface WorkspaceIpcQueries {
   'project:list': ()=>Promise<ProjectSummaryDto[]>;
@@ -31,10 +34,15 @@ export interface WorkspaceIpcQueries {
   'changeset:list': (projectId:string)=>Promise<ChangeSetDto[]>;
   'context:get_snapshot': (snapshotId:string)=>Promise<ContextSnapshotDto>;
   'context:preview_package': (input:PreviewContextInput)=>Promise<ContextPackageDto>;
+  'agent:list_profiles': (projectId:string)=>Promise<AgentProfileDto[]>;
+  'execution:list': (projectId:string)=>Promise<AgentExecutionDto[]>;
+  'execution:list_events': (executionId:string)=>Promise<AgentEventRecordDto[]>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};
   'artifact:sync_status_changed': ArtifactSyncStatusChangedDto;
+  'execution:status_changed': {executionId:string;workItemId:string;status:AgentExecutionDto['status']};
+  'execution:event_received': {executionId:string;event:AgentEventDto};
 }
 export type IpcCommandChannel=keyof WorkspaceIpcCommands;
 export type IpcQueryChannel=keyof WorkspaceIpcQueries;
@@ -51,6 +59,8 @@ export interface WorkspaceIpcClient {
     editChangeSet(changeSetId:string,operations:unknown[]):Promise<ChangeSetDto>;
     applyChangeSet(changeSetId:string):Promise<{changeSet:ChangeSetDto;revision:number}>;
     rejectChangeSet(changeSetId:string):Promise<ChangeSetDto>;
+    startExecution(input:StartAgentExecutionInput):Promise<AgentExecutionDto>;
+    cancelExecution(executionId:string):Promise<AgentExecutionDto>;
   };
   queries:{
     listProjects():Promise<ProjectSummaryDto[]>;
@@ -62,6 +72,9 @@ export interface WorkspaceIpcClient {
     listChangeSets(projectId:string):Promise<ChangeSetDto[]>;
     getContextSnapshot(snapshotId:string):Promise<ContextSnapshotDto>;
     previewContext(input:PreviewContextInput):Promise<ContextPackageDto>;
+    listAgentProfiles(projectId:string):Promise<AgentProfileDto[]>;
+    listExecutions(projectId:string):Promise<AgentExecutionDto[]>;
+    listExecutionEvents(executionId:string):Promise<AgentEventRecordDto[]>;
   };
-  events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void};
+  events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void};
 }

@@ -13,6 +13,8 @@ export const workspaceIpc:WorkspaceIpcClient={
   editChangeSet:(changeSetId,operations)=>invokeCore('changeset:edit',[changeSetId,operations]),
   applyChangeSet:changeSetId=>invokeCore('changeset:apply',[changeSetId]),
   rejectChangeSet:changeSetId=>invokeCore('changeset:reject',[changeSetId]),
+  startExecution:input=>invokeCore('execution:start',[input]),
+  cancelExecution:executionId=>invokeCore('execution:cancel',[executionId]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),
@@ -24,10 +26,15 @@ export const workspaceIpc:WorkspaceIpcClient={
   listChangeSets:projectId=>invokeCore('changeset:list',[projectId]),
   getContextSnapshot:snapshotId=>invokeCore('context:get_snapshot',[snapshotId]),
   previewContext:input=>invokeCore('context:preview_package',[input]),
+  listAgentProfiles:projectId=>invokeCore('agent:list_profiles',[projectId]),
+  listExecutions:projectId=>invokeCore('execution:list',[projectId]),
+  listExecutionEvents:executionId=>invokeCore('execution:list_events',[executionId]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},
   onArtifactSyncStatusChanged(listener){return subscribe('artifact:sync_status_changed',listener);},
+  onExecutionStatusChanged(listener){return subscribe('execution:status_changed',listener);},
+  onExecutionEventReceived(listener){return subscribe('execution:event_received',listener);},
  },
 };
 function subscribe<K extends keyof WorkspaceIpcEvents>(channel:K,listener:(event:WorkspaceIpcEvents[K])=>void):()=>void {

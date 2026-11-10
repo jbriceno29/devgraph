@@ -12,9 +12,9 @@ afterEach(cleanup);
 it('renders a safe Markdown preview, saves through typed IPC, and reflects watcher events',async()=>{
  let onSync:((event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void)|undefined;let currentView=view;
  const client:WorkspaceIpcClient={
-  commands:{createProject:vi.fn(),openProject:vi.fn(),configureRepository:vi.fn(),createArtifact:vi.fn(),saveArtifact:vi.fn(async(_documentId:string,_hash:string,content:string)=>({document:{...artifactRecord,contentHash:'hash-2'},content})),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn()},
-  queries:{listProjects:vi.fn(async()=>[]),getGraphView:vi.fn(),getEntityInspectorDetails:vi.fn(),getRepositoryPath:vi.fn(async()=>'/tmp/repository'),listArtifacts:vi.fn(async()=>[artifactRecord]),getArtifact:vi.fn(async()=>currentView),listChangeSets:vi.fn(async()=>[]),previewContext:vi.fn(),getContextSnapshot:vi.fn()},
-  events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(listener=>{onSync=listener;return ()=>{onSync=undefined;};})},
+  commands:{createProject:vi.fn(),openProject:vi.fn(),configureRepository:vi.fn(),createArtifact:vi.fn(),saveArtifact:vi.fn(async(_documentId:string,_hash:string,content:string)=>({document:{...artifactRecord,contentHash:'hash-2'},content})),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn(),startExecution:vi.fn(),cancelExecution:vi.fn()},
+  queries:{listProjects:vi.fn(async()=>[]),getGraphView:vi.fn(),getEntityInspectorDetails:vi.fn(),getRepositoryPath:vi.fn(async()=>'/tmp/repository'),listArtifacts:vi.fn(async()=>[artifactRecord]),getArtifact:vi.fn(async()=>currentView),listChangeSets:vi.fn(async()=>[]),previewContext:vi.fn(),getContextSnapshot:vi.fn(),listAgentProfiles:vi.fn(async()=>[]),listExecutions:vi.fn(async()=>[]),listExecutionEvents:vi.fn(async()=>[])},
+  events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(listener=>{onSync=listener;return ()=>{onSync=undefined;};}),onExecutionStatusChanged:vi.fn(()=>()=>{}),onExecutionEventReceived:vi.fn(()=>()=>{})},
  };
  Object.defineProperty(window,'workspaceIpc',{configurable:true,value:client});
  render(<DocumentsPanel projectId="p" nodes={[{id:'root',key:'PROJ-01',type:'PROJECT_ROOT',label:'Workspace',status:'ACTIVE'}]}/>);

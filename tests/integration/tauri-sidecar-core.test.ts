@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync,rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync,rmSync,readFileSync,existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
+import type { AgentAdapterPort } from '../../src/application/ports/agent-adapter-port.js';
+import type { AgentCapabilities,AgentEvent } from '../../src/domain/agents/models.js';
+import { openDatabase,closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
 const roots:string[]=[];const cores:Array<ReturnType<typeof createWorkspaceCore>>=[];
 afterEach(()=>{for(const core of cores.splice(0))core.close();for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
 describe('Tauri to TypeScript sidecar protocol',()=>{
@@ -43,4 +46,37 @@ describe('Tauri to TypeScript sidecar protocol',()=>{
   expect(saved.document.syncStatus).toBe('SYNCED');
   expect(events).toContainEqual({channel:'graph:revision_updated',payload:{projectId:project.id,revision:2}});
  });
+ it('runs a READY work item with the sealed context and persists live events to SQLite and JSONL',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'graphdev2-agent-core-'));roots.push(root);const repositoryPath=join(root,'repo');mkdirSync(join(repositoryPath,'src'),{recursive:true});execFileSync('git',['init','--quiet',repositoryPath]);
+  const emitted:Array<{channel:string;payload:unknown}>=[],adapter=new FakeAgentAdapter();const workspaceRoot=join(root,'workspace');const core=createWorkspaceCore(workspaceRoot,(channel,payload)=>emitted.push({channel,payload}),{agentAdapter:adapter});cores.push(core);
+  const project=await core.handle({channel:'project:create',args:[{name:'Agent Bridge',slug:'agent-bridge',rules:['Keep changes scoped.']}]}) as {id:string};
+  const opened=await core.handle({channel:'project:open',args:[project.id]}) as {selectedEntityId:string};await core.handle({channel:'repository:configure',args:[project.id,repositoryPath]});
+  const db=openDatabase({filename:join(workspaceRoot,'projects',project.id,'workspace.sqlite'),initialize:false});
+  try {
+   db.prepare(`INSERT INTO knowledge_entities(id,project_id,entity_type,display_key,title,summary,status,parent_id,created_revision,updated_revision,created_at,updated_at) VALUES('task-agent',?,'WORK_ITEM','TASK-001','Implement agent bridge','Add an event stream','READY',?,1,1,'now','now')`).run(project.id,opened.selectedEntityId);
+   db.prepare(`INSERT INTO work_items(entity_id,work_type,priority,acceptance_criteria_json,recommended_profile_role) VALUES('task-agent','TASK','HIGH','["Persists its event stream"]','DEVELOPER')`).run();
+  } finally { closeDatabase(db); }
+  const profiles=await core.handle({channel:'agent:list_profiles',args:[project.id]}) as Array<{id:string;roleKey:string;capabilities:AgentCapabilities}>;const developer=profiles.find(item=>item.roleKey==='DEVELOPER')!;expect(developer.capabilities).toMatchObject({supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true});
+  const initial=await core.handle({channel:'execution:start',args:[{projectId:project.id,workItemId:'task-agent',profileId:developer.id}]}) as {id:string;status:string;contextSnapshotId:string|null};expect(initial.status).toBe('RUNNING');expect(initial.contextSnapshotId).toBeTruthy();
+  const completed=await waitForCompleted(core,project.id,initial.id);expect(completed.status).toBe('COMPLETED');expect(completed.resultSummary).toBe('Implementation finished.');
+  const records=await core.handle({channel:'execution:list_events',args:[initial.id]}) as Array<{event:AgentEvent;sequenceNo:number}>;expect(records.map(record=>record.event.type)).toEqual(['SESSION_INITIALIZED','TOOL_INVOCATION_STARTED','TOOL_INVOCATION_FINISHED','FILE_TOUCHED','TEXT_DELTA','EXECUTION_FINISHED']);expect(records.map(record=>record.sequenceNo)).toEqual([1,2,3,4,5,6]);
+  const context=await core.handle({channel:'context:get_snapshot',args:[initial.contextSnapshotId]}) as {executionId:string|null;focusEntityId:string};expect(context).toMatchObject({executionId:initial.id,focusEntityId:'task-agent'});
+  const eventFile=join(workspaceRoot,'projects',project.id,'executions',initial.id,'events.jsonl');expect(existsSync(eventFile)).toBe(true);expect(readFileSync(eventFile,'utf8').trim().split('\n')).toHaveLength(6);
+  expect(emitted.some(event=>event.channel==='execution:status_changed'&&(event.payload as {status?:string}).status==='COMPLETED')).toBe(true);expect(emitted.some(event=>event.channel==='execution:event_received')).toBe(true);expect(existsSync(join(repositoryPath,'src','agent-output.txt'))).toBe(true);
+ });
 });
+
+class FakeAgentAdapter implements AgentAdapterPort {
+ readonly providerId='codex' as const;
+ getCapabilities():AgentCapabilities{return {supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true};}
+ async *run(input:{executionId:string;workingDirectory:string;prompt:string}):AsyncIterable<AgentEvent>{
+  await import('node:fs/promises').then(fs=>fs.writeFile(join(input.workingDirectory,'src','agent-output.txt'),input.prompt.includes('ContextSnapshot')?'Context received.':'Missing context.'));
+  const timestamp=new Date().toISOString();yield {type:'SESSION_INITIALIZED',timestamp,externalSessionId:'fake-session'};yield {type:'TOOL_INVOCATION_STARTED',timestamp,callId:'call-1',toolName:'write_file',args:{path:'src/agent-output.txt'}};yield {type:'TOOL_INVOCATION_FINISHED',timestamp,callId:'call-1',resultPreview:'File written.',isError:false};yield {type:'FILE_TOUCHED',timestamp,relativePath:'src/agent-output.txt',operation:'CREATE'};yield {type:'TEXT_DELTA',timestamp,delta:'Implementation finished.'};yield {type:'EXECUTION_FINISHED',timestamp,summary:'Implementation finished.'};
+ }
+ async cancel():Promise<void>{}
+}
+
+async function waitForCompleted(core:ReturnType<typeof createWorkspaceCore>,projectId:string,executionId:string):Promise<{status:string;resultSummary:string|null}>{
+ for(let attempt=0;attempt<100;attempt++){const executions=await core.handle({channel:'execution:list',args:[projectId]}) as Array<{id:string;status:string;resultSummary:string|null}>;const execution=executions.find(item=>item.id===executionId);if(execution?.status==='COMPLETED'||execution?.status==='FAILED'||execution?.status==='CANCELLED')return execution;await new Promise(resolve=>setTimeout(resolve,10));}
+ throw new Error(`Execution ${executionId} did not finish in time.`);
+}

@@ -6,7 +6,7 @@ export interface ContextPackage {snapshot:ContextSnapshot;packageText:string}
 export class ContextPackager {
  constructor(private readonly repository:ContextRepositoryPort){}
  package(context:ResolvedContext,ranked:RankedContext,maxAllowedTokens:number):ContextPackage{
-  const snapshot:ContextSnapshot={id:globalThis.crypto.randomUUID(),projectId:context.project.id,executionId:null,focusEntityId:context.focus.entity.id,repositoryCommit:context.repositoryCommit,graphRevision:context.project.currentRevision,createdAt:new Date().toISOString(),tokenUsage:{maxAllowedTokens,totalUsedTokens:ranked.totalUsedTokens},constraints:context.constraints,includedSources:ranked.includedSources,excludedSources:ranked.excludedSources};
+  const snapshot:ContextSnapshot={id:globalThis.crypto.randomUUID(),projectId:context.project.id,executionId:context.executionId??null,focusEntityId:context.focus.entity.id,repositoryCommit:context.repositoryCommit,graphRevision:context.project.currentRevision,createdAt:new Date().toISOString(),tokenUsage:{maxAllowedTokens,totalUsedTokens:ranked.totalUsedTokens},constraints:context.constraints,includedSources:ranked.includedSources,excludedSources:ranked.excludedSources};
   this.repository.persistSnapshot(snapshot);return {snapshot,packageText:renderContextSnapshot(snapshot)};
  }
 }

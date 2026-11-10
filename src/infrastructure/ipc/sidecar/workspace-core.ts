@@ -19,12 +19,21 @@ import { SqliteContextRepository } from '../../persistence/repositories/sqlite-c
 import { RepositoryContextFileStore } from '../../filesystem/repository-context-file-store.js';
 import type { PreviewContextInput } from '../../../shared/contracts/context-view.js';
 import { renderContextSnapshot } from '../../../application/context/context-packager.js';
+import { AgentOrchestrator } from '../../../application/execution/agent-orchestrator.js';
+import { SqliteAgentExecutionRepository } from '../../persistence/repositories/sqlite-agent-execution-repository.js';
+import { CodexAgentAdapter } from '../../ai/codex-agent-adapter.js';
+import { ExecutionEventLog } from '../../filesystem/execution-event-log.js';
+import type { AgentExecution } from '../../../domain/agents/models.js';
+import type { StartAgentExecutionInput } from '../../../shared/contracts/agent-view.js';
+import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-port.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
-export type WorkspaceEventEmitter=(channel:'artifact:sync_status_changed'|'graph:revision_updated',payload:ArtifactSyncStatusChangedEvent|{projectId:string;revision:number})=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined) {
+export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const watchers=new Map<string,ArtifactWatcherService>();
+ const codexAdapter=dependencies.agentAdapter??new CodexAgentAdapter();
+ const executionServices=new Map<string,AgentOrchestrator>();
  const getManagement=(projectId:string)=>{
   const workspace=store.openProject(projectId);
   return new ArtifactManagementService(workspace.projects,workspace.graph,workspace.artifacts,workspace.repositories,files,event=>emit('artifact:sync_status_changed',event as ArtifactSyncStatusChangedEvent));
@@ -34,6 +43,13 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   return new ChangeSetPlanningService(workspace.projects,workspace.graph,new SqliteChangeSetRepository(workspace.database),new CodexChangeSetPlanner(path),new SqliteChangeSetApplier(workspace.database,new TransactionalMarkdownFileStore(),workspace.repositories),id=>store.openProject(id).repositories.findPrimaryForProject(id)?.localPath??null);
  };
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
+ const getExecutionService=(projectId:string)=>{
+  const cached=executionServices.get(projectId);if(cached)return cached;
+  const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database),contextEngine=getContextEngine(projectId);
+  const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,maxAllowedTokens:32_000,maxHops:2})};
+  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),codexAdapter,(channel,payload)=>emit(channel,payload));
+  executionServices.set(projectId,service);return service;
+ };
  const startWatcher=async(projectId:string)=>{
   const management=getManagement(projectId),repositoryPath=management.repositoryPath(projectId);
   const previous=watchers.get(projectId);previous?.stop();watchers.delete(projectId);
@@ -113,6 +129,11 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'changeset:list': return getPlanning(String(args[0]??'')).list(String(args[0]??''));
     case 'context:preview_package': {const input=args[0] as PreviewContextInput;return getContextEngine(input.projectId).preview(input);}
     case 'context:get_snapshot': {const snapshotId=String(args[0]??'');for(const project of store.listProjects()){const workspace=store.openProject(project.id),repository=new SqliteContextRepository(workspace.database);if(repository.findSnapshot(snapshotId))return new ContextEngine(repository,new RepositoryContextFileStore()).getSnapshot(snapshotId);}throw new Error('ContextSnapshot no encontrado.');}
+    case 'agent:list_profiles': return getExecutionService(String(args[0]??'')).listProfiles(String(args[0]??''));
+    case 'execution:list': return getExecutionService(String(args[0]??'')).listExecutions(String(args[0]??'')).map(toAgentExecutionDto);
+    case 'execution:list_events': return findExecutionService(String(args[0]??'')).listEvents(String(args[0]??''));
+    case 'execution:start': {const input=args[0] as StartAgentExecutionInput;return toAgentExecutionDto(await getExecutionService(input.projectId).start(input));}
+    case 'execution:cancel': {const executionId=String(args[0]??'');return toAgentExecutionDto(await findExecutionService(executionId).cancel(executionId));}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }
   },
@@ -129,7 +150,15 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   for(const project of store.listProjects()){const workspace=store.openProject(project.id);if(new SqliteChangeSetRepository(workspace.database).findById(changeSetId))return getPlanning(project.id);}
   throw new Error('Propuesta no encontrada.');
  }
+ function findExecutionService(executionId:string):AgentOrchestrator {
+  for(const project of store.listProjects()) {
+   const workspace=store.openProject(project.id),repository=new SqliteAgentExecutionRepository(workspace.database);
+   if(repository.findExecution(executionId))return getExecutionService(project.id);
+  }
+  throw new Error('Ejecución no encontrada.');
+ }
 }
 function summarize(project:Project):ProjectSummaryDto{return {id:project.props.id,name:project.props.name,slug:project.props.slug,description:project.props.description??null,currentRevision:project.currentRevision,createdAt:project.props.createdAt,updatedAt:project.props.updatedAt};}
 function toDocumentDto(document:import('../../../application/ports/artifact-management-port.js').ArtifactDocumentRecord):ArtifactDocumentDto {return {id:document.id,projectId:document.projectId,displayKey:document.displayKey,title:document.title,summary:document.summary,entityType:document.entityType,artifactType:document.artifactType,version:document.version,adrNumber:document.adrNumber,relativePath:document.relativePath,contentHash:document.contentHash,syncStatus:document.syncStatus};}
 function toDocumentViewDto(view:import('../../../application/artifacts/artifact-management-service.js').DocumentView):ArtifactDocumentViewDto{return {document:toDocumentDto(view.document),content:view.content};}
+function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt};}

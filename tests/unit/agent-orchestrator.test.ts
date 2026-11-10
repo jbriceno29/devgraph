@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentOrchestrator } from '../../src/application/execution/agent-orchestrator.js';
+import { AgentOrchestrator, describePolicy } from '../../src/application/execution/agent-orchestrator.js';
 import type { AgentAdapterPort } from '../../src/application/ports/agent-adapter-port.js';
 import type { AgentExecutionRepositoryPort, ExecutionValidatorPort, GitIsolationPort } from '../../src/application/ports/agent-execution-port.js';
 import type { AgentCapabilities, AgentEvent, AgentExecution } from '../../src/domain/agents/models.js';
@@ -109,5 +109,25 @@ describe('AgentOrchestrator worktree cleanup',()=>{
   const {orchestrator,isolation,repository}=harness({validate:async()=>({passed:false,finalCommit:null,resultSummary:'audit failed',testSummary:null})});
   const execution=await start(orchestrator);await flush();
   expect(repository.findExecution(execution.id)).toMatchObject({status:'FAILED',branchOrWorktree:'/ws/projects/p/worktrees/e'});expect(isolation.discard).not.toHaveBeenCalled();
+ });
+});
+
+describe('AgentOrchestrator task prompt',()=>{
+ it('tells the engine its writable paths and the exact commands it may run, and passes the same policy to the adapter',async()=>{
+  let received:{prompt:string;policy?:unknown}|undefined;
+  const {orchestrator}=harness({adapter:{async *run(input){received=input;yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};}}});
+  await start(orchestrator);await flush();
+  expect(received!.prompt).toContain('# Política de ejecución');
+  expect(received!.prompt).toContain('No tienes permitido ejecutar comandos');
+  expect(received!.policy).toEqual({writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[]});
+ });
+
+ it('lists allowed commands verbatim and forbids pipes, and lists denied paths',()=>{
+  const text=describePolicy({writablePaths:['src/**','tests/**'],readonlyPaths:['docs/adr/**'],deniedPaths:['.env*'],allowedCommands:['node --test']});
+  expect(text).toContain('- `src/**`\n- `tests/**`');
+  expect(text).toContain('- `node --test`');
+  expect(text).toContain('no tuberías, redirecciones ni `&&`');
+  expect(text).toContain('Rutas prohibidas (no las leas ni las modifiques):\n- `.env*`');
+  expect(text).toContain('Rutas de solo lectura:\n- `docs/adr/**`');
  });
 });

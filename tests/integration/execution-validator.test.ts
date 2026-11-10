@@ -1,6 +1,6 @@
 import { afterEach,describe,expect,it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync,existsSync } from 'node:fs';
+import { mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync,existsSync,symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ExecutionValidator } from '../../src/infrastructure/execution/execution-validator.js';
@@ -41,6 +41,41 @@ describe('ExecutionValidator',()=>{
   expect(existsSync(join(workspace,'projects',projectId,'executions',id,'test-output.log'))).toBe(true);
  });
 
+ it('ignores a crafted .git pointer: never runs its fsmonitor command and restores the real pointer',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('55555555-5555-4555-8555-555555555555');
+  const marker=join(root,'PWNED'),crafted=join(worktree,'src','crafted-git'),original=readFileSync(join(worktree,'.git'),'utf8');
+  execFileSync('git',['clone','--quiet','--bare',join(root,'repo'),crafted]);
+  writeFileSync(join(crafted,'config'),`[core]\n\trepositoryformatversion = 0\n\tbare = false\n\tfsmonitor = touch ${marker}; false\n`);
+  writeFileSync(join(worktree,'.git'),`gitdir: ${crafted}\n`);
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy});
+  expect(existsSync(marker)).toBe(false);
+  expect(result.passed).toBe(false);expect((result.testSummary as {violations:string[]}).violations).toContain('.git');
+  expect(readFileSync(join(worktree,'.git'),'utf8')).toBe(original);
+ });
+
+ it('rejects changed symlinks that escape the worktree or reach denied paths',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('66666666-6666-4666-8666-666666666666');
+  writeFileSync(join(root,'outside.txt'),'outside\n');
+  symlinkSync(join(root,'outside.txt'),join(worktree,'src','outside-link'));symlinkSync('/',join(worktree,'src','root-link'));
+  symlinkSync('../.env',join(worktree,'src','env-link'));symlinkSync('base.ts',join(worktree,'src','inside-link'));
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy});
+  const violations=(result.testSummary as {violations:string[]}).violations;
+  expect(result.passed).toBe(false);expect(violations).toEqual(expect.arrayContaining(['src/outside-link','src/root-link','src/env-link']));expect(violations).not.toContain('src/inside-link');
+  expect(existsSync(join(worktree,'src','outside-link'))).toBe(false);expect(existsSync(join(root,'outside.txt'))).toBe(true);
+ });
+
+ it('never copies the content of untracked denied files into the patch or diff rows',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('77777777-7777-4777-8777-777777777777');
+  writeFileSync(join(worktree,'.env'),'TOKEN=super-secret\n');writeFileSync(join(worktree,'src','ok.ts'),'export const ok = 1;\n');
+  const recorded:Array<{filePath:string;diffPatch:string|null}>=[];
+  const result=await new ExecutionValidator(workspace,(_e,_r,diffs)=>recorded.push(...diffs)).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy});
+  expect(result.passed).toBe(false);
+  const patch=readFileSync(join(workspace,'projects',projectId,'executions',id,'changes.patch'),'utf8');
+  expect(patch).not.toContain('super-secret');expect(patch).toContain('ok.ts');
+  expect(recorded.find(row=>row.filePath==='.env')).toMatchObject({diffPatch:null,changeType:'ADDED'});
+  expect(JSON.stringify(recorded)).not.toContain('super-secret');expect(existsSync(join(worktree,'.env'))).toBe(false);
+ });
+
  it('runs only commands listed in the autonomy policy and writes their output',async()=>{
   const root=repository(),workspace=join(root,'workspace'),id='44444444-4444-4444-8444-444444444444',projectId=policy.projectId;
   const base=execFileSync('git',['rev-parse','HEAD'],{cwd:join(root,'repo'),encoding:'utf8'}).trim();
@@ -52,6 +87,14 @@ describe('ExecutionValidator',()=>{
   await expect(validator.validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy:{...policy,allowedCommands:['node --version; touch /tmp/should-not-run']}})).rejects.toThrow('Shell operators are not allowed');
  });
 });
+
+function isolated(id:string){
+ const root=repository(),workspace=join(root,'workspace'),projectId=policy.projectId;
+ const base=execFileSync('git',['rev-parse','HEAD'],{cwd:join(root,'repo'),encoding:'utf8'}).trim();
+ const worktree=join(workspace,'projects',projectId,'worktrees',id);mkdirSync(dirname(worktree),{recursive:true});
+ execFileSync('git',['worktree','add','--detach','--quiet',worktree,base],{cwd:join(root,'repo')});
+ return {root,workspace,worktree,base,id,projectId};
+}
 
 function repository():string {
  const root=mkdtempSync(join(tmpdir(),'graphdev2-validation-'));roots.push(root);const repo=join(root,'repo');mkdirSync(join(repo,'src'),{recursive:true});execFileSync('git',['init','--quiet',repo]);execFileSync('git',['config','user.name','Graphdev Tests'],{cwd:repo});execFileSync('git',['config','user.email','tests@graphdev.local'],{cwd:repo});writeFileSync(join(repo,'src','base.ts'),'export const base = true;\n');execFileSync('git',['add','.'],{cwd:repo});execFileSync('git',['commit','--quiet','-m','base'],{cwd:repo});return root;

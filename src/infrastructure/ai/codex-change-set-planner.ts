@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { access,mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { resolveCodexExecutable } from './codex-cli-path.js';
 import type { ChangeOperation } from '../../domain/knowledge/change-set.js';
 import type { ChangeSetDraft, ChangeSetPlannerPort } from '../../application/ports/change-set-planning-port.js';
 import type { GraphRelationship, KnowledgeEntity } from '../../domain/graph/knowledge-entity.js';
@@ -33,16 +33,6 @@ export class CodexChangeSetPlanner implements ChangeSetPlannerPort {
   return new Promise((resolve,reject)=>{const child=spawn(executable,args,{cwd:this.cwd,stdio:['pipe','pipe','pipe'],windowsHide:true});let out='',err='';const timer=setTimeout(()=>{child.kill('SIGTERM');reject(new Error('Codex superó el límite de tiempo para proponer cambios.'));},this.timeoutMs);child.stdout.setEncoding('utf8').on('data',chunk=>out+=chunk);child.stderr.setEncoding('utf8').on('data',chunk=>err+=chunk);child.once('error',error=>{clearTimeout(timer);reject(new Error(`No se pudo iniciar Codex (${executable}): ${error.message}`));});child.stdin.on('error',error=>{if((error as NodeJS.ErrnoException).code!=='EPIPE'){clearTimeout(timer);child.kill('SIGTERM');reject(new Error(`No se pudo enviar el contexto a Codex: ${error.message}`));}});child.once('close',code=>{clearTimeout(timer);if(code===0)resolve(out);else reject(new Error(`Codex terminó con código ${code}: ${err.slice(-4000)}`));});child.stdin.end(prompt);});
  }
 }
-async function resolveCodexExecutable(configured:string):Promise<string>{
- const explicit=process.env.GRAPHDEV_CODEX_PATH??process.env.CODEX_CLI_PATH;
- const requested=explicit||configured;
- if(requested.includes('/')||requested.includes('\\')){if(await isExecutable(requested))return requested;throw new Error(`No se pudo iniciar Codex: no existe un ejecutable en "${requested}". Configura GRAPHDEV_CODEX_PATH con la ruta absoluta del CLI.`);}
- const pathDirectories=(process.env.PATH??'').split(delimiter).filter(Boolean);
- const fallbackDirectories=process.platform==='linux'?['/usr/lib/chatgpt/resources','/usr/local/bin','/usr/bin',join(homedir(),'.local','bin')]:process.platform==='darwin'?['/opt/homebrew/bin','/usr/local/bin',join(homedir(),'.local','bin')]:[join(process.env.LOCALAPPDATA??homedir(),'Programs','Codex','bin')];
- for(const directory of [...pathDirectories,...fallbackDirectories]){const candidate=join(directory,requested);if(await isExecutable(candidate))return candidate;}
- throw new Error(`No se encontró el CLI de Codex ("${requested}"). Añade su carpeta al PATH del proceso de escritorio o configura GRAPHDEV_CODEX_PATH con la ruta absoluta; en Linux suele estar en /usr/lib/chatgpt/resources/codex.`);
-}
-async function isExecutable(path:string):Promise<boolean>{try{await access(path,constants.X_OK);return true;}catch{return false;}}
 function normalizeOperation(value:unknown):ChangeOperation {
  if(!value||typeof value!=='object')throw new Error('Codex devolvió una operación inválida.');const op=value as Record<string,unknown>,str=(key:string):string=>{const item=op[key];if(typeof item!=='string'||!item)throw new Error(`Codex omitió el campo ${key} de una operación.`);return item;},text=(key:string):string=>typeof op[key]==='string'?op[key] as string:'',nullable=(key:string):string|null|undefined=>op[key]===null||op[key]===undefined?undefined:String(op[key]);
  switch(op.type){

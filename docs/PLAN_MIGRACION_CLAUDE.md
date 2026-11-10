@@ -12,7 +12,8 @@ Actualizado: 2026-11-10, rama `feat/claude-code`.
 | 0. Base limpia | **Hecha.** Etapa 7 y documentos commiteados (`d1f57a5`, `af44427`); carpetas rotas eliminadas; `typecheck`, `test`, `build` y `cargo test` en verde. |
 | 1. Sondeo del CLI y fixtures | **Hecha.** Fixtures en `tests/fixtures/claude/`; sección 2 actualizada. Falta solo el error de límite de uso, que no se puede provocar. |
 | 4. Defectos | **Parcial.** Hechos: endurecimiento del validador (`68e0c2d`), D2 y D3 (`2a90857`), D4 y D5 (`a1c493b`). Pendientes: ver la Fase 4. |
-| 2, 3, 5, 6, 7 | Pendientes. |
+| 2. `ClaudeCodeAdapter` | **Implementada, falta la prueba real.** Adaptador, entorno limpio, comprobación de sesión, reglas de permisos desde la política, SIGINT con respaldo SIGTERM, siembra del proveedor y selección de modelo (IPC + selector en la vista de Agentes). Probado con los fixtures y con un `claude` simulado de punta a punta. Falta el criterio de cierre: una tarea real con Claude desde la app. |
+| 3, 5, 6, 7 | Pendientes. |
 
 La verificación del análisis (`docs/ANALISIS_PROYECTO.md`) confirmó D1 a D6 con reproducciones y encontró defectos nuevos. Todos los defectos abiertos están asignados a una fase en la sección 4; el análisis queda como referencia del diagnóstico, no como lista de trabajo.
 
@@ -117,6 +118,11 @@ Comportamiento:
 - Capacidades: resume, streaming, cancelación, salida estructurada y worktrees en `true`; aprobaciones en `false`.
 - `CLAUDE.md`, hooks y MCP del repositorio: sin `--bare` se cargan también en `-p`, sin diálogo de confianza. Se dejan cargar (sección 6, decisión 2) y se registra la ruta y el hash del `CLAUDE.md` en el `ContextSnapshot`.
 - Modo de autenticación (`subscription` o `api_key`) y modelos por rol, leídos de `provider_connections.config_json` (sección 6, decisiones 1 y 3).
+- **Selección de modelo:**
+  - `--model` con alias (`haiku`, `sonnet`, `opus`), no IDs completos, para que no se rompa al salir modelos nuevos.
+  - Modelo por defecto por rol (`planning`, `execution`) en `config_json` del proveedor, sin cambios de esquema.
+  - `execution:start` acepta un `model` opcional; la vista de Agentes muestra un selector junto a "Iniciar" con el modelo por defecto preseleccionado.
+  - El modelo real que confirma `system/init` (`init.model`) se guarda en `modelUsed` de la ejecución.
 
 **Criterio de cierre:** una tarea `READY` real se ejecuta con Claude en un worktree, aparece el stream en la vista de Agentes, se audita el diff y la ejecución termina en `COMPLETED` o `FAILED` con motivo claro. Tests unitarios de `normalizeClaudeEvent` y un test de integración con un `claude` simulado (script que reproduce un fixture).
 
@@ -125,7 +131,8 @@ Comportamiento:
 - Nuevo `ClaudeChangeSetPlanner` (`claude -p --output-format json --json-schema`, herramientas deshabilitadas o solo lectura, lectura de `structured_output`, error claro si falta). Extraer `normalizeOperation` a un módulo compartido.
 - **D1 (confirmado):** con un planificador de 75 s, la UI recibe error a los 60 s pero la propuesta se guarda igual, y una consulta enviada a los 2 s responde a los 73 s. Corrección: correlacionar respuestas por `id` en `lib.rs` (mapa de pendientes, sin mantener el mutex durante la espera), atender peticiones del sidecar de forma concurrente, y convertir la propuesta en un comando que responde enseguida y notifica el resultado por evento. Subir el timeout no basta: sigue bloqueando la UI y contradice el criterio de cierre.
 - Registrar el `stderr` del sidecar en un archivo de log y reiniciarlo si muere (hoy se descarta y, si cae, todas las peticiones fallan hasta reiniciar la app).
-- Probar que un esquema JSON "normal" funciona; simplificar el actual si es posible.
+- Probar que un esquema JSON "normal" funciona; simplificar el actual si es posible. (Confirmado en la Fase 1.)
+- Selector de modelo en la vista Planificar, con el modelo de planificación como valor por defecto.
 
 **Criterio de cierre:** proponer y aplicar un ChangeSet con Claude desde la vista Planificar, incluso con una respuesta que tarde más de 60 s, sin bloquear el resto de la UI.
 
@@ -151,6 +158,7 @@ Pendientes:
 ### Fase 5: Operación mínima desde la UI (M a L)
 
 - Configuración del proyecto: reglas (nivel 1 del contexto), `techStack`, `AutonomyPolicy` y comandos de verificación (`allowedCommands`).
+- Modelos por defecto de cada rol editables desde la UI; opcionalmente `--fallback-model` para que el CLI pruebe otro modelo si el elegido está saturado o al límite.
 - Cambio manual de estado de tareas y ADRs, comprobando que las dependencias `DEPENDS_ON` estén en `DONE` antes de pasar a `READY`.
 - Canal `execution:get_forensic_detail` y vista de detalle: diff por archivo, `changes.patch`, `test-output.log`.
 - Lista de acciones denegadas de la ejecución con el botón "Permitir y reintentar" (añade a `allowedCommands` y lanza una nueva ejecución).

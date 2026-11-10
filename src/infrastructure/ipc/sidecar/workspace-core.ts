@@ -21,7 +21,7 @@ import type { PreviewContextInput } from '../../../shared/contracts/context-view
 import { renderContextSnapshot } from '../../../application/context/context-packager.js';
 import { AgentOrchestrator } from '../../../application/execution/agent-orchestrator.js';
 import { SqliteAgentExecutionRepository } from '../../persistence/repositories/sqlite-agent-execution-repository.js';
-import { CodexAgentAdapter } from '../../ai/codex-agent-adapter.js';
+import { ClaudeCodeAdapter } from '../../ai/claude-code-adapter.js';
 import { ExecutionEventLog } from '../../filesystem/execution-event-log.js';
 import type { AgentExecution } from '../../../domain/agents/models.js';
 import type { StartAgentExecutionInput } from '../../../shared/contracts/agent-view.js';
@@ -34,7 +34,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const watchers=new Map<string,ArtifactWatcherService>();
- const codexAdapter=dependencies.agentAdapter??new CodexAgentAdapter();
+ // Claude Code is the wired engine; CodexAgentAdapter stays in the codebase, unwired, until Claude is proven (migration plan, section 3).
+ const agentAdapter=dependencies.agentAdapter??new ClaudeCodeAdapter();
  const executionServices=new Map<string,AgentOrchestrator>();
  const getManagement=(projectId:string)=>{
   const workspace=store.openProject(projectId);
@@ -47,10 +48,10 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
  const getExecutionService=(projectId:string)=>{
   const cached=executionServices.get(projectId);if(cached)return cached;
-  const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database),contextEngine=getContextEngine(projectId);
+  const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database,agentAdapter.providerId),contextEngine=getContextEngine(projectId);
   const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,maxAllowedTokens:32_000,maxHops:2})};
   const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
-  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),codexAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload));
+  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload));
   executionServices.set(projectId,service);return service;
  };
  const startWatcher=async(projectId:string)=>{

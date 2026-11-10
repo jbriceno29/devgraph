@@ -5,6 +5,10 @@ import type { AutonomyPolicy,ApprovalRequest } from '../../domain/governance/mod
 
 export interface AgentExecutionProfile extends AgentProfile {
   provider: AgentProvider;
+  /** Model aliases the provider offers, and the default for this profile's role. */
+  models: { default: string | null; available: string[] };
+  /** Opaque provider connection settings (e.g. authMode), handed to the adapter. */
+  connectionConfig: Record<string, unknown>;
 }
 
 export interface AgentExecutionRepositoryPort {

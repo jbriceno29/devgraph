@@ -12,17 +12,20 @@ export class AgentOrchestrator {
  private readonly governance:GovernanceInterceptor;
  constructor(private readonly repository:AgentExecutionRepositoryPort,private readonly contextBuilder:AgentContextBuilderPort,private readonly eventLog:ExecutionEventLogPort,private readonly adapter:AgentAdapterPort,private readonly isolation:GitIsolationPort,private readonly validator:ExecutionValidatorPort,private readonly workspaceRoot:string,private readonly emit:ExecutionEventSink=()=>undefined){this.governance=new GovernanceInterceptor(repository,adapter,(execution,event)=>this.persistAndEmit(execution,event),execution=>this.publishStatus(execution));}
 
- listProfiles(projectId:string){return this.repository.listProfiles(projectId).map(profile=>({id:profile.id,projectId:profile.projectId,roleKey:profile.roleKey,name:profile.name,defaultProviderId:profile.defaultProviderId,providerId:profile.provider.id,providerName:profile.provider.displayName,capabilities:profile.provider.capabilities}));}
+ listProfiles(projectId:string){return this.repository.listProfiles(projectId).map(profile=>({id:profile.id,projectId:profile.projectId,roleKey:profile.roleKey,name:profile.name,defaultProviderId:profile.defaultProviderId,providerId:profile.provider.id,providerName:profile.provider.displayName,capabilities:profile.provider.capabilities,defaultModel:profile.models?.default??null,availableModels:profile.models?.available??[]}));}
  listExecutions(projectId:string){return this.repository.listExecutions(projectId);}
  listEvents(executionId:string){return this.repository.listEvents(executionId);}
 
- async start(input:{projectId:string;workItemId:string;profileId:string}):Promise<AgentExecution>{
+ async start(input:{projectId:string;workItemId:string;profileId:string;model?:string}):Promise<AgentExecution>{
   const workItem=this.repository.findWorkItem(input.projectId,input.workItemId);
   if(!workItem)throw new Error('La entidad seleccionada no es una tarea de este proyecto.');
   if(workItem.status!=='READY')throw new Error(`La tarea ${workItem.displayKey} debe estar en estado READY para iniciar.`);
   const profile=this.repository.findProfile(input.projectId,input.profileId);
   if(!profile||profile.roleKey!=='DEVELOPER')throw new Error('Selecciona un perfil DEVELOPER del proyecto.');
   if(profile.provider.providerKey!==this.adapter.providerId)throw new Error(`El adaptador ${profile.provider.providerKey} no está disponible.`);
+  const availableModels=profile.models?.available??[];
+  const requestedModel=input.model?.trim()||profile.models?.default||undefined;
+  if(input.model?.trim()&&!availableModels.includes(input.model.trim()))throw new Error(`El modelo ${input.model} no está disponible para ${profile.provider.displayName}.`);
   const repositoryRoot=this.repository.getRepositoryRoot(input.projectId),repositoryId=this.repository.getRepositoryId(input.projectId);
   if(!repositoryRoot||!repositoryId)throw new Error('Configura primero un repositorio Git para este proyecto.');
   const policy=this.repository.getAutonomyPolicy(input.projectId,profile.id);
@@ -31,7 +34,7 @@ export class AgentOrchestrator {
   if(this.repository.listExecutions(input.projectId).some(item=>item.workItemId===workItem.id&&!terminalStatuses.has(item.status)))throw new Error('Esta tarea ya tiene una ejecución activa.');
 
   const now=new Date().toISOString();
-  let execution:AgentExecution={id:randomUUID(),projectId:input.projectId,workItemId:workItem.id,profileId:profile.id,providerId:profile.provider.id,sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:null,initialCommit:'PENDING_ISOLATION',finalCommit:null,branchOrWorktree:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
+  let execution:AgentExecution={id:randomUUID(),projectId:input.projectId,workItemId:workItem.id,profileId:profile.id,providerId:profile.provider.id,sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:requestedModel??null,initialCommit:'PENDING_ISOLATION',finalCommit:null,branchOrWorktree:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
   this.repository.createExecution(execution);this.publishStatus(execution);
   execution=transitionExecution(execution,'PREPARING_CONTEXT');this.repository.updateExecution(execution);this.publishStatus(execution);
   this.active.add(execution.id);let handedToConsumer=false;
@@ -46,7 +49,7 @@ export class AgentOrchestrator {
    execution={...execution,contextSnapshotId:context.snapshot.id,startedAt:now};
    execution=transitionExecution(execution,'RUNNING');this.repository.updateExecution(execution);this.publishStatus(execution);
    const prompt=buildTaskPrompt(profile.systemInstructions,workItem.title,workItem.summary,workItem.acceptanceCriteria.map(item=>item.description),context.packageText);
-   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt});
+   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt,...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
    handedToConsumer=true;void this.consume(execution,stream);
    return execution;
   }catch(error){
@@ -95,6 +98,8 @@ export class AgentOrchestrator {
    for await(const event of events){
     if(event.type==='APPROVAL_REQUIRED'){if(!await this.governance.intercept(execution,event))throw new Error('La acción solicitada fue rechazada por el usuario.');}
     else await this.persistAndEmit(execution,event);
+    // The CLI reports the concrete model behind an alias (e.g. sonnet -> claude-sonnet-...).
+    if(event.type==='SESSION_INITIALIZED'&&event.model){const latest=this.repository.findExecution(execution.id);if(latest&&!terminalStatuses.has(latest.status)&&latest.modelUsed!==event.model)this.repository.updateExecution({...latest,modelUsed:event.model});}
     if(event.type==='EXECUTION_FINISHED'||event.type==='EXECUTION_FAILED')terminal=event;
    }
    const current=this.repository.findExecution(execution.id);if(!current||terminalStatuses.has(current.status))return;

@@ -6,6 +6,17 @@ export interface AgentRunInput {
   prompt: string;
   model?: string;
   outputSchema?: Record<string, unknown>;
+  /** Path and command rules the engine should enforce itself; the ExecutionValidator stays the authority. */
+  policy?: AgentRunPolicy;
+  /** Provider connection settings (e.g. `authMode`), opaque to the application layer. */
+  providerConfig?: Record<string, unknown>;
+}
+
+export interface AgentRunPolicy {
+  writablePaths: string[];
+  readonlyPaths: string[];
+  deniedPaths: string[];
+  allowedCommands: string[];
 }
 
 export interface AgentAdapterPort {

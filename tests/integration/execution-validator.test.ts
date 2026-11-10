@@ -2,8 +2,8 @@ import { afterEach,describe,expect,it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync,existsSync,symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { ExecutionValidator } from '../../src/infrastructure/execution/execution-validator.js';
+import { dirname, join, resolve } from 'node:path';
+import { ExecutionValidator, glob } from '../../src/infrastructure/execution/execution-validator.js';
 import type { AutonomyPolicy } from '../../src/domain/governance/models.js';
 
 const roots:string[]=[];
@@ -76,6 +76,36 @@ describe('ExecutionValidator',()=>{
   expect(JSON.stringify(recorded)).not.toContain('super-secret');expect(existsSync(join(worktree,'.env'))).toBe(false);
  });
 
+ it('accepts ignored build directories covered by dir/** without deleting them (D2)',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('88888888-8888-4888-8888-888888888888');
+  const gitDir=resolve(worktree,execFileSync('git',['rev-parse','--git-common-dir'],{cwd:worktree,encoding:'utf8'}).trim());
+  mkdirSync(join(gitDir,'info'),{recursive:true});writeFileSync(join(gitDir,'info','exclude'),'node_modules/\ndist/\n');
+  mkdirSync(join(worktree,'node_modules','left-pad'),{recursive:true});writeFileSync(join(worktree,'node_modules','left-pad','index.js'),'module.exports = 1;\n');
+  mkdirSync(join(worktree,'dist'));writeFileSync(join(worktree,'dist','out.js'),'built\n');writeFileSync(join(worktree,'src','feature.ts'),'export const f = 1;\n');
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy:{...policy,writablePaths:['src/**','node_modules/**','dist/**']}});
+  expect(result).toMatchObject({passed:true});
+  expect(existsSync(join(worktree,'node_modules','left-pad','index.js'))).toBe(true);expect(existsSync(join(worktree,'dist','out.js'))).toBe(true);
+ });
+
+ it('still rejects ignored directories that the policy does not make writable (D2)',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('99999999-9999-4999-8999-999999999999');
+  const gitDir=resolve(worktree,execFileSync('git',['rev-parse','--git-common-dir'],{cwd:worktree,encoding:'utf8'}).trim());
+  mkdirSync(join(gitDir,'info'),{recursive:true});writeFileSync(join(gitDir,'info','exclude'),'build/\n');
+  mkdirSync(join(worktree,'build'));writeFileSync(join(worktree,'build','out.bin'),'x');
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy});
+  expect(result.passed).toBe(false);expect((result.testSummary as {violations:string[]}).violations).toEqual(['build']);expect(existsSync(join(worktree,'build'))).toBe(false);
+ });
+
+ it('denies name-only patterns at any depth, case-insensitively (D3)',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  mkdirSync(join(worktree,'src','sub'));
+  writeFileSync(join(worktree,'src','.env'),'A=1\n');writeFileSync(join(worktree,'src','sub','.env.prod'),'B=2\n');writeFileSync(join(worktree,'src','sub','.ENV.local'),'C=3\n');writeFileSync(join(worktree,'src','environment.ts'),'export {};\n');
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy});
+  const violations=(result.testSummary as {violations:string[]}).violations;
+  expect(result.passed).toBe(false);expect(violations.sort()).toEqual(['src/.env','src/sub/.ENV.local','src/sub/.env.prod']);
+  expect(existsSync(join(worktree,'src','environment.ts'))).toBe(true);
+ });
+
  it('runs only commands listed in the autonomy policy and writes their output',async()=>{
   const root=repository(),workspace=join(root,'workspace'),id='44444444-4444-4444-8444-444444444444',projectId=policy.projectId;
   const base=execFileSync('git',['rev-parse','HEAD'],{cwd:join(root,'repo'),encoding:'utf8'}).trim();
@@ -86,6 +116,15 @@ describe('ExecutionValidator',()=>{
   expect(readFileSync(join(workspace,'projects',projectId,'executions',id,'test-output.log'),'utf8')).toContain(process.versions.node);
   await expect(validator.validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy:{...policy,allowedCommands:['node --version; touch /tmp/should-not-run']}})).rejects.toThrow('Shell operators are not allowed');
  });
+});
+
+describe('policy glob',()=>{
+ it.each([
+  ['.env*','.env',true],['.env*','src/sub/.env.prod',true],['.env*','src/environment.ts',false],['.env*','.envrc/config',true],
+  ['node_modules/**','node_modules',true],['node_modules/**','node_modules/a/b.js',true],['node_modules/**','src/node_modules',false],
+  ['src/**','src/a.ts',true],['src/**','tests/src/a.ts',false],['/README.md','README.md',true],['/README.md','docs/README.md',false],
+  ['docs/architecture/ADR/**','docs/architecture/ADR',true],['**/secrets','secrets',true],['**/secrets','a/b/secrets',true],['*.md','docs/a.md',true],['src/*.ts','src/a/b.ts',false],
+ ])('%s matches %s → %s',(pattern,path,expected)=>{expect(glob(pattern).test(path)).toBe(expected);});
 });
 
 function isolated(id:string){

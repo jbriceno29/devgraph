@@ -161,10 +161,28 @@ async function redactedChangeType(worktree:string,path:string,isUntracked:boolea
 
 function splitNul(value:string):string[]{return value.split('\0').filter(Boolean);}
 function safeRepoPath(path:string):string {const normalized=path.replaceAll('\\','/').replace(/\/+$/,'');if(!normalized||normalized.startsWith('/')||normalized.split('/').some(part=>part==='..'))throw new Error(`Git returned an unsafe path: ${path}`);return normalized;}
-function isDenied(path:string,patterns:string[]):boolean{return matchesAny(path,patterns);}
+// Denied paths are matched case-insensitively so `.ENV` cannot dodge `.env*` on case-insensitive filesystems.
+function isDenied(path:string,patterns:string[]):boolean{return matchesAny(path,patterns,'i');}
 function isReadOnly(path:string,patterns:string[]):boolean{return matchesAny(path,patterns);}
-function matchesAny(path:string,patterns:string[]):boolean{return patterns.some(pattern=>glob(pattern).test(path));}
-function glob(pattern:string):RegExp {const escaped=pattern.replace(/[.+^${}()|[\]\\]/g,'\\$&').replaceAll('**','\u0000').replaceAll('*','[^/]*').replaceAll('?','[^/]').replaceAll('\u0000','.*');return new RegExp(`^${escaped}$`);}
+function matchesAny(path:string,patterns:string[],flags=''):boolean{return patterns.some(pattern=>glob(pattern,flags).test(path));}
+
+/**
+ * Compiles a policy pattern with gitignore-like semantics:
+ * - a pattern without `/` (`.env*`) matches that name at any depth, and everything beneath it;
+ * - a pattern with `/` (or a leading `/`) is anchored at the repository root;
+ * - `dir/**` also matches `dir` itself, because Git reports untracked ignored directories collapsed;
+ * - `**` crosses directories, `*` and `?` stay within one path segment.
+ */
+export function glob(pattern:string,flags=''):RegExp {
+ const trimmed=pattern.trim().replace(/\/+$/,'');
+ const anchored=trimmed.includes('/');
+ let body=trimmed.replace(/^\/+/,'');
+ const coversDirectory=body.endsWith('/**');
+ if(coversDirectory)body=body.slice(0,-3);
+ const translated=body.replace(/[.+^${}()|[\]\\]/g,'\\$&').replaceAll('**/','\u0001').replaceAll('**','\u0000').replaceAll('*','[^/]*').replaceAll('?','[^/]').replaceAll('\u0001','(?:.*/)?').replaceAll('\u0000','.*');
+ const source=anchored?`^${translated}${coversDirectory?'(?:/.*)?':''}$`:`^(?:.*/)?${translated}(?:/.*)?$`;
+ return new RegExp(source,flags);
+}
 function parseCommand(command:string):string[]{
  if(/[;&|`$<>\n\r]/.test(command))throw new Error(`Shell operators are not allowed in verification commands: ${command}`);
  const tokens=command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)??[];

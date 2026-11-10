@@ -1,0 +1,21 @@
+// @vitest-environment jsdom
+import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { afterEach,expect,it,vi } from 'vitest';
+import { WorkspaceNavigationProvider } from '../../src/desktop/state/workspace-navigation-context.js';
+import { WorkspaceShell } from '../../src/desktop/state/WorkspaceShell.js';
+import type { ChangeSetDto,EntityInspectorDto,WorkspaceIpcClient,WorkspaceLoadedStateDto } from '../../src/shared/contracts/ipc-contracts.js';
+
+const project={id:'p',name:'Planning Project',slug:'planning-project',description:null,currentRevision:1,createdAt:'now',updatedAt:'now'};
+const graph={projectId:'p',revision:1,nodes:[{id:'root',key:'PROJ-01',type:'PROJECT_ROOT' as const,label:'Planning Project',status:'ACTIVE'}],edges:[]};
+const loaded:WorkspaceLoadedStateDto={project,graph,selectedEntityId:'root'};
+const proposal:ChangeSetDto={id:'cs-1',projectId:'p',baseGraphRevision:1,originType:'AI_CHAT',title:'Add sign in',rationale:'Provide authentication.',status:'VALIDATED',operations:[{type:'CREATE_MODULE',tempId:'$module',parentId:'root',title:'Identity'},{type:'CREATE_FEATURE',tempId:'$feature',moduleId:'$module',title:'Sign in'}],validationIssues:[],createdAt:'now'};
+afterEach(cleanup);
+it('shows a validated Codex proposal as graph ghosts and applies it only after explicit confirmation',async()=>{
+ let saved:ChangeSetDto[]=[],currentRevision=1;const details:EntityInspectorDto={entity:{id:'root',key:'PROJ-01',type:'PROJECT_ROOT',label:'Planning Project',status:'ACTIVE',summary:''},attributes:{},relationships:[],executionHistory:[]};
+ const client:WorkspaceIpcClient={commands:{createProject:vi.fn(async()=>project),openProject:vi.fn(async()=>loaded),configureRepository:vi.fn(async(projectId:string,localPath:string)=>({projectId,localPath})),createArtifact:vi.fn(),saveArtifact:vi.fn(),proposeChanges:vi.fn(async()=>{saved=[proposal];return proposal;}),editChangeSet:vi.fn(),applyChangeSet:vi.fn(async()=>{currentRevision=2;const applied={...proposal,status:'APPLIED' as const,appliedGraphRevision:2,appliedAt:'later'};saved=[applied];return {changeSet:applied,revision:2};}),rejectChangeSet:vi.fn()},queries:{listProjects:vi.fn(async()=>[project]),getGraphView:vi.fn(async()=>({...graph,revision:currentRevision})),getEntityInspectorDetails:vi.fn(async()=>details),getRepositoryPath:vi.fn(async()=>null),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn(),listChangeSets:vi.fn(async()=>saved),previewContext:vi.fn(),getContextSnapshot:vi.fn()},events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(()=>()=>{})}};
+ Object.defineProperty(window,'workspaceIpc',{configurable:true,value:client});render(<WorkspaceNavigationProvider><WorkspaceShell/></WorkspaceNavigationProvider>);
+ await waitFor(()=>expect(client.queries.listProjects).toHaveBeenCalled());fireEvent.click(screen.getByRole('button',{name:/Planning Project/}));await screen.findByRole('button',{name:'PROJECT_ROOT: Planning Project'});fireEvent.click(screen.getByRole('button',{name:'Planificar'}));
+ fireEvent.change(screen.getByLabelText('¿Qué quieres cambiar?'),{target:{value:'Add a sign in feature'}});fireEvent.click(screen.getByRole('button',{name:'Proponer cambios'}));
+ expect(await screen.findByLabelText('Propuesta: FEATURE: Sign in')).toBeTruthy();const apply=await screen.findByRole('button',{name:'Aplicar cambios'});expect((apply as HTMLButtonElement).disabled).toBe(false);fireEvent.click(apply);
+ await waitFor(()=>expect(client.commands.applyChangeSet).toHaveBeenCalledWith('cs-1'));expect(await screen.findByText('Cambios aplicados y grafo actualizado.')).toBeTruthy();expect(await screen.findByText('REV 2')).toBeTruthy();
+});

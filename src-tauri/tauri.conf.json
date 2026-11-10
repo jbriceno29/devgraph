@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Graph Workspace",
+  "version": "0.1.0",
+  "identifier": "dev.graphdev2.workspace",
+  "build": {
+    "beforeDevCommand": "npm run dev:tauri",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build:tauri",
+    "frontendDist": "../dist/renderer"
+  },
+  "app": {
+    "windows": [{"label":"main","title":"Graph Workspace","width":1440,"height":920,"minWidth":1000,"minHeight":680,"backgroundColor":"#090d18"}],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost asset:; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "resources": {
+      "resources/node": "node",
+      "resources/core": "core",
+      "resources/node_modules": "node_modules"
+    }
+  }
+}

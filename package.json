@@ -1,0 +1,45 @@
+{
+  "name": "graphdev2-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build:renderer": "vite build",
+    "build:core": "node scripts-clean-main.mjs && tsc -p tsconfig.core.json && node scripts-copy-sql.mjs",
+    "build:tauri": "npm run build:core && npm run build:renderer && node scripts/prepare-tauri-resources.mjs",
+    "dev:tauri": "npm run build:core && node scripts/prepare-tauri-resources.mjs && vite --host 127.0.0.1 --port 1420",
+    "tauri": "tauri",
+    "desktop": "tauri dev",
+    "desktop:build": "tauri build",
+    "prepare:tauri": "node scripts/prepare-tauri-resources.mjs",
+    "build": "npm run build:tauri"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@tauri-apps/cli": "^2.12.4",
+    "@testing-library/react": "^16.3.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "jsdom": "^31.0.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "better-sqlite3": "^12.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0"
+  }
+}

@@ -3,6 +3,19 @@
 Fecha: 2026-11-10
 Relacionado: `docs/ANALISIS_PROYECTO.md` (defectos D1 a D8, huecos del MVP y Etapa 8)
 
+## 0. Estado
+
+Actualizado: 2026-11-10, rama `feat/claude-code`.
+
+| Fase | Estado |
+| :--- | :--- |
+| 0. Base limpia | **Hecha.** Etapa 7 y documentos commiteados (`d1f57a5`, `af44427`); carpetas rotas eliminadas; `typecheck`, `test`, `build` y `cargo test` en verde. |
+| 1. Sondeo del CLI y fixtures | **Hecha.** Fixtures en `tests/fixtures/claude/`; sección 2 actualizada. Falta solo el error de límite de uso, que no se puede provocar. |
+| 4. Defectos | **Parcial.** Hechos: endurecimiento del validador (`68e0c2d`), D2 y D3 (`2a90857`), D4 y D5 (`a1c493b`). Pendientes: ver la Fase 4. |
+| 2, 3, 5, 6, 7 | Pendientes. |
+
+La verificación del análisis (`docs/ANALISIS_PROYECTO.md`) confirmó D1 a D6 con reproducciones y encontró defectos nuevos. Todos los defectos abiertos están asignados a una fase en la sección 4; el análisis queda como referencia del diagnóstico, no como lista de trabajo.
+
 ## 1. Objetivo y alcance
 
 Dejar de depender de Codex y usar **Claude Code a través de su CLI** (`claude -p`) como único motor, de modo que el consumo salga de la **suscripción** y no de créditos de API. Con ese motor funcionando se cierran los defectos previos a la Etapa 8, se implementa la Etapa 8 recortada y se valida en uso real entre dos personas si el contexto curado aporta valor.
@@ -36,11 +49,24 @@ Fuente: https://code.claude.com/docs/en/legal-and-compliance.md
 
 **Conclusión:** lanzar el `claude` oficial, sin modificar, como proceso hijo y con la sesión que cada persona ya tiene iniciada, sin tocar tokens, queda más cerca de lo permitido que de lo prohibido. Una app que automatiza el CLI en ejecuciones largas y autónomas no está descrita explícitamente, así que es una zona gris. Condiciones firmes: cada persona usa su propia suscripción (no se comparte una sesión) y, si Graph Workspace pasa a ser un producto para otros, esos usuarios deberán usar clave de API. Para una respuesta definitiva, la propia página indica contactar a ventas de Anthropic. Este resumen es una lectura de la documentación, no una opinión legal.
 
-### Lo que NO se pudo confirmar
+### Confirmado en la Fase 1 (CLI 2.1.318, 2026-11-10)
 
-1. **El contrato exacto de `--permission-prompt-tool`** (formato de la herramienta MCP) y la **sintaxis de reglas de ruta** para `Edit`/`Write` (por ejemplo cómo expresar `src/**`). Leer https://code.claude.com/docs/en/cli-reference.md y https://code.claude.com/docs/en/permissions.md antes de implementarlos.
-3. **Los nombres exactos de campos** de los mensajes `assistant`/`user`/`result` del stream. Por eso la Fase 1 captura salidas reales como fixtures.
-4. **Si el esquema JSON de Claude exige el formato "todo requerido y nullable"** que hoy usa el planificador para Codex. Probar un esquema normal.
+Fixtures y detalle de cada captura en `tests/fixtures/claude/README.md`.
+
+- **Facturación:** con la sesión iniciada y el entorno limpio, `system/init` trae `apiKeySource: "none"` y `claude auth status --json` devuelve `authMethod: "claude.ai"`. Se usa la suscripción.
+- **Reglas de ruta:** `Write(src/**)` y `Edit(src/**)` se resuelven relativas al `cwd`. Con ellas, `src/ok.ts` se permite y `README.md` en la raíz se deniega.
+- **Lectura y comandos de solo lectura:** en `dontAsk`, el CLI **autoaprueba** comandos Bash de solo lectura dentro del `cwd` (`ls -la`, `reason_type: "subcommandResults"`) aunque Bash no esté en `--allowedTools`. Leer fuera del `cwd`, con Bash o con Read, se deniega. `--disallowedTools Bash` elimina Bash por completo.
+- **Denegaciones:** cada una emite `system/permission_denied` (`tool_name`, `tool_use_id`, `decision_reason_type`, `message`) y se repite en `result.permission_denials` (`tool_name`, `tool_use_id`, `tool_input`). Una ejecución con denegaciones termina igualmente en `subtype: "success"`: el adaptador debe mostrarlas.
+- **Decisión por herramienta:** los mensajes `user` con `tool_result` traen `tool_result_meta[].permission_decision` (`decision: accept|reject`, `reason_type: rule|mode|subcommandResults`).
+- **Campos del stream:** `system/init` (`session_id`, `model`, `tools`, `permissionMode`, `claude_code_version`, `cwd`); `assistant` con `message.content[]` de tipo `text`, `thinking` o `tool_use` (`id`, `name`, `input`) y `message.usage`; `user` con `tool_result` (`tool_use_id`, `content`, `is_error`) y `tool_use_result` (para `Write`: `type`, `filePath`, `content`); `system/thinking_tokens`; `system/status`; `rate_limit_event` (`rate_limit_info.status`, `rateLimitType`, `resetsAt`, `unifiedWindows.five_hour|seven_day.utilization`); `result` (`subtype`, `is_error`, `result`, `stop_reason`, `terminal_reason`, `num_turns`, `usage`, `modelUsage`, `total_cost_usd`, `permission_denials`, `session_id`).
+- **Salida estructurada:** un esquema JSON normal (propiedades opcionales) funciona con `--output-format json --tools "" --json-schema`; el objeto llega en `structured_output` y como texto en `result`.
+- **Cancelación:** SIGINT → código de salida 0 y `result` final con `subtype: "error_during_execution"`, `is_error: true`, `terminal_reason: "aborted_streaming"`. SIGTERM → código 143 y sin `result`.
+- **Herramientas por defecto:** `init.tools` incluye herramientas que una ejecución autónoma no debe ver (`CronCreate`, `RemoteTrigger`, `PushNotification`, `SendMessage`, `WebFetch`, `WebSearch`…). Usar `--tools` con la lista mínima, además de `--allowedTools`.
+
+### Lo que sigue sin confirmar
+
+1. **El error de límite de uso.** No se puede provocar a voluntad. Se tratará `rate_limit_event` con `status` distinto de `allowed` y un `result` con `is_error` y `api_error_status` como señales, y se capturará el primero que aparezca en uso real.
+2. **El contrato de `--permission-prompt-tool`.** No hace falta mientras las aprobaciones sean estáticas (sección 6, decisión 4).
 
 ## 3. Decisiones de diseño
 
@@ -60,7 +86,7 @@ Tamaños relativos: S = horas, M = ~1 día, L = varios días.
 - Correr `npm run typecheck`, `npm test`, `cargo test --manifest-path src-tauri/Cargo.toml` y anotar el resultado real.
 - Crear una rama de trabajo (`feat/claude-code`).
 
-**Criterio de cierre:** árbol limpio, suites en verde, Etapa 7 en el historial.
+**Criterio de cierre:** árbol limpio, suites en verde, Etapa 7 en el historial. **Cumplido.**
 
 ### Fase 1: Sondeo del CLI y fixtures (S)
 
@@ -69,7 +95,7 @@ Tamaños relativos: S = horas, M = ~1 día, L = varios días.
 - Registrar en este documento los campos reales y la sintaxis de reglas de ruta confirmada.
 - Comprobar que, sin `ANTHROPIC_API_KEY` en el entorno, la ejecución se factura a la suscripción.
 
-**Criterio de cierre:** fixtures versionados y la sección 2 actualizada con lo confirmado.
+**Criterio de cierre:** fixtures versionados y la sección 2 actualizada con lo confirmado. **Cumplido** (salvo el caso (e), ver sección 2).
 
 ### Fase 2: `ClaudeCodeAdapter` (M)
 
@@ -81,9 +107,11 @@ Archivos:
 - `sqlite-agent-execution-repository.ts`: sembrar el proveedor `claude-code` y su perfil `DEVELOPER`; reemplazar `ensureCodexDefaults` por una siembra por proveedor, llamada al crear o abrir el proyecto y no en cada lectura. Migrar los proyectos existentes (perfil Codex → Claude).
 
 Comportamiento:
-- Argumentos base: `-p --output-format stream-json --verbose --permission-mode dontAsk --permission-prompts none`, `--model` opcional, `--allowedTools` derivado de la política (`allowedCommands` → `Bash(<cmd> *)`; escritura → reglas de ruta según lo confirmado en Fase 1).
+- Argumentos base: `-p --output-format stream-json --verbose --permission-mode dontAsk --permission-prompts none --strict-mcp-config`, `--model` opcional, `--tools` con la lista mínima (`Read`, `Write`, `Edit`, `Glob`, `Grep` y `Bash` solo si la política tiene `allowedCommands`), y `--allowedTools` derivado de la política: `writablePaths` → `Write(<patrón>)` y `Edit(<patrón>)`, `allowedCommands` → `Bash(<cmd>)`. Sin `allowedCommands`, pasar `--disallowedTools Bash`, porque `dontAsk` autoaprueba Bash de solo lectura dentro del worktree.
+- `rate_limit_event` → evento visible en la vista de Agentes (ventana y porcentaje); `system/permission_denied` → evento de acción denegada.
 - Prompt por stdin, `cwd` = worktree.
-- Entorno del hijo sin `ANTHROPIC_API_KEY`.
+- Entorno del hijo construido desde una lista blanca (`HOME`, `PATH`, `LANG`, `USER`, `TMPDIR`…), no heredado. Además de `ANTHROPIC_API_KEY`, hay que excluir `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDECODE` y cualquier `CLAUDE_CODE_*`: si Graph Workspace se lanza desde otra sesión de Claude (por ejemplo, la app de escritorio), esas variables redirigen la autenticación o cambian el modo del CLI.
+- Antes de cada ejecución, `claude auth status --json` debe devolver `loggedIn: true`; si no, la ejecución falla con un mensaje claro sin lanzar el agente.
 - Mapeo: `system/init` → `SESSION_INITIALIZED`; bloques de texto → `TEXT_DELTA`; `tool_use` → `TOOL_INVOCATION_STARTED` (y `FILE_TOUCHED` para Edit/Write); `tool_result` → `TOOL_INVOCATION_FINISHED`; `result` → `EXECUTION_FINISHED` o `EXECUTION_FAILED`; `system/api_retry` con `rate_limit` → evento visible.
 - Cancelación: SIGINT; si el proceso sigue vivo tras unos segundos, SIGTERM.
 - Capacidades: resume, streaming, cancelación, salida estructurada y worktrees en `true`; aprobaciones en `false`.
@@ -95,7 +123,8 @@ Comportamiento:
 ### Fase 3: Planificador con Claude y fix de D1 (M)
 
 - Nuevo `ClaudeChangeSetPlanner` (`claude -p --output-format json --json-schema`, herramientas deshabilitadas o solo lectura, lectura de `structured_output`, error claro si falta). Extraer `normalizeOperation` a un módulo compartido.
-- **D1:** correlacionar respuestas por `id` en `lib.rs` (mapa de pendientes, sin mantener el mutex durante la espera) y atender peticiones del sidecar de forma concurrente. Alternativa mínima si se quiere acotar: subir el timeout a un valor mayor que el del planificador y mantener la serialización.
+- **D1 (confirmado):** con un planificador de 75 s, la UI recibe error a los 60 s pero la propuesta se guarda igual, y una consulta enviada a los 2 s responde a los 73 s. Corrección: correlacionar respuestas por `id` en `lib.rs` (mapa de pendientes, sin mantener el mutex durante la espera), atender peticiones del sidecar de forma concurrente, y convertir la propuesta en un comando que responde enseguida y notifica el resultado por evento. Subir el timeout no basta: sigue bloqueando la UI y contradice el criterio de cierre.
+- Registrar el `stderr` del sidecar en un archivo de log y reiniciarlo si muere (hoy se descarta y, si cae, todas las peticiones fallan hasta reiniciar la app).
 - Probar que un esquema JSON "normal" funciona; simplificar el actual si es posible.
 
 **Criterio de cierre:** proponer y aplicar un ChangeSet con Claude desde la vista Planificar, incluso con una respuesta que tarde más de 60 s, sin bloquear el resto de la UI.
@@ -104,14 +133,20 @@ Comportamiento:
 
 Cada uno con su test de regresión.
 
-- **D2:** que `node_modules/**` y similares coincidan también con el directorio `node_modules` (o listar ignorados sin `--directory`); definir si los ignorados respetan `writablePaths` o solo `deniedPaths`.
-- **D3:** semántica tipo gitignore para patrones sin `/` (`.env*` en cualquier profundidad).
-- **D4:** reconciliar al abrir el proyecto: toda ejecución no terminal que no esté en memoria pasa a `FAILED` (interrumpida); límite de tiempo por ejecución.
-- **D5:** releer la ejecución tras validar y no sobrescribir un estado terminal.
-- **D6:** commit automático de los documentos al aplicar un ChangeSet, rechazo si esas rutas tenían cambios sin commitear, y bloqueo de `execution:start` mientras algún documento de artefacto no esté en `HEAD` (sección 6, decisión 5).
-- **D7:** detener el proceso del motor cuando falla el consumo o se rechaza una acción.
+Hechos:
+- **Validador endurecido** (`68e0c2d`): Git fijado al directorio de administración del worktree con `core.fsmonitor` y hooks desactivados (el agente podía hacer ejecutar un comando en el host reescribiendo el `.git` del worktree); el `.git` manipulado se restaura y falla la auditoría; symlinks que salen del worktree o llegan a rutas denegadas fallan; el contenido de rutas denegadas no se copia al parche ni a `execution_file_diffs`.
+- **D2 y D3** (`2a90857`): patrones con semántica tipo gitignore; `dir/**` coincide con `dir`; patrones sin `/` valen a cualquier profundidad; rutas denegadas sin distinguir mayúsculas.
+- **D4 y D5** (`a1c493b`): reconciliación de ejecuciones interrumpidas al abrir el proyecto y al iniciar; cancelar huérfanas; `CANCELLED` se persiste antes de detener el motor y no se sobrescribe tras validar; worktree y rama se eliminan si la preparación falla o se cancela antes de que el agente corra.
 
-**Criterio de cierre:** una ejecución que corre `npm install` o un build en el worktree no falla por la auditoría; `src/.env` se detecta; reiniciar la app con una ejecución en curso no deja la tarea bloqueada.
+Pendientes:
+- **D6:** commit automático de los documentos al aplicar un ChangeSet, rechazo si esas rutas tenían cambios sin commitear, y bloqueo de `execution:start` mientras algún documento de artefacto no esté en `HEAD` (sección 6, decisión 5). Confirmado: un documento recién creado no existe en el worktree del agente, y tampoco llegó al prompt cuando colgaba de la raíz del proyecto.
+- **Atomicidad del applier** (junto con D6): hoy se mueven los archivos y después se hace commit en SQLite. Si el proceso muere entre ambos, quedan Markdown sin filas y `.bak` huérfanos; si falla el borrado de un `.bak` tras el commit, se revierten los archivos con la base ya confirmada. Corrección: borrar backups sin revertir tras el commit, y al abrir el proyecto limpiar `.tmp`/`.bak` y reconciliar documentos sin fila.
+- **`ContextSnapshot` reproducible:** hoy sella `HEAD` pero lee el árbol de trabajo. Con D6 resuelto (documentos siempre en `HEAD`), leer las fuentes con `git show HEAD:<ruta>` o registrar que el contenido no estaba commiteado.
+- **D7:** detener el proceso del motor cuando falla el consumo o se rechaza una acción; `core.close()` debe cancelar las ejecuciones activas.
+- **Tiempo máximo por ejecución**, configurable en la política; al vencer, cancelar el motor y marcar `FAILED` con motivo.
+- Al reconciliar una ejecución interrumpida, cerrar sus solicitudes de aprobación `PENDING`.
+
+**Criterio de cierre:** una ejecución que corre `npm install` o un build en el worktree no falla por la auditoría; `src/.env` se detecta; reiniciar la app con una ejecución en curso no deja la tarea bloqueada (los tres ya se cumplen); el agente encuentra en su worktree los documentos que generó el último ChangeSet; ninguna ejecución queda corriendo indefinidamente.
 
 ### Fase 5: Operación mínima desde la UI (M a L)
 
@@ -176,4 +211,4 @@ Resuelven las preguntas abiertas de la versión anterior de este plan.
 
 ## 7. Orden de arranque sugerido
 
-Fase 0 y Fase 1 el mismo día; Fase 2 y 3 a continuación; Fase 4 antes de cualquier uso prolongado. Las Fases 5 y 6 pueden solaparse parcialmente.
+Fase 0 y Fase 1 el mismo día; Fase 2 y 3 a continuación; lo pendiente de la Fase 4 (sobre todo D6) antes de la primera ejecución real con Claude sobre un proyecto con documentos, y el resto antes de cualquier uso prolongado. Las Fases 5 y 6 pueden solaparse parcialmente.

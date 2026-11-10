@@ -26,6 +26,8 @@ import { ExecutionEventLog } from '../../filesystem/execution-event-log.js';
 import type { AgentExecution } from '../../../domain/agents/models.js';
 import type { StartAgentExecutionInput } from '../../../shared/contracts/agent-view.js';
 import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-port.js';
+import { GitIsolationService } from '../../git/git-isolation-service.js';
+import { ExecutionValidator } from '../../execution/execution-validator.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
 export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
@@ -47,7 +49,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const cached=executionServices.get(projectId);if(cached)return cached;
   const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database),contextEngine=getContextEngine(projectId);
   const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,maxAllowedTokens:32_000,maxHops:2})};
-  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),codexAdapter,(channel,payload)=>emit(channel,payload));
+  const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
+  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),codexAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload));
   executionServices.set(projectId,service);return service;
  };
  const startWatcher=async(projectId:string)=>{
@@ -134,6 +137,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'execution:list_events': return findExecutionService(String(args[0]??'')).listEvents(String(args[0]??''));
     case 'execution:start': {const input=args[0] as StartAgentExecutionInput;return toAgentExecutionDto(await getExecutionService(input.projectId).start(input));}
     case 'execution:cancel': {const executionId=String(args[0]??'');return toAgentExecutionDto(await findExecutionService(executionId).cancel(executionId));}
+    case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }
   },

@@ -17,6 +17,7 @@ export type AgentEvent =
  | { type:'CHANGESET_PROPOSED'; timestamp:string; proposal:import('../knowledge/change-set.js').ChangeSet }
  | { type:'EXECUTION_FINISHED'; timestamp:string; summary:string; usage?:{inputTokens:number;outputTokens:number} }
  | { type:'EXECUTION_FAILED'; timestamp:string; errorCode:string; errorMessage:string; isRecoverable:boolean };
+export type ApprovalDecision = {approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string};
 const transitions: Readonly<Record<ExecutionStatus, readonly ExecutionStatus[]>> = { QUEUED:['PREPARING_CONTEXT','CANCELLED'], PREPARING_CONTEXT:['RUNNING','FAILED','CANCELLED'], RUNNING:['AWAITING_APPROVAL','VALIDATING','FAILED','CANCELLED'], AWAITING_APPROVAL:['RUNNING','FAILED','CANCELLED'], VALIDATING:['COMPLETED','FAILED','CANCELLED'], COMPLETED:[], FAILED:[], CANCELLED:[] };
 export function canTransitionExecution(from: ExecutionStatus, to: ExecutionStatus): boolean { return transitions[from].includes(to); }
 export function transitionExecution(execution: AgentExecution, to: ExecutionStatus): AgentExecution {

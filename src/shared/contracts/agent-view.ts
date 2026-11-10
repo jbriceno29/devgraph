@@ -6,3 +6,4 @@ export interface AgentExecutionDto {id:string;projectId:string;workItemId:string
 export interface AgentEventDto {type:string;timestamp:string;[key:string]:unknown}
 export interface AgentEventRecordDto {id:string;sequenceNo:number;createdAt:string;event:AgentEventDto}
 export interface StartAgentExecutionInput {projectId:string;workItemId:string;profileId:string}
+export interface ResolveExecutionApprovalInput {executionId:string;requestId:string;decision:{approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string}}

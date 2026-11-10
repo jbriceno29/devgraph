@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider, AgentProviderId, ExecutionStatus } from '../../../domain/agents/models.js';
+import type { AutonomyPolicy,ApprovalRequest } from '../../../domain/governance/models.js';
 import type { WorkItem, AcceptanceCriterion } from '../../../domain/work-management/entities.js';
 import type { AgentExecutionProfile, AgentExecutionRepositoryPort } from '../../../application/ports/agent-execution-port.js';
 import type { SqliteDatabase } from '../sqlite/database.js';
+import type { ExecutionFileDiff } from '../../execution/execution-validator.js';
 
 const CODEX_CAPABILITIES = { supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true };
 
@@ -36,6 +38,27 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
   getRepositoryRoot(projectId: string): string | null {
     const row=this.db.prepare('SELECT local_path FROM repositories WHERE project_id=? AND is_primary=1 ORDER BY created_at LIMIT 1').get(projectId) as {local_path:string}|undefined;
     return row?.local_path??null;
+  }
+
+  getRepositoryId(projectId:string):string|null {const row=this.db.prepare('SELECT id FROM repositories WHERE project_id=? AND is_primary=1 ORDER BY created_at LIMIT 1').get(projectId) as {id:string}|undefined;return row?.id??null;}
+
+  getAutonomyPolicy(projectId:string,profileId:string):AutonomyPolicy {
+    this.ensureCodexDefaults(projectId);
+    const row=this.db.prepare(`SELECT a.* FROM autonomy_policies a JOIN agent_profiles p ON p.default_policy_id=a.id WHERE p.project_id=? AND p.id=?`).get(projectId,profileId) as PolicyRow|undefined;
+    if(!row)throw new Error('No hay una política de autonomía asignada al perfil.');
+    return {id:row.id,projectId:row.project_id,name:row.name,writablePaths:parseArray(row.writable_paths_json),readonlyPaths:parseArray(row.readonly_paths_json),deniedPaths:parseArray(row.denied_paths_json),allowedCommands:parseArray(row.allowed_commands_json),autoApproveScopes:parseArray(row.auto_approve_scopes_json),requireWorktreeIsolation:Boolean(row.require_worktree_isolation)};
+  }
+
+  createApprovalRequest(request:ApprovalRequest):void {this.db.prepare(`INSERT INTO approval_requests(id,execution_id,scope,requested_action,reason,status,requested_at) VALUES(?,?,?,?,?,'PENDING',?)`).run(request.id,request.executionId,request.scope,request.requestedAction,request.reason,request.requestedAt);}
+
+  resolveApprovalRequest(requestId:string,decision:{approved:boolean;resolvedBy:string;note:string}):void {
+    const result=this.db.prepare(`UPDATE approval_requests SET status=?,resolved_by=?,resolution_note=?,resolved_at=? WHERE id=? AND status='PENDING'`).run(decision.approved?'APPROVED':'REJECTED',decision.resolvedBy,decision.note,new Date().toISOString(),requestId);
+    if(result.changes!==1)throw new Error('La solicitud de aprobación ya fue resuelta o no existe.');
+  }
+
+  recordFileDiffs(executionId:string,repositoryId:string,diffs:ExecutionFileDiff[]):void {
+    const insert=this.db.prepare(`INSERT INTO execution_file_diffs(id,execution_id,repository_id,file_path,change_type,additions,deletions,diff_patch) VALUES(?,?,?,?,?,?,?,?)`);
+    this.db.transaction(()=>{for(const diff of diffs)insert.run(randomUUID(),executionId,repositoryId,diff.filePath,diff.changeType,diff.additions,diff.deletions,diff.diffPatch);}).immediate();
   }
 
   createExecution(execution: AgentExecution): void {
@@ -85,6 +108,7 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
   private ensureCodexDefaults(projectId: string): void {
     const providerId='provider:codex';
     const profileId=`${projectId}:profile:developer`;
+    const policyId=`${projectId}:policy:default`;
     const now=new Date().toISOString();
     this.db.transaction(()=>{
       this.db.prepare(`INSERT INTO agent_providers(id,provider_key,display_name,adapter_version,capabilities_json)
@@ -93,10 +117,12 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       const actualProviderId=(this.db.prepare('SELECT id FROM agent_providers WHERE provider_key=?').get('codex') as {id:string}).id;
       this.db.prepare(`INSERT INTO provider_connections(id,provider_id,executable_path,health_status)
         VALUES(?,?,?,'UNKNOWN') ON CONFLICT(id) DO NOTHING`).run(`${actualProviderId}:local`,actualProviderId,process.env.GRAPHDEV_CODEX_PATH??process.env.CODEX_CLI_PATH??null);
+      this.db.prepare(`INSERT INTO autonomy_policies(id,project_id,name,writable_paths_json,readonly_paths_json,denied_paths_json,allowed_commands_json,auto_approve_scopes_json,require_worktree_isolation)
+        VALUES(?,?,?,'["src/**","tests/**","docs/**","node_modules/**","dist/**","target/**","coverage/**"]','["docs/architecture/ADR/**"]','[".env*",".git/config"]','[]','[]',1) ON CONFLICT(id) DO NOTHING`).run(policyId,projectId,'Default isolated execution policy');
       this.db.prepare(`INSERT INTO agent_profiles(id,project_id,role_key,name,system_instructions,default_provider_id,default_policy_id)
-        VALUES(?,?,'DEVELOPER','Desarrollador Codex',?, ?,NULL)
-        ON CONFLICT(id) DO UPDATE SET default_provider_id=excluded.default_provider_id`)
-        .run(profileId,projectId,'Implementa el WorkItem seleccionado siguiendo estrictamente su ContextSnapshot, los criterios de aceptación y las políticas del proyecto. Mantén el alcance acotado a la tarea. No reveles credenciales ni alteres configuración local.',actualProviderId);
+        VALUES(?,?,'DEVELOPER','Desarrollador Codex',?, ?,?)
+        ON CONFLICT(id) DO UPDATE SET default_provider_id=excluded.default_provider_id,default_policy_id=COALESCE(agent_profiles.default_policy_id,excluded.default_policy_id)`)
+        .run(profileId,projectId,'Implementa el WorkItem seleccionado siguiendo estrictamente su ContextSnapshot, los criterios de aceptación y las políticas del proyecto. Mantén el alcance acotado a la tarea. No reveles credenciales ni alteres configuración local.',actualProviderId,policyId);
       this.db.prepare('UPDATE provider_connections SET last_checked_at=COALESCE(last_checked_at,?) WHERE id=?').run(now,`${actualProviderId}:local`);
     }).immediate();
   }
@@ -106,7 +132,9 @@ interface ProfileRow {id:string;project_id:string;role_key:AgentProfile['roleKey
 interface WorkItemRow {id:string;project_id:string;display_key:string;title:string;summary:string;status:string;parent_id:string|null;created_revision:number;updated_revision:number;created_at:string;updated_at:string;work_type:WorkItem['workType'];work_priority:WorkItem['priority'];scope_notes:string|null;acceptance_criteria_json:string;recommended_profile_role:WorkItem['recommendedProfileRole']}
 interface ExecutionRow {id:string;project_id:string;work_item_id:string|null;profile_id:string;provider_id:string;session_id:string|null;context_snapshot_id:string|null;status:ExecutionStatus;model_used:string|null;initial_commit:string;final_commit:string|null;branch_or_worktree:string|null;test_summary_json:string|null;result_summary:string|null;started_at:string|null;completed_at:string|null}
 interface EventRow {id:string;sequence_no:number;created_at:string;payload_json:string}
+interface PolicyRow {id:string;project_id:string;name:string;writable_paths_json:string;readonly_paths_json:string;denied_paths_json:string;allowed_commands_json:string;auto_approve_scopes_json:string;require_worktree_isolation:number}
 function mapProfile(row:ProfileRow):AgentProfile {return {id:row.id,projectId:row.project_id,roleKey:row.role_key,name:row.name,systemInstructions:row.system_instructions,defaultProviderId:row.default_provider_id,defaultPolicyId:row.default_policy_id};}
 function mapProvider(row:ProfileRow):AgentProvider {let capabilities:AgentProvider['capabilities']=CODEX_CAPABILITIES;try{capabilities=JSON.parse(row.capabilities_json) as AgentProvider['capabilities'];}catch{}return {id:row.default_provider_id??'provider:codex',providerKey:row.provider_key,displayName:row.display_name,adapterVersion:row.adapter_version,capabilities};}
 function mapExecution(row:ExecutionRow):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
 function parseCriteria(json:string):AcceptanceCriterion[] {try{const value=JSON.parse(json) as unknown;if(!Array.isArray(value))return[];return value.flatMap((item,index)=>typeof item==='string'?[{id:String(index+1),description:item,verified:false}]:item&&typeof item==='object'&&typeof (item as {description?:unknown}).description==='string'?[{id:String((item as {id?:unknown}).id??index+1),description:(item as {description:string}).description,verified:Boolean((item as {verified?:unknown}).verified)}]:[]);}catch{return[];}}
+function parseArray(json:string):string[]{try{const value=JSON.parse(json) as unknown;return Array.isArray(value)?value.filter((entry):entry is string=>typeof entry==='string'):[];}catch{return[];}}

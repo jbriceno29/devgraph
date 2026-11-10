@@ -5,11 +5,12 @@ import type { WorkspaceIpcClient } from '../../src/shared/contracts/ipc-contract
 import type { AgentExecutionDto,AgentEventRecordDto,AgentProfileDto } from '../../src/shared/contracts/agent-view.js';
 import { AgentsWorkspace } from '../../src/desktop/presentation/agents/AgentsWorkspace.js';
 
-afterEach(cleanup);
+const originalShowModal=HTMLDialogElement.prototype.showModal;
+afterEach(()=>{cleanup();if(originalShowModal)HTMLDialogElement.prototype.showModal=originalShowModal;else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;});
 const profile:AgentProfileDto={id:'developer',projectId:'project',roleKey:'DEVELOPER',name:'Desarrollador Codex',defaultProviderId:'provider',providerId:'provider',providerName:'Codex CLI',capabilities:{supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true}};
 const execution:AgentExecutionDto={id:'execution-1',projectId:'project',workItemId:'task-ready',profileId:'developer',providerId:'provider',sessionId:null,contextSnapshotId:'snapshot-12345678',status:'RUNNING',modelUsed:null,initialCommit:'abc123',finalCommit:null,branchOrWorktree:null,resultSummary:null,startedAt:'now',completedAt:null};
 const records:AgentEventRecordDto[]=[{id:'event-1',sequenceNo:1,createdAt:'2026-11-10T10:00:00.000Z',event:{type:'TOOL_INVOCATION_STARTED',timestamp:'now',callId:'call-1',toolName:'command_execution',args:{command:'npm test'}}}];
-function client():WorkspaceIpcClient {return {commands:{createProject:vi.fn(),openProject:vi.fn(),configureRepository:vi.fn(),createArtifact:vi.fn(),saveArtifact:vi.fn(),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn(),startExecution:vi.fn(async()=>execution),cancelExecution:vi.fn(async()=>({...execution,status:'CANCELLED' as const}))},queries:{listProjects:vi.fn(async()=>[]),getGraphView:vi.fn(),getEntityInspectorDetails:vi.fn(),getRepositoryPath:vi.fn(async()=>'/tmp/repository'),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn(),listChangeSets:vi.fn(async()=>[]),previewContext:vi.fn(),getContextSnapshot:vi.fn(),listAgentProfiles:vi.fn(async()=>[profile]),listExecutions:vi.fn(async()=>[execution]),listExecutionEvents:vi.fn(async()=>records)},events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(()=>()=>{}),onExecutionStatusChanged:vi.fn(()=>()=>{}),onExecutionEventReceived:vi.fn(()=>()=>{})}};}
+function client():WorkspaceIpcClient {return {commands:{createProject:vi.fn(),openProject:vi.fn(),configureRepository:vi.fn(),createArtifact:vi.fn(),saveArtifact:vi.fn(),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn(),startExecution:vi.fn(async()=>execution),cancelExecution:vi.fn(async()=>({...execution,status:'CANCELLED' as const})),resolveExecutionApproval:vi.fn()},queries:{listProjects:vi.fn(async()=>[]),getGraphView:vi.fn(),getEntityInspectorDetails:vi.fn(),getRepositoryPath:vi.fn(async()=>'/tmp/repository'),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn(),listChangeSets:vi.fn(async()=>[]),previewContext:vi.fn(),getContextSnapshot:vi.fn(),listAgentProfiles:vi.fn(async()=>[profile]),listExecutions:vi.fn(async()=>[execution]),listExecutionEvents:vi.fn(async()=>records)},events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(()=>()=>{}),onExecutionStatusChanged:vi.fn(()=>()=>{}),onExecutionEventReceived:vi.fn(()=>()=>{})}};}
 
 it('starts the selected READY WorkItem with a DEVELOPER profile and shows persisted stream events',async()=>{
  const ipc=client();Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
@@ -30,4 +31,13 @@ it('explains when no READY WorkItems are available',async()=>{
  await screen.findByRole('heading',{name:'Monitor de tareas'});
  expect((screen.getByLabelText('Tarea lista') as HTMLSelectElement).disabled).toBe(true);
  expect((screen.getByRole('button',{name:'Iniciar ejecución Codex'}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('shows a named approval dialog and sends rejection when it closes',async()=>{
+ HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
+ const ipc=client();ipc.commands.resolveExecutionApproval=vi.fn(async()=>({resolved:true as const}));const awaiting={...execution,status:'AWAITING_APPROVAL' as const};ipc.queries.listExecutions=vi.fn(async()=>[awaiting]);ipc.queries.listExecutionEvents=vi.fn(async()=>[{id:'approval-record',sequenceNo:1,createdAt:'now',event:{type:'APPROVAL_REQUIRED',timestamp:'now',requestId:'approval-123',actionType:'COMMAND',target:'npm test',justification:'The agent requests test execution.'}}]);Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
+ render(<AgentsWorkspace projectId="project" nodes={[]} selectedEntityId={null}/>);
+ const dialog=await screen.findByRole('dialog',{name:'Aprobación requerida'});expect(dialog.getAttribute('open')).not.toBeNull();
+ (dialog as HTMLDialogElement).returnValue='reject';dialog.removeAttribute('open');fireEvent(dialog,new Event('close'));
+ await waitFor(()=>expect(ipc.commands.resolveExecutionApproval).toHaveBeenCalledWith({executionId:'execution-1',requestId:'approval-123',decision:{approved:false,reason:'Aprobación rechazada o diálogo cerrado.'}}));
 });

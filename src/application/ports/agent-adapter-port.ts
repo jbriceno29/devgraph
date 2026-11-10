@@ -1,4 +1,4 @@
-import type { AgentCapabilities, AgentEvent, AgentProviderId } from '../../domain/agents/models.js';
+import type { AgentCapabilities, AgentEvent, AgentProviderId, ApprovalDecision } from '../../domain/agents/models.js';
 
 export interface AgentRunInput {
   executionId: string;
@@ -13,4 +13,5 @@ export interface AgentAdapterPort {
   getCapabilities(): AgentCapabilities;
   run(input: AgentRunInput): AsyncIterable<AgentEvent>;
   cancel(executionId: string): Promise<void>;
+  respondToApproval(executionId:string,requestId:string,decision:ApprovalDecision):Promise<void>;
 }

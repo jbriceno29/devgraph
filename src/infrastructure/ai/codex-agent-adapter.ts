@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentCapabilities, AgentEvent } from '../../domain/agents/models.js';
+import type { AgentCapabilities, AgentEvent, ApprovalDecision } from '../../domain/agents/models.js';
 import type { AgentAdapterPort, AgentRunInput } from '../../application/ports/agent-adapter-port.js';
 import { resolveCodexExecutable } from './codex-cli-path.js';
 
@@ -88,6 +88,10 @@ export class CodexAgentAdapter implements AgentAdapterPort {
   async cancel(executionId: string): Promise<void> {
     const child = this.children.get(executionId);
     if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  }
+
+  async respondToApproval(_executionId:string,_requestId:string,_decision:ApprovalDecision):Promise<void> {
+    throw new Error('Codex CLI no expone aprobaciones interactivas en este adaptador.');
   }
 }
 

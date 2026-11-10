@@ -15,6 +15,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   rejectChangeSet:changeSetId=>invokeCore('changeset:reject',[changeSetId]),
   startExecution:input=>invokeCore('execution:start',[input]),
   cancelExecution:executionId=>invokeCore('execution:cancel',[executionId]),
+  resolveExecutionApproval:input=>invokeCore('execution:resolve_approval',[input]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),

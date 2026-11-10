@@ -1,7 +1,7 @@
 import type { GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
@@ -23,6 +23,7 @@ export interface WorkspaceIpcCommands {
   'changeset:reject': (changeSetId:string)=>Promise<ChangeSetDto>;
   'execution:start': (input:StartAgentExecutionInput)=>Promise<AgentExecutionDto>;
   'execution:cancel': (executionId:string)=>Promise<AgentExecutionDto>;
+  'execution:resolve_approval': (input:ResolveExecutionApprovalInput)=>Promise<{resolved:true}>;
 }
 export interface WorkspaceIpcQueries {
   'project:list': ()=>Promise<ProjectSummaryDto[]>;
@@ -61,6 +62,7 @@ export interface WorkspaceIpcClient {
     rejectChangeSet(changeSetId:string):Promise<ChangeSetDto>;
     startExecution(input:StartAgentExecutionInput):Promise<AgentExecutionDto>;
     cancelExecution(executionId:string):Promise<AgentExecutionDto>;
+    resolveExecutionApproval(input:ResolveExecutionApprovalInput):Promise<{resolved:true}>;
   };
   queries:{
     listProjects():Promise<ProjectSummaryDto[]>;

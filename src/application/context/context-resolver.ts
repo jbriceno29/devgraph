@@ -5,7 +5,7 @@ import type { ResolvedContext,ContextCandidate } from './context-types.js';
 
 export class ContextResolver {
  constructor(private readonly repository:ContextRepositoryPort,private readonly files:ContextFilePort){}
- async resolve(input:{projectId:string;focusEntityId:string;query?:string;maxHops?:number;recentNotes?:string[];executionId?:string;sourceCommit?:string}):Promise<ResolvedContext>{
+ async resolve(input:{projectId:string;focusEntityId:string;extraFocusEntityIds?:string[];query?:string;maxHops?:number;recentNotes?:string[];executionId?:string;sourceCommit?:string}):Promise<ResolvedContext>{
   const project=this.repository.findProjectContext(input.projectId);if(!project)throw new Error('Proyecto no encontrado para resolver el contexto.');
   const entities=new Map(this.repository.listEntities(input.projectId).map(entity=>[entity.id,entity]));const focusEntity=entities.get(input.focusEntityId);if(!focusEntity)throw new Error('La entidad de foco no pertenece al proyecto.');
   const records=new Map<string,import('../ports/context-engine-port.js').ContextEntityRecord>();for(const entity of entities.values()){const record=this.repository.findEntityRecord(entity.id);if(record)records.set(entity.id,record);}
@@ -28,9 +28,12 @@ export class ContextResolver {
   }
   for(const [index,note] of (input.recentNotes??[]).entries()){const content=note.trim();if(!content)continue;candidates.push({sourceId:`chat:${project.id}:${index}`,sourceType:'CHAT_NOTE',titleOrPath:`Nota conversacional ${index+1}`,authorityTier:6,retrievalOrigin:'FULL_TEXT_SEARCH',graphDistance:0,content,contentHash:this.files.hashContent(content),relevanceScore:0});}
   const hierarchy=[focus,...ancestors];for(let i=0;i<hierarchy.length;i++){const record=hierarchy[i]!;candidates.push(candidateForRecord(record,i===0?'FOCUS_NODE':'HIERARCHY_PARENT',i===0?0:i,3,record.entity.id===focus.entity.id?Number.MAX_SAFE_INTEGER:0));}
+  // The other tasks of a grouped run count as focus too: always included, at the focus's tier.
+  const extraFocus:ResolvedContext['extraFocus']=[];
+  for(const id of input.extraFocusEntityIds??[]){if(id===focus.entity.id||extraFocus.some(record=>record.entity.id===id))continue;const record=records.get(id);if(!record)throw new Error('Una de las tareas del grupo no pertenece al proyecto.');extraFocus.push(record);candidates.push(candidateForRecord(record,'FOCUS_NODE',0,3,Number.MAX_SAFE_INTEGER));}
   // An execution's snapshot is pinned to the commit it starts from; a preview (no execution) reflects the user's HEAD.
   const repositoryCommit=input.sourceCommit??(project.repositoryPath?await this.files.getHeadCommit(project.repositoryPath):'UNKNOWN');
-  return {project,focus,entities:records,relationships:this.repository.listRelationships(input.projectId),ancestors,constraints:[...project.rules,...conventions],candidates,excluded:[],query:(input.query?.trim()||`${focus.entity.title} ${focus.entity.summary}`).trim(),maxHops:Math.max(0,Math.min(2,input.maxHops??1)),repositoryCommit,...(input.sourceCommit?{sourceCommit:input.sourceCommit}:{}),...(input.executionId?{executionId:input.executionId}:{})};
+  return {project,focus,extraFocus,entities:records,relationships:this.repository.listRelationships(input.projectId),ancestors,constraints:[...project.rules,...conventions],candidates,excluded:[],query:(input.query?.trim()||[focus,...extraFocus].map(record=>`${record.entity.title} ${record.entity.summary}`).join(' ')).trim(),maxHops:Math.max(0,Math.min(2,input.maxHops??1)),repositoryCommit,...(input.sourceCommit?{sourceCommit:input.sourceCommit}:{}),...(input.executionId?{executionId:input.executionId}:{})};
  }
 }
 export function candidateForRecord(record:import('../ports/context-engine-port.js').ContextEntityRecord,origin:ContextCandidate['retrievalOrigin'],distance:number,tier:ContextCandidate['authorityTier'],relevanceScore=0,viaEdgeType?:ContextCandidate['viaEdgeType']):ContextCandidate{

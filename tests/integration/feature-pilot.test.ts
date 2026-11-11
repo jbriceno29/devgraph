@@ -22,12 +22,14 @@ class PilotAdapter implements AgentAdapterPort {
  getCapabilities():AgentCapabilities{return {supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true};}
  async *run(input:AgentRunInput):AsyncIterable<AgentEvent>{
   this.prompts.push(input.prompt);
-  const key=/TASK-\d+/.exec(/# WorkItem\n([^\n]+)/.exec(input.prompt)?.[1]??'')?.[0]??'task';
+  // One task («# WorkItem») or a group («## Parte n de m: TASK-…»): a file per task, and a summary section per task.
+  const grouped=[...input.prompt.matchAll(/## Parte \d+ de \d+: (TASK-\d+)/g)].map(match=>match[1]!);
+  const keys=grouped.length?grouped:[/TASK-\d+/.exec(/# WorkItem\n([^\n]+)/.exec(input.prompt)?.[1]??'')?.[0]??'task'];
   if(this.behaviour==='hang'){yield {type:'SESSION_INITIALIZED',timestamp:new Date().toISOString(),externalSessionId:'s'};await new Promise(()=>undefined);}
   if(this.behaviour==='high-usage')yield {type:'RATE_LIMIT_UPDATED',timestamp:new Date().toISOString(),status:'allowed',window:'five_hour',utilization:0.95,resetsAt:new Date(Date.now()+3_600_000).toISOString()};
   const content=this.behaviour==='bad-then-good'&&!input.prompt.includes('# Intento anterior')?'bad':'ok';
-  writeFileSync(join(input.workingDirectory,'src',`${key}.txt`),`${content}\n`);
-  yield {type:'EXECUTION_FINISHED',timestamp:new Date().toISOString(),summary:`**Hecho** ${key}.`};
+  for(const key of keys)writeFileSync(join(input.workingDirectory,'src',`${key}.txt`),`${content}\n`);
+  yield {type:'EXECUTION_FINISHED',timestamp:new Date().toISOString(),summary:keys.length>1?keys.map(key=>`## ${key}\n**Hecho** ${key}.`).join('\n\n'):`**Hecho** ${keys[0]}.`};
  }
  async cancel():Promise<void>{}
  async respondToApproval():Promise<void>{}
@@ -164,5 +166,42 @@ describe('feature metrics (Stage 5)',()=>{
   expect(markdown).toContain('| Tareas cerradas | 1 de 1 |');
   const exported=await core.handle({channel:'metrics:export_report',args:[projectId,'feat']}) as {path:string};
   expect((await import('node:fs')).readFileSync(exported.path,'utf8')).toBe(markdown.replace(/Generado: .*/,(await import('node:fs')).readFileSync(exported.path,'utf8').match(/Generado: .*/)![0]));
+ });
+
+ it('with grouping on, runs the first task of the project alone and then the rest of the feature in one grouped execution',async()=>{
+  const {pilot,until,git,adapter}=await setup('good',{tasks:[['t1','TASK-001','READY'],['t2','TASK-002','BLOCKED'],['t3','TASK-003','READY'],['t4','TASK-004','READY']],edges:[['t2','t1']]});
+  const saved=await pilot('set_autonomy',{level:'PILOT',groupTasks:true,maxGroupSize:3}) as {groupTasks:boolean;maxGroupSize:number};
+  expect(saved).toMatchObject({groupTasks:true,maxGroupSize:3});
+  expect((await pilot('get') as {autonomy:{groupTasks:boolean}}).autonomy.groupTasks).toBe(true);
+  await pilot('start',{acknowledgeCost:true});
+  const done=await until(value=>value.run?.status==='COMPLETED');
+  expect(done.tasks.map(task=>`${task.displayKey}:${task.status}`)).toEqual(['TASK-001:DONE','TASK-002:DONE','TASK-003:DONE','TASK-004:DONE']);
+  expect(done.events.map(event=>event.kind)).toEqual(['STARTED','TASK_STARTED','TASK_ACCEPTED','GROUP_STARTED','TASK_ACCEPTED','COMPLETED']);
+  expect(done.events[3]!.message).toContain('TASK-002, TASK-003, TASK-004: intento 1 de 3 (grupo de 3 tareas en una ejecución)');
+  expect(git('log','--format=%s','main..feature/feat-001-pilot-feature').split('\n')).toEqual(['TASK-002, TASK-003, TASK-004: TASK-002 work · TASK-003 work · TASK-004 work','TASK-001: TASK-001 work']);
+  expect(adapter.prompts).toHaveLength(2);
+  expect(adapter.prompts[0]).toContain('# WorkItem\nTASK-001 work');
+  expect(adapter.prompts[1]).toContain('## Parte 2 de 3: TASK-003 TASK-003 work');
+ });
+
+ it('retries a failed group as a whole, with the failure as context, and respects the group size and the off switch',async()=>{
+  const retried=await setup('bad-then-good',{tasks:[['t0','TASK-000','DONE'],['t1','TASK-001','READY'],['t2','TASK-002','READY'],['t3','TASK-003','READY']],edges:[]});
+  await retried.pilot('set_autonomy',{level:'PILOT',groupTasks:true,maxGroupSize:2});
+  await retried.pilot('start',{acknowledgeCost:true});
+  const done=await retried.until(value=>value.run?.status==='COMPLETED');
+  // The adapter fails every first attempt, so the single task that follows the group also retries once.
+  expect(done.events.map(event=>event.kind)).toEqual(['STARTED','GROUP_STARTED','RETRY','GROUP_STARTED','TASK_ACCEPTED','TASK_STARTED','RETRY','TASK_STARTED','TASK_ACCEPTED','COMPLETED']);
+  expect(done.events[2]!.message).toContain('se reintentará el grupo entero');
+  expect(retried.adapter.prompts[1]).toContain('# Intento anterior');
+  expect(retried.adapter.prompts[1]).toContain('## Parte 1 de 2: TASK-001');
+  expect(retried.adapter.prompts[1]).toContain('## Parte 2 de 2: TASK-002');
+  expect(retried.git('log','--format=%s','main..feature/feat-001-pilot-feature').split('\n')).toEqual(['TASK-003: TASK-003 work','TASK-001, TASK-002: TASK-001 work · TASK-002 work']);
+
+  await expect(retried.pilot('set_autonomy',{level:'PILOT',maxGroupSize:9})).rejects.toThrow('El tamaño del grupo debe estar entre 1 y 5 tareas.');
+  const off=await setup('good',{tasks:[['t0','TASK-000','DONE'],['t1','TASK-001','READY'],['t2','TASK-002','READY']],edges:[]});
+  await off.pilot('set_autonomy',{level:'PILOT'});
+  await off.pilot('start',{acknowledgeCost:true});
+  const plain=await off.until(value=>value.run?.status==='COMPLETED');
+  expect(plain.events.map(event=>event.kind)).toEqual(['STARTED','TASK_STARTED','TASK_ACCEPTED','TASK_STARTED','TASK_ACCEPTED','COMPLETED']);
  });
 });

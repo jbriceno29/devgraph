@@ -35,3 +35,30 @@ export function extractConventions(summary: string): string[] {
   // "Ninguna" / "Ninguna nueva. Seguí las existentes…" restate rules already recorded: never store them as new ones.
   return rules.map(rule => rule.replace(/\*\*/g, '').trim()).filter(rule => rule && !/^ningun[ao]s?\b/i.test(rule));
 }
+
+/**
+ * A grouped run closes several tasks with one summary: one section per WorkItem, each headed by the task key
+ * («## TASK-002 …», «**TASK-002**», «Parte 2 de 3: TASK-002 …»). Returns the section of every key, or null when any
+ * key has no heading, so the caller can fall back to the shared summary. Text before the first heading goes with
+ * the first section found.
+ */
+export function splitSummaryByTask(summary: string, keys: readonly string[]): Map<string, string> | null {
+  const lines = summary.split(/\r?\n/);
+  const headings: Array<{ key: string; line: number }> = [];
+  const seen = new Set<string>();
+  for (const [index, line] of lines.entries()) {
+    for (const key of keys) {
+      if (seen.has(key)) continue;
+      const pattern = new RegExp(`^\\s*(?:#{1,6}\\s*|\\*\\*\\s*|[-*]\\s+)?(?:parte\\s+\\d+(?:\\s+de\\s+\\d+)?\\s*[:.\\-–]?\\s*)?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'i');
+      if (pattern.test(line)) { headings.push({ key, line: index }); seen.add(key); break; }
+    }
+  }
+  if (headings.length !== keys.length) return null;
+  const sections = new Map<string, string>();
+  for (const [position, heading] of headings.entries()) {
+    const start = position === 0 ? 0 : heading.line;
+    const end = headings[position + 1]?.line ?? lines.length;
+    sections.set(heading.key, lines.slice(start, end).join('\n').trim());
+  }
+  return sections;
+}

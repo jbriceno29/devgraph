@@ -1,6 +1,7 @@
 import { normalizeDecisionPolicy } from '../../../domain/autonomy/decision-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider, AgentProviderId, ExecutionStatus } from '../../../domain/agents/models.js';
+import { coveredWorkItems } from '../../../domain/agents/models.js';
 import type { AutonomyPolicy,ApprovalRequest } from '../../../domain/governance/models.js';
 import { canTransitionWorkItem, type WorkItem, type AcceptanceCriterion, type WorkItemStatus } from '../../../domain/work-management/entities.js';
 import type { AgentExecutionProfile, AgentExecutionRepositoryPort } from '../../../application/ports/agent-execution-port.js';
@@ -219,6 +220,8 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     this.db.prepare(`INSERT INTO agent_executions
       (id,project_id,work_item_id,profile_id,provider_id,session_id,context_snapshot_id,status,model_used,initial_commit,final_commit,branch_or_worktree,base_branch,execution_branch,revision_of,review_status,review_note,merged_commit,reviewed_at,test_summary_json,result_summary,started_at,completed_at)
       VALUES (@id,@projectId,@workItemId,@profileId,@providerId,@sessionId,@contextSnapshotId,@status,@modelUsed,@initialCommit,@finalCommit,@branchOrWorktree,@baseBranch,@executionBranch,@revisionOf,@reviewStatus,@reviewNote,@mergedCommit,@reviewedAt,@testSummary,@resultSummary,@startedAt,@completedAt)`).run(toRow(execution));
+    const covered=coveredWorkItems(execution);
+    if(covered.length>1){const insert=this.db.prepare('INSERT INTO execution_work_items(execution_id,work_item_id,position) VALUES(?,?,?)');covered.forEach((workItemId,position)=>insert.run(execution.id,workItemId,position));}
   }
 
   updateExecution(execution: AgentExecution): void {
@@ -230,11 +233,22 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
 
   findExecution(executionId: string): AgentExecution | null {
     const row=this.db.prepare('SELECT * FROM agent_executions WHERE id=?').get(executionId) as ExecutionRow|undefined;
-    return row?mapExecution(row):null;
+    return row?mapExecution(row,this.coveredByExecution([row.id]).get(row.id)):null;
   }
 
   listExecutions(projectId: string): AgentExecution[] {
-    return (this.db.prepare('SELECT * FROM agent_executions WHERE project_id=? ORDER BY COALESCE(started_at,completed_at) DESC,id DESC').all(projectId) as ExecutionRow[]).map(mapExecution);
+    const rows=this.db.prepare('SELECT * FROM agent_executions WHERE project_id=? ORDER BY COALESCE(started_at,completed_at) DESC,id DESC').all(projectId) as ExecutionRow[];
+    const covered=this.coveredByExecution(rows.map(row=>row.id));
+    return rows.map(row=>mapExecution(row,covered.get(row.id)));
+  }
+
+  /** Tasks covered by each execution (grouped runs only), in position order. Executions without rows cover just their leader. */
+  private coveredByExecution(executionIds:string[]):Map<string,string[]> {
+    const covered=new Map<string,string[]>();
+    if(!executionIds.length)return covered;
+    const select=this.db.prepare('SELECT execution_id,work_item_id FROM execution_work_items WHERE execution_id=? ORDER BY position');
+    for(const executionId of executionIds){const ids=(select.all(executionId) as Array<{execution_id:string;work_item_id:string}>).map(row=>row.work_item_id);if(ids.length)covered.set(executionId,ids);}
+    return covered;
   }
 
   appendEvent(executionId: string, event: AgentEvent): {id:string;sequenceNo:number;createdAt:string} {
@@ -297,7 +311,7 @@ interface EventRow {id:string;sequence_no:number;created_at:string;payload_json:
 interface PolicyRow {id:string;project_id:string;name:string;writable_paths_json:string;readonly_paths_json:string;denied_paths_json:string;allowed_commands_json:string;auto_approve_scopes_json:string;require_worktree_isolation:number;max_execution_minutes?:number; max_turns?:number|null; decision_policy_json?:string|null }
 function mapProfile(row:ProfileRow):AgentProfile {return {id:row.id,projectId:row.project_id,roleKey:row.role_key,name:row.name,systemInstructions:row.system_instructions,defaultProviderId:row.default_provider_id,defaultPolicyId:row.default_policy_id};}
 function mapProvider(row:ProfileRow):AgentProvider {let capabilities:AgentProvider['capabilities']=providerDefaults(row.provider_key==='opencode'?'claude-code':row.provider_key).capabilities;try{capabilities=JSON.parse(row.capabilities_json) as AgentProvider['capabilities'];}catch{}return {id:row.default_provider_id??`provider:${row.provider_key}`,providerKey:row.provider_key,displayName:row.display_name,adapterVersion:row.adapter_version,capabilities};}
-function mapExecution(row:ExecutionRow):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,baseBranch:row.base_branch??null,executionBranch:row.execution_branch??null,revisionOf:row.revision_of??null,reviewStatus:row.review_status??null,reviewNote:row.review_note??null,mergedCommit:row.merged_commit??null,reviewedAt:row.reviewed_at??null,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
+function mapExecution(row:ExecutionRow,covered?:string[]):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {...(covered&&covered.length>1?{coveredWorkItemIds:covered}:{}),id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,baseBranch:row.base_branch??null,executionBranch:row.execution_branch??null,revisionOf:row.revision_of??null,reviewStatus:row.review_status??null,reviewNote:row.review_note??null,mergedCommit:row.merged_commit??null,reviewedAt:row.reviewed_at??null,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
 function parseCriteria(json:string):AcceptanceCriterion[] {try{const value=JSON.parse(json) as unknown;if(!Array.isArray(value))return[];return value.flatMap((item,index)=>typeof item==='string'?[{id:String(index+1),description:item,verified:false}]:item&&typeof item==='object'&&typeof (item as {description?:unknown}).description==='string'?[{id:String((item as {id?:unknown}).id??index+1),description:(item as {description:string}).description,verified:Boolean((item as {verified?:unknown}).verified)}]:[]);}catch{return[];}}
 function parseArray(json:string):string[]{try{const value=JSON.parse(json) as unknown;return Array.isArray(value)?value.filter((entry):entry is string=>typeof entry==='string'):[];}catch{return[];}}
 function toRow(execution:AgentExecution):Record<string,unknown> {

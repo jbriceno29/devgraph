@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentExecution } from '../../domain/agents/models.js';
 import { ACTIVE_PILOT_STATUSES, type AutonomyLevel, type FeatureAutonomy, type PilotEventKind, type PilotRun, type PilotStatus } from '../../domain/autonomy/models.js';
-import type { PilotRepositoryPort } from '../ports/pilot-port.js';
+import type { FeatureTaskView, PilotRepositoryPort } from '../ports/pilot-port.js';
+import { nextTaskGroup } from './task-grouping.js';
+import { coveredWorkItems } from '../../domain/agents/models.js';
 import type { AgentOrchestrator, PlanProposalOutcome } from './agent-orchestrator.js';
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
@@ -32,7 +34,7 @@ export class FeaturePilot {
 
   getAutonomy(projectId: string, featureId: string): FeatureAutonomy { return this.repository.getAutonomy(projectId, featureId); }
 
-  setAutonomy(projectId: string, featureId: string, input: { level: AutonomyLevel; executionModel?: string | null; escalationModel?: string | null; maxAttempts?: number; usagePauseThreshold?: number }): FeatureAutonomy {
+  setAutonomy(projectId: string, featureId: string, input: { level: AutonomyLevel; executionModel?: string | null; escalationModel?: string | null; maxAttempts?: number; usagePauseThreshold?: number; groupTasks?: boolean; maxGroupSize?: number }): FeatureAutonomy {
     if (!['MANUAL', 'AUTO_ACCEPT', 'PILOT'].includes(input.level)) throw new Error(`Nivel de autonomía desconocido: ${input.level}`);
     const current = this.repository.getAutonomy(projectId, featureId);
     const available = this.orchestrator.listProfiles(projectId).find(profile => profile.roleKey === 'DEVELOPER')?.availableModels ?? [];
@@ -41,7 +43,9 @@ export class FeaturePilot {
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) throw new Error('Los intentos por tarea deben estar entre 1 y 5.');
     const usagePauseThreshold = input.usagePauseThreshold ?? current.usagePauseThreshold;
     if (!(usagePauseThreshold >= 0.5 && usagePauseThreshold <= 0.99)) throw new Error('El umbral de pausa debe estar entre 50 % y 99 %.');
-    const next: FeatureAutonomy = { featureId, projectId, level: input.level, executionModel: input.executionModel ?? null, escalationModel: input.escalationModel ?? null, maxAttempts, usagePauseThreshold };
+    const maxGroupSize = input.maxGroupSize ?? current.maxGroupSize;
+    if (!Number.isInteger(maxGroupSize) || maxGroupSize < 1 || maxGroupSize > 5) throw new Error('El tamaño del grupo debe estar entre 1 y 5 tareas.');
+    const next: FeatureAutonomy = { featureId, projectId, level: input.level, executionModel: input.executionModel ?? null, escalationModel: input.escalationModel ?? null, maxAttempts, usagePauseThreshold, groupTasks: input.groupTasks ?? current.groupTasks, maxGroupSize };
     this.repository.saveAutonomy(next);
     if (next.level !== 'PILOT') { const run = this.repository.latestRun(featureId); if (run && ACTIVE_PILOT_STATUSES.has(run.status)) void this.stop(projectId, featureId, 'El nivel de autonomía dejó de ser piloto.'); }
     this.notify(projectId, featureId);
@@ -113,11 +117,14 @@ export class FeaturePilot {
     this.loops.set(run.id, state);
     const attempts = new Map<string, number>();
     const failures = new Map<string, string>();
+    // Members of a failed group, by leader: the retry runs the same group with the error as context.
+    const groups = new Map<string, string[]>();
     try {
       while (!state.stop) {
         const autonomy = this.repository.getAutonomy(run.projectId, run.featureId);
         if (autonomy.level !== 'PILOT') return this.finish(run, 'STOPPED', 'El nivel de autonomía dejó de ser piloto.');
-        const open = this.repository.listFeatureTasks(run.projectId, run.featureId).filter(task => !['DONE', 'ARCHIVED'].includes(task.status));
+        const all = this.repository.listFeatureTasks(run.projectId, run.featureId);
+        const open = all.filter(task => !['DONE', 'ARCHIVED'].includes(task.status));
         if (!open.length) return this.finish(run, 'COMPLETED', 'Todas las tareas de la feature están cerradas.');
 
         const reviewing = open.find(task => task.status === 'IN_REVIEW');
@@ -129,7 +136,7 @@ export class FeaturePilot {
         }
         const running = open.find(task => task.status === 'IN_PROGRESS');
         if (running) {
-          const active = this.orchestrator.listExecutions(run.projectId).find(execution => execution.workItemId === running.id && !TERMINAL.has(execution.status));
+          const active = this.orchestrator.listExecutions(run.projectId).find(execution => coveredWorkItems(execution).includes(running.id) && !TERMINAL.has(execution.status));
           if (!active) return this.waitUser(run, `${running.displayKey} está en curso sin ejecución activa.`, running.id);
           state.currentExecution = active.id;
           await this.waitTerminal(active.id, state);
@@ -139,8 +146,15 @@ export class FeaturePilot {
         // A feature that depends on another one with open tasks cannot run yet (its branch would miss that work).
         const blocker = this.orchestrator.featureBlocker(run.projectId, run.featureId);
         if (blocker) return this.waitUser(run, `${blocker} Termínalas (o integra esa feature) y reanuda el piloto.`, null);
-        const next = open.find(task => task.status === 'READY');
+        // Etapa 0: with grouping on, 2–maxGroupSize small tasks run in one execution (rules in task-grouping.ts). A retried leader keeps its group.
+        const grouping = autonomy.groupTasks && autonomy.maxGroupSize > 1;
+        const group = grouping ? nextTaskGroup(all, { maxGroupSize: autonomy.maxGroupSize, projectHasDoneTasks: this.repository.countDoneTasks(run.projectId) > 0 }) : null;
+        const byId = new Map(all.map(task => [task.id, task]));
+        const next = (group ? byId.get(group.leader.id) : undefined) ?? open.find(task => task.status === 'READY');
         if (!next) return this.waitUser(run, `No hay tareas listas: ${open.map(task => `${task.displayKey} (${task.status})`).join(', ')}. Pasa a READY las que estén en DRAFT; las BLOCKED esperan dependencias.`, null);
+        const remembered = failures.has(next.id) ? groups.get(next.id) : undefined;
+        const members: FeatureTaskView[] = (remembered ?? group?.tasks.map(task => task.id) ?? [next.id]).flatMap(id => { const task = byId.get(id); return task ? [task] : []; });
+        const label = members.map(task => task.displayKey).join(', ');
 
         const usage = this.lastUsage(run.projectId);
         if (usage?.utilization != null && usage.utilization >= autonomy.usagePauseThreshold) return this.pause(run, usage, autonomy.usagePauseThreshold);
@@ -150,27 +164,28 @@ export class FeaturePilot {
         const model = (escalate ? autonomy.escalationModel : autonomy.executionModel) ?? undefined;
         const profileId = this.orchestrator.listProfiles(run.projectId).find(profile => profile.roleKey === 'DEVELOPER')?.id;
         if (!profileId) return this.finish(run, 'FAILED', 'El proyecto no tiene un perfil DEVELOPER.');
-        this.log(run, escalate ? 'ESCALATED' : 'TASK_STARTED', `${next.displayKey}: intento ${attempt} de ${autonomy.maxAttempts}${model ? ` con ${model}` : ''}.`, next.id);
+        this.log(run, escalate ? 'ESCALATED' : members.length > 1 ? 'GROUP_STARTED' : 'TASK_STARTED', `${label}: intento ${attempt} de ${autonomy.maxAttempts}${model ? ` con ${model}` : ''}${members.length > 1 ? ` (grupo de ${members.length} tareas en una ejecución)` : ''}.`, next.id);
         let execution: AgentExecution;
         try {
-          execution = await this.orchestrator.start({ projectId: run.projectId, workItemId: next.id, profileId, ...(model ? { model } : {}), ...(failures.has(next.id) ? { retryContext: failures.get(next.id)! } : {}) });
+          execution = await this.orchestrator.start({ projectId: run.projectId, workItemId: next.id, ...(members.length > 1 ? { workItemIds: members.slice(1).map(task => task.id) } : {}), profileId, ...(model ? { model } : {}), ...(failures.has(next.id) ? { retryContext: failures.get(next.id)! } : {}) });
         } catch (error) {
-          return this.waitUser(run, `No se pudo iniciar ${next.displayKey}: ${message(error)}`, next.id);
+          return this.waitUser(run, `No se pudo iniciar ${label}: ${message(error)}`, next.id);
         }
         state.currentExecution = execution.id;
         const final = await this.waitTerminal(execution.id, state);
         state.currentExecution = null;
         if (state.stop) break;
         if (final.status === 'COMPLETED') {
-          if (!await this.acceptWithGates(run, final, next.displayKey)) return;
-          attempts.delete(next.id); failures.delete(next.id);
+          if (!await this.acceptWithGates(run, final, label)) return;
+          attempts.delete(next.id); failures.delete(next.id); groups.delete(next.id);
           continue;
         }
-        if (final.status === 'CANCELLED') return this.finish(run, 'STOPPED', `Se canceló la ejecución de ${next.displayKey}.`);
+        if (final.status === 'CANCELLED') return this.finish(run, 'STOPPED', `Se canceló la ejecución de ${label}.`);
         attempts.set(next.id, attempt);
         failures.set(next.id, this.failureContext(final));
-        if (attempt >= autonomy.maxAttempts) return this.waitUser(run, `${next.displayKey} falló ${attempt} ${attempt === 1 ? 'vez' : 'veces'}. Último motivo: ${final.resultSummary ?? 'sin detalle'}`, next.id, final.id);
-        this.log(run, 'RETRY', `${next.displayKey} falló (${final.resultSummary ?? 'sin detalle'}); se reintentará con ese error como contexto.`, next.id, final.id);
+        groups.set(next.id, members.map(task => task.id));
+        if (attempt >= autonomy.maxAttempts) return this.waitUser(run, `${label} falló ${attempt} ${attempt === 1 ? 'vez' : 'veces'}. Último motivo: ${final.resultSummary ?? 'sin detalle'}`, next.id, final.id);
+        this.log(run, 'RETRY', `${label} falló (${final.resultSummary ?? 'sin detalle'}); se reintentará${members.length > 1 ? ' el grupo entero' : ''} con ese error como contexto.`, next.id, final.id);
       }
       if (!state.closed) this.finish(run, 'STOPPED', 'Detenido por el usuario.');
     } catch (error) {
@@ -229,7 +244,7 @@ export class FeaturePilot {
   }
 
   private latestReviewable(projectId: string, workItemId: string): AgentExecution | null {
-    return this.orchestrator.listExecutions(projectId).find(execution => execution.workItemId === workItemId && execution.status === 'COMPLETED' && (!execution.reviewStatus || execution.reviewStatus === 'MERGE_CONFLICT')) ?? null;
+    return this.orchestrator.listExecutions(projectId).find(execution => coveredWorkItems(execution).includes(workItemId) && execution.status === 'COMPLETED' && (!execution.reviewStatus || execution.reviewStatus === 'MERGE_CONFLICT')) ?? null;
   }
 
   private failureContext(execution: AgentExecution): string {

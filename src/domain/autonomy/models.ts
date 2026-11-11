@@ -12,13 +12,17 @@ export interface FeatureAutonomy {
   maxAttempts: number;
   /** Fraction (0-1) of the usage window at which the autopilot pauses. */
   usagePauseThreshold: number;
+  /** Etapa 0: the autopilot runs 2–`maxGroupSize` small READY tasks of the feature in one execution. Off by default until measured in real pilots. */
+  groupTasks: boolean;
+  /** Most tasks one grouped execution may cover (1–5). */
+  maxGroupSize: number;
 }
-export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85 };
+export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85, groupTasks: false, maxGroupSize: 3 };
 
 export type PilotStatus = 'RUNNING' | 'PAUSED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export const ACTIVE_PILOT_STATUSES: ReadonlySet<PilotStatus> = new Set(['RUNNING', 'PAUSED']);
 export interface PilotRun { id: string; projectId: string; featureId: string; status: PilotStatus; reason: string | null; startedAt: string; endedAt: string | null }
-export type PilotEventKind = 'STARTED' | 'TASK_STARTED' | 'TASK_ACCEPTED' | 'AUTO_ACCEPTED' | 'RETRY' | 'ESCALATED' | 'PAUSED' | 'RESUMED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED'
+export type PilotEventKind = 'STARTED' | 'TASK_STARTED' | 'GROUP_STARTED' | 'TASK_ACCEPTED' | 'AUTO_ACCEPTED' | 'RETRY' | 'ESCALATED' | 'PAUSED' | 'RESUMED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED'
   /** The agent's plan proposal was applied to the graph (PLAN_CHANGED) or awaits the user / was invalid (PLAN_PROPOSAL). */
   | 'PLAN_CHANGED' | 'PLAN_PROPOSAL';
 export interface PilotEvent { id: string; pilotRunId: string; sequenceNo: number; kind: PilotEventKind; message: string; workItemId: string | null; executionId: string | null; createdAt: string }

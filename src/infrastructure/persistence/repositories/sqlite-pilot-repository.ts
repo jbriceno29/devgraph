@@ -9,13 +9,13 @@ export class SqlitePilotRepository implements PilotRepositoryPort {
   getAutonomy(projectId: string, featureId: string): FeatureAutonomy {
     const row = this.db.prepare('SELECT * FROM feature_autonomy WHERE feature_id=?').get(featureId) as AutonomyRow | undefined;
     if (!row) return { featureId, projectId, ...DEFAULT_AUTONOMY };
-    return { featureId, projectId: row.project_id, level: row.level, executionModel: row.execution_model, escalationModel: row.escalation_model, maxAttempts: row.max_attempts, usagePauseThreshold: row.usage_pause_threshold };
+    return { featureId, projectId: row.project_id, level: row.level, executionModel: row.execution_model, escalationModel: row.escalation_model, maxAttempts: row.max_attempts, usagePauseThreshold: row.usage_pause_threshold, groupTasks: row.group_tasks === 1, maxGroupSize: row.max_group_size ?? DEFAULT_AUTONOMY.maxGroupSize };
   }
 
   saveAutonomy(autonomy: FeatureAutonomy): void {
-    this.db.prepare(`INSERT INTO feature_autonomy(feature_id,project_id,level,execution_model,escalation_model,max_attempts,usage_pause_threshold,updated_at) VALUES(?,?,?,?,?,?,?,?)
-      ON CONFLICT(feature_id) DO UPDATE SET level=excluded.level,execution_model=excluded.execution_model,escalation_model=excluded.escalation_model,max_attempts=excluded.max_attempts,usage_pause_threshold=excluded.usage_pause_threshold,updated_at=excluded.updated_at`)
-      .run(autonomy.featureId, autonomy.projectId, autonomy.level, autonomy.executionModel, autonomy.escalationModel, autonomy.maxAttempts, autonomy.usagePauseThreshold, new Date().toISOString());
+    this.db.prepare(`INSERT INTO feature_autonomy(feature_id,project_id,level,execution_model,escalation_model,max_attempts,usage_pause_threshold,group_tasks,max_group_size,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(feature_id) DO UPDATE SET level=excluded.level,execution_model=excluded.execution_model,escalation_model=excluded.escalation_model,max_attempts=excluded.max_attempts,usage_pause_threshold=excluded.usage_pause_threshold,group_tasks=excluded.group_tasks,max_group_size=excluded.max_group_size,updated_at=excluded.updated_at`)
+      .run(autonomy.featureId, autonomy.projectId, autonomy.level, autonomy.executionModel, autonomy.escalationModel, autonomy.maxAttempts, autonomy.usagePauseThreshold, autonomy.groupTasks ? 1 : 0, autonomy.maxGroupSize, new Date().toISOString());
   }
 
   featureOf(projectId: string, workItemId: string): string | null {
@@ -29,11 +29,16 @@ export class SqlitePilotRepository implements PilotRepositoryPort {
   }
 
   listFeatureTasks(projectId: string, featureId: string): FeatureTaskView[] {
-    const rows = this.db.prepare(`SELECT e.id,e.display_key,e.title,e.status FROM knowledge_entities e
+    const rows = this.db.prepare(`SELECT e.id,e.display_key,e.title,e.summary,e.status,w.acceptance_criteria_json FROM knowledge_entities e LEFT JOIN work_items w ON w.entity_id=e.id
       WHERE e.project_id=? AND e.entity_type='WORK_ITEM' AND (e.parent_id=? OR e.parent_id IN (SELECT id FROM knowledge_entities WHERE parent_id=? AND entity_type='WORK_ITEM'))
-      ORDER BY e.display_key`).all(projectId, featureId, featureId) as Array<{ id: string; display_key: string; title: string; status: string }>;
+      ORDER BY e.display_key`).all(projectId, featureId, featureId) as Array<{ id: string; display_key: string; title: string; summary: string | null; status: string; acceptance_criteria_json: string | null }>;
     const dependencies = this.db.prepare(`SELECT target_id FROM graph_edges WHERE project_id=? AND source_id=? AND edge_type='DEPENDS_ON'`);
-    return rows.map(row => ({ id: row.id, displayKey: row.display_key, title: row.title, status: row.status, dependsOn: (dependencies.all(projectId, row.id) as Array<{ target_id: string }>).map(edge => edge.target_id) }));
+    const criteriaCount = (json: string | null) => { try { const parsed: unknown = json ? JSON.parse(json) : []; return Array.isArray(parsed) ? parsed.length : 0; } catch { return 0; } };
+    return rows.map(row => ({ id: row.id, displayKey: row.display_key, title: row.title, status: row.status, summary: row.summary ?? '', criteriaCount: criteriaCount(row.acceptance_criteria_json), dependsOn: (dependencies.all(projectId, row.id) as Array<{ target_id: string }>).map(edge => edge.target_id) }));
+  }
+
+  countDoneTasks(projectId: string): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM knowledge_entities WHERE project_id=? AND entity_type='WORK_ITEM' AND status='DONE'`).get(projectId) as { n: number }).n;
   }
 
   createRun(run: PilotRun): void {
@@ -72,7 +77,7 @@ export class SqlitePilotRepository implements PilotRepositoryPort {
   }
 }
 
-interface AutonomyRow { project_id: string; level: FeatureAutonomy['level']; execution_model: string | null; escalation_model: string | null; max_attempts: number; usage_pause_threshold: number }
+interface AutonomyRow { project_id: string; level: FeatureAutonomy['level']; execution_model: string | null; escalation_model: string | null; max_attempts: number; usage_pause_threshold: number; group_tasks?: number; max_group_size?: number }
 interface RunRow { id: string; project_id: string; feature_id: string; status: PilotStatus; reason: string | null; started_at: string; ended_at: string | null }
 interface EventRow { id: string; pilot_run_id: string; sequence_no: number; kind: PilotEventKind; message: string; work_item_id: string | null; execution_id: string | null; created_at: string }
 function mapRun(row: RunRow): PilotRun { return { id: row.id, projectId: row.project_id, featureId: row.feature_id, status: row.status, reason: row.reason, startedAt: row.started_at, endedAt: row.ended_at }; }

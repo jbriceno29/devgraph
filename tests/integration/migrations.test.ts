@@ -18,6 +18,8 @@ describe('versioned schema migrations',()=>{
   expect(columns(db,'agent_executions')).toContain('base_branch');
   expect(columns(db,'feature_branches')).toEqual(['feature_id','project_id','repository_id','branch_name','source_branch','created_at','integrated_at']);
   expect(columns(db,'project_inception')).toEqual(expect.arrayContaining(['notes_json','scaffold_task_id']));
+  expect(columns(db,'execution_work_items')).toEqual(['execution_id','work_item_id','position']);
+  expect(columns(db,'feature_autonomy')).toEqual(expect.arrayContaining(['group_tasks','max_group_size']));
   closeDatabase(db);
  });
 
@@ -32,6 +34,7 @@ describe('versioned schema migrations',()=>{
    const db=openDatabase({filename});
    expect(db.pragma('user_version',{simple:true})).toBe(latest);
    expect(columns(db,'agent_executions')).toContain('base_branch');
+   expect(columns(db,'execution_work_items')).toEqual(['execution_id','work_item_id','position']);
    expect(db.prepare('SELECT name FROM projects').all()).toEqual([{name:'P'}]);
    closeDatabase(db);
   }
@@ -46,7 +49,7 @@ describe('opening an existing project',()=>{
   const created=store.createProject({name:'Legacy',slug:'legacy'});store.closeAll();
   const filename=join(root,'projects',created.id,'workspace.sqlite');
   // Downgrade to what the previous app version left on disk: schema 001 only, user_version 1.
-  const legacy=new Database(filename);for(const table of ['project_inception','pilot_events','pilot_runs','feature_autonomy','task_outcomes','feature_branches'])legacy.exec(`DROP TABLE ${table}`);legacy.exec('ALTER TABLE projects DROP COLUMN out_of_scope_json');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_execution_minutes');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN decision_policy_json');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_turns');for(const column of ['base_branch','execution_branch','revision_of','review_status','review_note','merged_commit','reviewed_at'])legacy.exec(`ALTER TABLE agent_executions DROP COLUMN ${column}`);legacy.pragma('user_version = 1');legacy.close();
+  const legacy=new Database(filename);for(const table of ['execution_work_items','project_inception','pilot_events','pilot_runs','feature_autonomy','task_outcomes','feature_branches'])legacy.exec(`DROP TABLE ${table}`);legacy.exec('ALTER TABLE projects DROP COLUMN out_of_scope_json');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_execution_minutes');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN decision_policy_json');legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_turns');for(const column of ['base_branch','execution_branch','revision_of','review_status','review_note','merged_commit','reviewed_at'])legacy.exec(`ALTER TABLE agent_executions DROP COLUMN ${column}`);legacy.pragma('user_version = 1');legacy.close();
   const reopened=new ProjectWorkspaceStore(root);
   expect(reopened.listProjects().map(project=>project.name)).toEqual(['Legacy']);
   const workspace=reopened.openProject(created.id);

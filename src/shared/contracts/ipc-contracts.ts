@@ -2,6 +2,7 @@ import type { ContextFlowDto, GraphEdgeType, GraphNodeView, GraphEdgeView, Knowl
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
 import type { ActivitySummaryDto } from './activity-view.js';
+import type { InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
 import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
@@ -35,6 +36,16 @@ export interface WorkspaceIpcCommands {
   'pilot:resume': (projectId:string,featureId:string)=>Promise<PilotRunDto>;
   'metrics:export_report': (projectId:string,featureId:string)=>Promise<{path:string}>;
   'provider:set_auth_mode': (projectId:string,mode:'subscription'|'api_key')=>Promise<{authMode:'subscription'|'api_key'}>;
+  /** Creates a new Git repository (folder missing or empty, absolute path without ..) and makes it the project's primary one. */
+  'repository:initialize': (projectId:string,absolutePath:string)=>Promise<InitializeRepositoryResultDto>;
+  /** Starts the inception: returns at once with status WORKING; `inception:updated` tells when the questions are ready. */
+  'inception:start': (projectId:string,input:StartInceptionInput)=>Promise<InceptionViewDto>;
+  /** Saves the answers and asks for the proposal (in PROPOSAL, regenerates it). Returns at once with status WORKING. */
+  'inception:answer': (projectId:string,answers:InceptionAnswerDto[])=>Promise<InceptionViewDto>;
+  /** Applies the proposal's ChangeSet (needs a primary repository). */
+  'inception:approve': (projectId:string)=>Promise<InceptionViewDto>;
+  /** Forgets questions, answers and the pending proposal; refused once applied. */
+  'inception:restart': (projectId:string)=>Promise<InceptionViewDto>;
 }
 export interface WorkspaceIpcQueries {
   'project:list': ()=>Promise<ProjectSummaryDto[]>;
@@ -55,6 +66,7 @@ export interface WorkspaceIpcQueries {
   'graph:context_flow': (projectId:string,workItemId:string)=>Promise<ContextFlowDto>;
   'metrics:feature_report': (projectId:string,featureId:string)=>Promise<FeatureReportDto>;
   'activity:list': (projectId:string,limit?:number)=>Promise<ActivitySummaryDto>;
+  'inception:get': (projectId:string)=>Promise<InceptionViewDto>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};
@@ -62,6 +74,7 @@ export interface WorkspaceIpcEvents {
   'execution:status_changed': {executionId:string;workItemId:string;status:AgentExecutionDto['status']};
   'execution:event_received': {executionId:string;event:AgentEventDto};
   'pilot:updated': {projectId:string;featureId:string;status:string|null};
+  'inception:updated': {projectId:string;stage:InceptionStage;status:InceptionStatus};
 }
 export type IpcCommandChannel=keyof WorkspaceIpcCommands;
 export type IpcQueryChannel=keyof WorkspaceIpcQueries;
@@ -112,5 +125,7 @@ export interface WorkspaceIpcClient {
     getFeatureReport(projectId:string,featureId:string):Promise<FeatureReportDto>;
     getActivity(projectId:string,limit?:number):Promise<ActivitySummaryDto>;
   };
+  /** Project inception and repository creation (optional so existing fakes stay valid; the Tauri client implements it). */
+  inception?:InceptionIpcClient;
   events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void;onPilotUpdated(listener:(event:WorkspaceIpcEvents['pilot:updated'])=>void):()=>void};
 }

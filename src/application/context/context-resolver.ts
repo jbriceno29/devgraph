@@ -1,4 +1,5 @@
 import { extractConventions } from '../../domain/work-management/task-outcome.js';
+import { renderProfileForContext } from '../../domain/projects/project-profile.js';
 import type { ContextRepositoryPort,ContextFilePort } from '../ports/context-engine-port.js';
 import type { ResolvedContext,ContextCandidate } from './context-types.js';
 
@@ -12,6 +13,9 @@ export class ContextResolver {
   const ancestors:ResolvedContext['ancestors']=[],visited=new Set([focus.entity.id]);let parentId=focus.entity.parentId;
   while(parentId){if(visited.has(parentId))throw new Error('La jerarquía del grafo contiene un ciclo.');visited.add(parentId);const parent=records.get(parentId);if(!parent)throw new Error('La jerarquía del foco contiene una entidad padre inexistente.');ancestors.push(parent);parentId=parent.entity.parentId;}
   const candidates:ContextCandidate[]=[];
+  // Goal, scope and stack of the project (inception profile): tier 1, a few lines in every run.
+  const profile=renderProfileForContext(project);
+  if(profile)candidates.push({sourceId:`profile:${project.id}`,entityKey:'PROFILE',sourceType:'POLICY',titleOrPath:'Perfil del proyecto',authorityTier:1,retrievalOrigin:'FOCUS_NODE',graphDistance:0,content:profile,contentHash:this.files.hashContent(profile),relevanceScore:Number.MAX_SAFE_INTEGER});
   for(const [index,rule] of project.rules.entries()){const content=rule.trim();if(!content)continue;candidates.push({sourceId:`policy:${project.id}:${index}`,entityKey:`POLICY-${index+1}`,sourceType:'POLICY',titleOrPath:`Regla del proyecto ${index+1}`,authorityTier:1,retrievalOrigin:'FOCUS_NODE',graphDistance:0,content,contentHash:this.files.hashContent(content),relevanceScore:Number.MAX_SAFE_INTEGER});}
   // Conventions declared by accepted tasks are project rules from then on (tier 1, always included).
   const conventions:string[]=[];

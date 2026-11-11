@@ -11,7 +11,10 @@ export type ChangeOperation =
  | {type:'UPSERT_ARTIFACT';tempId?:string;entityId?:string;parentId?:string|null;artifactType:'PRD'|'ARCHITECTURE'|'SPEC'|'IMPLEMENTATION_PLAN'|'DOMAIN_DOC'|'OTHER';title:string;relativePath:string;markdownContent:string}
  | {type:'UPDATE_ENTITY_STATUS';entityId:string;newStatus:string;reason:string}
  | {type:'CREATE_RELATIONSHIP';sourceId:string;targetId:string;edgeType:GraphEdgeType;metadata?:Record<string,unknown>}
- | {type:'DELETE_RELATIONSHIP';edgeId:string;reason:string};
+ | {type:'DELETE_RELATIONSHIP';edgeId:string;reason:string}
+ /** Project profile (inception): goal, scope, stack, level-1 rules and verification commands. Replaces each field it carries. */
+ | {type:'SET_PROJECT_PROFILE'}&ProjectProfile;
+export interface ProjectProfile { description?:string; objectives:string[]; outOfScope:string[]; techStack:Record<string,string>; rules:string[]; verificationCommands:string[] }
 export interface ChangeSet { id:string; projectId:string; baseGraphRevision:number; appliedGraphRevision?:number; originType:ChangeSetOriginType; originRefId?:string; title:string; rationale:string; status:ChangeSetStatus; operations:ChangeOperation[]; validationIssues:Array<{operationIndex:number;severity:'ERROR'|'WARNING';code:string;message:string}>; createdAt:string; appliedAt?:string }
 
 const transitions:Readonly<Record<ChangeSetStatus,readonly ChangeSetStatus[]>>={

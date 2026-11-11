@@ -1,6 +1,6 @@
 import type { KnowledgeEntity,GraphRelationship } from '../../domain/graph/knowledge-entity.js';
 import type { ContextSnapshot } from '../../domain/knowledge/context-snapshot.js';
-export interface ContextProjectRecord {id:string;name:string;currentRevision:number;rules:string[];repositoryPath:string|null}
+export interface ContextProjectRecord {id:string;name:string;currentRevision:number;rules:string[];repositoryPath:string|null;objectives?:string[];outOfScope?:string[];techStack?:Record<string,unknown>}
 export interface ContextEntityRecord {entity:KnowledgeEntity;attributes:Record<string,unknown>;bodyContent:string}
 export interface ContextSearchHit {record:ContextEntityRecord;relevanceScore:number}
 export interface ContextExecutionSummary {id:string;status:string;completedAt:string|null;resultSummary:string|null}

@@ -6,7 +6,9 @@ import type { WorkspaceRequest } from './workspace-core.js';
  * runs concurrently, so a slow proposal or execution start never blocks the rest of the UI.
  */
 export const SERIALIZED_CHANNELS: ReadonlySet<string> = new Set([
-  'project:create', 'project:open', 'repository:configure',
+  'project:create', 'project:open', 'repository:configure', 'repository:initialize',
+  // Inception commands return at once (the engine call runs in the background) and must not interleave with each other.
+  'inception:start', 'inception:answer', 'inception:approve', 'inception:restart',
   'artifact:create', 'artifact:save',
   'changeset:edit', 'changeset:apply', 'changeset:reject',
   'execution:start', 'execution:cancel', 'execution:resolve_approval', 'execution:accept', 'execution:request_changes',

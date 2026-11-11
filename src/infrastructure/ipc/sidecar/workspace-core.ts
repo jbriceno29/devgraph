@@ -41,9 +41,15 @@ import { FeatureMetrics, renderFeatureReport } from '../../../application/execut
 import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
 import { SqliteActivityRepository } from '../../persistence/repositories/sqlite-activity-repository.js';
 import { ActivityService } from '../../../application/activity/activity-service.js';
+import { ProjectInceptionService } from '../../../application/inception/project-inception-service.js';
+import type { InceptionEnginePort } from '../../../application/ports/inception-port.js';
+import { SqliteInceptionRepository } from '../../persistence/repositories/sqlite-inception-repository.js';
+import { ClaudeInceptionEngine } from '../../ai/claude-inception-engine.js';
+import { GitRepositoryInitializer } from '../../git/git-repository-initializer.js';
+import type { InceptionAnswerDto, StartInceptionInput } from '../../../shared/contracts/inception-view.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const documentCommitter=new GitDocumentCommitter();
@@ -66,6 +72,27 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   if(agentAdapter.providerId!=='claude-code')return new CodexChangeSetPlanner(cwd);
   const profile=providerConnection(projectId,database);
   return new ClaudeChangeSetPlanner(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription',defaultModel:profile?.models.planning??null});
+ };
+ // Project inception: one service per project (it tracks its background engine call). The engine follows the wired provider.
+ const inceptions=new Map<string,ProjectInceptionService>();
+ const getInception=(projectId:string)=>{
+  const cached=inceptions.get(projectId);if(cached)return cached;
+  const workspace=store.openProject(projectId);
+  const claudeEngine=()=>{
+   if(agentAdapter.providerId!=='claude-code')throw new Error('El asistente de inicio todavía solo funciona con Claude Code.');
+   const profile=providerConnection(projectId,workspace.database);
+   // A neutral working directory: no project instructions (CLAUDE.md) leak into the inception.
+   const cwd=join(workspaceRoot,'projects',projectId);mkdirSync(cwd,{recursive:true});
+   return new ClaudeInceptionEngine(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription',defaultModel:profile?.models.planning??null});
+  };
+  // Built per call, so `inception:get` works with any engine and auth changes apply to the next call.
+  const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input)};
+  const service=new ProjectInceptionService({projects:workspace.projects,graph:workspace.graph,store:new SqliteInceptionRepository(workspace.database),engine,
+   planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>getPlanning(projectId).apply(id),reject:id=>{getPlanning(projectId).reject(id);}},
+   repositoryPath:id=>workspace.repositories.findPrimaryForProject(id)?.localPath??null,
+   models:id=>{const profile=providerConnection(id,workspace.database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};},
+   emit:(channel,payload)=>emit(channel,payload)});
+  inceptions.set(projectId,service);return service;
  };
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
  const getExecutionService=(projectId:string)=>{
@@ -142,6 +169,20 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      await startWatcher(projectId);
      return configured;
     }
+    case 'repository:initialize': {
+     const projectId=String(args[0]??''),localPath=String(args[1]??'');const workspace=store.openProject(projectId);const project=workspace.projects.findById(projectId)!;
+     const created=await new GitRepositoryInitializer().initialize({path:localPath,projectName:project.props.name,description:project.props.description??null});
+     const configured=await getManagement(projectId).configureRepository(projectId,created.localPath);
+     await recoverDocuments(projectId);
+     await startWatcher(projectId);
+     emit('inception:updated',{projectId,...(({stage,status})=>({stage,status}))(getInception(projectId).get(projectId))});
+     return {projectId,localPath:configured.localPath,initialCommit:created.initialCommit,files:created.files};
+    }
+    case 'inception:get': return getInception(String(args[0]??'')).get(String(args[0]??''));
+    case 'inception:start': {const projectId=String(args[0]??'');return getInception(projectId).start(projectId,(args[1]??{}) as StartInceptionInput);}
+    case 'inception:answer': {const projectId=String(args[0]??'');return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[]);}
+    case 'inception:approve': {const projectId=String(args[0]??'');return getInception(projectId).approve(projectId);}
+    case 'inception:restart': {const projectId=String(args[0]??'');return getInception(projectId).restart(projectId);}
     case 'repository:get_path': {
      const projectId=String(args[0]??'');return getManagement(projectId).repositoryPath(projectId);
     }
@@ -203,7 +244,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
      return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};
     }
-    case 'activity:list': {const projectId=String(args[0]??'');return new ActivityService(new SqliteActivityRepository(store.openProject(projectId).database)).list(projectId,typeof args[1]==='number'?args[1]:undefined);}
+    case 'activity:list': {const projectId=String(args[0]??'');return new ActivityService(new SqliteActivityRepository(store.openProject(projectId).database),id=>getInception(id).activity(id)).list(projectId,typeof args[1]==='number'?args[1]:undefined);}
     case 'metrics:feature_report': {const projectId=String(args[0]??''),featureId=String(args[1]??'');return featureReport(projectId,featureId);}
     case 'metrics:export_report': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const {markdown}=featureReport(projectId,featureId);
@@ -228,6 +269,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }
   },
+  /** Resolves when the project's background inception call (if any) has finished (tests and shutdown). */
+  async inceptionSettled(projectId:string):Promise<void>{await inceptions.get(projectId)?.settled(projectId);},
   close():void {for(const pilot of pilots.values())pilot.shutdown();for(const service of executionServices.values())service.shutdown();for(const watcher of watchers.values())watcher.stop();watchers.clear();store.closeAll();},
  };
  function getManagementForDocument(documentId:string):ArtifactManagementService {

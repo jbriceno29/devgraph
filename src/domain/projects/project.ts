@@ -4,7 +4,7 @@ export const graphRevision = (value: number): GraphRevision => {
   if (!Number.isSafeInteger(value) || value < 1) throw new DomainError('INVALID_GRAPH_REVISION', 'Graph revision must be a positive integer.');
   return value as GraphRevision;
 };
-export interface ProjectProps { id: string; name: string; slug: string; description?: string | null; objectives?: string[]; techStack?: Record<string, unknown>; rules?: string[]; currentRevision?: number; createdAt: string; updatedAt: string }
+export interface ProjectProps { id: string; name: string; slug: string; description?: string | null; objectives?: string[]; outOfScope?: string[]; techStack?: Record<string, unknown>; rules?: string[]; currentRevision?: number; createdAt: string; updatedAt: string }
 export class Project {
   readonly currentRevision: GraphRevision;
   constructor(readonly props: ProjectProps) {

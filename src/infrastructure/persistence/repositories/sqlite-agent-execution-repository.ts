@@ -249,7 +249,7 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     const defaults=providerDefaults(this.providerKey);
     const providerId=`provider:${defaults.providerKey}`;
     const profileId=`${projectId}:profile:developer`;
-    const policyId=`${projectId}:policy:default`;
+    const policyId=defaultPolicyId(projectId);
     const now=new Date().toISOString();
     const otherProfileNames=['codex','claude-code'].filter(key=>key!==defaults.providerKey).map(key=>providerDefaults(key as AgentProviderId).developerProfileName);
     this.db.transaction(()=>{
@@ -261,8 +261,7 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       this.db.prepare(`INSERT INTO provider_connections(id,provider_id,executable_path,config_json,health_status)
         VALUES(?,?,?,?,'UNKNOWN') ON CONFLICT(id) DO UPDATE SET config_json=COALESCE(provider_connections.config_json,excluded.config_json)`)
         .run(`${actualProviderId}:local`,actualProviderId,process.env[defaults.executableEnv]??null,JSON.stringify(defaults.connectionConfig));
-      this.db.prepare(`INSERT INTO autonomy_policies(id,project_id,name,writable_paths_json,readonly_paths_json,denied_paths_json,allowed_commands_json,auto_approve_scopes_json,require_worktree_isolation)
-        VALUES(?,?,?,'["src/**","tests/**","docs/**","node_modules/**","dist/**","target/**","coverage/**"]','["docs/architecture/ADR/**"]','[".env*",".git/config"]','[]','[]',1) ON CONFLICT(id) DO NOTHING`).run(policyId,projectId,'Default isolated execution policy');
+      seedDefaultPolicy(this.db,projectId);
       // Existing projects move to the wired provider; a profile renamed by the user keeps its name.
       this.db.prepare(`INSERT INTO agent_profiles(id,project_id,role_key,name,system_instructions,default_provider_id,default_policy_id)
         VALUES(?,?,'DEVELOPER',?,?,?,?)
@@ -289,6 +288,13 @@ function toRow(execution:AgentExecution):Record<string,unknown> {
   return {...execution,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,testSummary:execution.testSummary===null?null:JSON.stringify(execution.testSummary)};
 }
 function parseJson<T>(json:string,fallback:T):T{try{return JSON.parse(json) as T;}catch{return fallback;}}
+
+export const defaultPolicyId=(projectId:string)=>`${projectId}:policy:default`;
+/** Inserts the project's default execution policy when missing (kept as is when it exists). */
+export function seedDefaultPolicy(db:SqliteDatabase,projectId:string):void {
+  db.prepare(`INSERT INTO autonomy_policies(id,project_id,name,writable_paths_json,readonly_paths_json,denied_paths_json,allowed_commands_json,auto_approve_scopes_json,require_worktree_isolation)
+    VALUES(?,?,?,'["src/**","tests/**","docs/**","node_modules/**","dist/**","target/**","coverage/**"]','["docs/architecture/ADR/**"]','[".env*",".git/config"]','[]','[]',1) ON CONFLICT(id) DO NOTHING`).run(defaultPolicyId(projectId),projectId,'Default isolated execution policy');
+}
 
 /** A stored policy that no longer parses falls back to the defaults rather than blocking every run. */
 function readDecisionPolicy(json:string|null|undefined){try{return normalizeDecisionPolicy(json?JSON.parse(json):null);}catch{return normalizeDecisionPolicy(null);}}

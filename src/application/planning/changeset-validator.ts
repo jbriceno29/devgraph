@@ -2,6 +2,7 @@ import { GraphTopologyService } from '../../domain/graph/graph-topology-service.
 import type { ChangeOperation, ChangeSet } from '../../domain/knowledge/change-set.js';
 import type { GraphRelationship, KnowledgeEntity } from '../../domain/graph/knowledge-entity.js';
 import { canTransitionWorkItem } from '../../domain/work-management/entities.js';
+import { profileIssues } from '../../domain/projects/project-profile.js';
 
 export interface ValidationResult { valid:boolean; issues:ChangeSet['validationIssues']; status:'VALIDATED'|'CONFLICTED'|'PENDING_APPROVAL' }
 const docOps=(operation:ChangeOperation)=>operation.type==='UPSERT_ARTIFACT'||operation.type==='CREATE_DECISION_RECORD';
@@ -45,6 +46,10 @@ export class ChangeSetValidator {
     else if(entity.entityType==='WORK_ITEM'&&(!['DRAFT','READY','BLOCKED','IN_PROGRESS','IN_REVIEW','DONE','ARCHIVED'].includes(op.newStatus)||!canTransitionWorkItem(entity.status as import('../../domain/work-management/entities.js').WorkItemStatus,op.newStatus as import('../../domain/work-management/entities.js').WorkItemStatus)))issue('INVALID_STATUS_TRANSITION',`No se permite cambiar el WorkItem de ${entity.status} a ${op.newStatus}.`);
    }
    else if(op.type==='DELETE_RELATIONSHIP'&&!edges.some(edge=>edge.id===op.edgeId))issue('MISSING_RELATIONSHIP',`No existe la relación ${op.edgeId}.`);
+   else if(op.type==='SET_PROJECT_PROFILE'){
+    if(changeSet.operations.filter(item=>item.type==='SET_PROJECT_PROFILE').length>1&&changeSet.operations.findIndex(item=>item.type==='SET_PROJECT_PROFILE')!==i)issue('DUPLICATE_PROFILE','La propuesta solo puede fijar el perfil del proyecto una vez.');
+    for(const message of profileIssues(op))issue('INVALID_PROJECT_PROFILE',message);
+   }
   }
   const conflict=issues.some(item=>item.code==='REVISION_CONFLICT');
   return {valid:issues.length===0,issues,status:conflict?'CONFLICTED':issues.length?'PENDING_APPROVAL':'VALIDATED'};

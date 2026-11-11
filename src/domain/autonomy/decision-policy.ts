@@ -3,20 +3,23 @@
  * closes a task; the project's policy classifies each operation and decides whether the whole proposal is applied
  * automatically or waits for the user. The project — not the engine — defines what counts as an important decision.
  */
-export type DecisionCategory = 'NEW_TASK' | 'TASK_DEPENDENCY' | 'TASK_STATUS' | 'DECISION_RECORD' | 'SCOPE_CHANGE';
+export type ConfigurableDecisionCategory = 'NEW_TASK' | 'TASK_DEPENDENCY' | 'TASK_STATUS' | 'DECISION_RECORD' | 'SCOPE_CHANGE';
+/** PROJECT_FOUNDATION (goal, scope, stack, rules, verification) always asks: it is not part of the configurable rules. */
+export type DecisionCategory = ConfigurableDecisionCategory | 'PROJECT_FOUNDATION';
 export type DecisionMode = 'AUTO' | 'ASK';
 export interface DecisionPolicy {
-  rules: Record<DecisionCategory, DecisionMode>;
+  rules: Record<ConfigurableDecisionCategory, DecisionMode>;
   /** New tasks the agents may add to one feature without asking; beyond that every new task asks. */
   maxAutoTasksPerFeature: number;
 }
-export const DECISION_CATEGORIES: ReadonlyArray<{ category: DecisionCategory; label: string }> = [
+export const DECISION_CATEGORIES: ReadonlyArray<{ category: ConfigurableDecisionCategory; label: string }> = [
   { category: 'NEW_TASK', label: 'Agregar tareas dentro de la misma feature' },
   { category: 'TASK_DEPENDENCY', label: 'Agregar dependencias entre tareas de la feature' },
   { category: 'TASK_STATUS', label: 'Cambiar el estado de tareas de la feature (por ejemplo, archivar una que sobra)' },
   { category: 'DECISION_RECORD', label: 'Registrar decisiones de arquitectura (ADR)' },
   { category: 'SCOPE_CHANGE', label: 'Cambiar el alcance: features, módulos, requisitos, documentos o entidades de otras features' },
 ];
+export const PROJECT_FOUNDATION_LABEL = 'Cambiar los cimientos del proyecto: objetivo, alcance, stack, reglas o comandos de verificación';
 export const DEFAULT_DECISION_POLICY: DecisionPolicy = {
   rules: { NEW_TASK: 'AUTO', TASK_DEPENDENCY: 'AUTO', TASK_STATUS: 'ASK', DECISION_RECORD: 'ASK', SCOPE_CHANGE: 'ASK' },
   maxAutoTasksPerFeature: 5,
@@ -28,9 +31,10 @@ export function normalizeDecisionPolicy(value: unknown): DecisionPolicy {
   const input = value as { rules?: Record<string, unknown>; maxAutoTasksPerFeature?: unknown };
   const rules = { ...DEFAULT_DECISION_POLICY.rules };
   for (const [key, mode] of Object.entries(input.rules ?? {})) {
+    if (key === 'PROJECT_FOUNDATION') throw new Error('PROJECT_FOUNDATION siempre pide aprobación; no es configurable.');
     if (!(key in rules)) throw new Error(`Categoría de decisión desconocida: ${key}`);
     if (mode !== 'AUTO' && mode !== 'ASK') throw new Error(`Modo de decisión inválido para ${key}: ${String(mode)}`);
-    rules[key as DecisionCategory] = mode;
+    rules[key as ConfigurableDecisionCategory] = mode;
   }
   const max = input.maxAutoTasksPerFeature ?? DEFAULT_DECISION_POLICY.maxAutoTasksPerFeature;
   if (typeof max !== 'number' || !Number.isInteger(max) || max < 0 || max > 50) throw new Error('El máximo de tareas automáticas por feature debe estar entre 0 y 50.');
@@ -57,6 +61,7 @@ export function classifyOperation(operation: Operation, scope: DecisionScope, ne
       return 'SCOPE_CHANGE';
     case 'UPDATE_ENTITY_STATUS': return inFeature(operation.entityId) ? 'TASK_STATUS' : 'SCOPE_CHANGE';
     case 'CREATE_DECISION_RECORD': return 'DECISION_RECORD';
+    case 'SET_PROJECT_PROFILE': return 'PROJECT_FOUNDATION';
     default: return 'SCOPE_CHANGE';
   }
 }
@@ -69,7 +74,10 @@ export function decide(operations: Operation[], policy: DecisionPolicy, scope: D
   const newDecisions = new Set(operations.filter(op => op.type === 'CREATE_DECISION_RECORD' && typeof op.tempId === 'string').map(op => op.tempId as string));
   const categories = operations.map(op => classifyOperation(op, scope, newTasks, newDecisions));
   const reasons: string[] = [];
-  for (const category of new Set(categories)) if (policy.rules[category] === 'ASK') reasons.push(`${DECISION_CATEGORIES.find(item => item.category === category)!.label}: la política pide revisión.`);
+  for (const category of new Set(categories)) {
+    if (category === 'PROJECT_FOUNDATION') reasons.push(`${PROJECT_FOUNDATION_LABEL}: siempre pide tu aprobación.`);
+    else if (policy.rules[category] === 'ASK') reasons.push(`${DECISION_CATEGORIES.find(item => item.category === category)!.label}: la política pide revisión.`);
+  }
   const added = categories.filter(category => category === 'NEW_TASK').length;
   if (added && scope.autoTasksSoFar + added > policy.maxAutoTasksPerFeature) reasons.push(`Se agregarían ${scope.autoTasksSoFar + added} tareas automáticas a la feature y el máximo es ${policy.maxAutoTasksPerFeature}.`);
   return { mode: reasons.length ? 'ASK' : 'AUTO', categories, reasons };

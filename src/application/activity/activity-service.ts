@@ -1,4 +1,5 @@
 import type { ActivityItemDto, ActivitySummaryDto } from '../../shared/contracts/activity-view.js';
+import type { InceptionActivityDto } from '../../shared/contracts/inception-view.js';
 import type { ActivityExecutionRow, ActivitySourcePort, ActivityTaskRow } from '../ports/activity-port.js';
 
 export const DEFAULT_ACTIVITY_LIMIT = 50;
@@ -8,7 +9,7 @@ export const DEFAULT_ACTIVITY_LIMIT = 50;
  * current state, plus pilot runs, agent plan proposals and pending approvals. Items that need the user come first.
  */
 export class ActivityService {
-  constructor(private readonly source: ActivitySourcePort) {}
+  constructor(private readonly source: ActivitySourcePort, private readonly inception: (projectId: string) => InceptionActivityDto | null = () => null) {}
 
   list(projectId: string, limit = DEFAULT_ACTIVITY_LIMIT): ActivitySummaryDto {
     const max = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 500) : DEFAULT_ACTIVITY_LIMIT;
@@ -52,9 +53,14 @@ export class ActivityService {
       push({ id: `APPROVAL_PENDING:${approval.id}`, at: approval.requestedAt, kind: 'APPROVAL_PENDING', title: key ? `Un agente pide permiso en ${key}` : 'Un agente pide permiso', detail: `${approval.requestedAction}: ${approval.reason}`, needsAttention: true, workItemId: approval.workItemId, executionId: approval.executionId, target: 'agents' });
     }
 
+    // Project inception: the proposal waiting for approval is a plan proposal (reviewable in Planning); the questions only live in `inception`.
+    const inception = this.inception(projectId);
+    if (inception?.stage === 'PROPOSAL' && inception.changeSetId && inception.status === 'WAITING_USER') push({ id: `PLAN_PROPOSAL:${inception.changeSetId}`, at: inception.at, kind: 'PLAN_PROPOSAL', title: inception.title, detail: inception.detail, needsAttention: true, changeSetId: inception.changeSetId, target: 'planning' });
+
     items.sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const running = data.tasks.filter(task => task.status === 'IN_PROGRESS').map(task => ({ workItemKey: task.displayKey, title: task.title }));
-    return { items: items.slice(0, max), running, attentionCount: items.filter(item => item.needsAttention).length };
+    const inceptionItem = items.some(item => item.changeSetId && item.changeSetId === inception?.changeSetId);
+    return { items: items.slice(0, max), running, attentionCount: items.filter(item => item.needsAttention).length + (inception?.needsAttention && !inceptionItem ? 1 : 0), ...(inception ? { inception } : {}) };
   }
 }
 

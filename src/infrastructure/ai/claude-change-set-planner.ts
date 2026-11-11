@@ -14,6 +14,8 @@ export interface ClaudeChangeSetPlannerOptions {
   timeoutMs?: number;
 }
 
+export interface StructuredUsage { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null; model: string | null }
+
 export const CLAUDE_PLANNER_TIMEOUT_MS = 300_000;
 const MODEL_PATTERN = /^[A-Za-z0-9._[\]-]{1,64}$/;
 
@@ -25,6 +27,15 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
   constructor(private readonly cwd: string, private readonly options: ClaudeChangeSetPlannerOptions = {}) {}
 
   async propose(input: PlannerInput): Promise<ChangeSetDraft> {
+    const { output } = await this.structured(buildPlannerPrompt(input), plainSchema, input.model);
+    return parsePlannerDraft(output, 'Claude Code');
+  }
+
+  /**
+   * One independent `claude -p` call without tools that must answer with JSON matching `schema`.
+   * `extraArgs` go before the model (the inception adds the isolation flags of the agent adapter).
+   */
+  async structured(prompt: string, schema: unknown, requestedModel?: string, extraArgs: readonly string[] = []): Promise<{ output: unknown; usage: StructuredUsage }> {
     const executable = await resolveCliExecutable(claudeCli, this.options.executable ?? 'claude');
     const authMode = this.options.authMode ?? 'subscription';
     const env = buildChildEnvironment(process.env, { authMode });
@@ -32,10 +43,10 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
       const auth = await checkClaudeLogin(executable, env, this.cwd);
       if (!auth.loggedIn) throw new Error(auth.message);
     }
-    const model = input.model ?? this.options.defaultModel ?? undefined;
+    const model = requestedModel ?? this.options.defaultModel ?? undefined;
     if (model && !MODEL_PATTERN.test(model)) throw new Error(`Nombre de modelo inválido: ${model}`);
-    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(plainSchema), '--tools', '', '--permission-mode', 'dontAsk', '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])];
-    const stdout = await this.run(executable, args, env, buildPlannerPrompt(input));
+    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(schema), '--tools', '', '--permission-mode', 'dontAsk', '--strict-mcp-config', '--no-session-persistence', ...extraArgs, ...(model ? ['--model', model] : [])];
+    const stdout = await this.run(executable, args, env, prompt);
     let result: Record<string, unknown>;
     try { result = JSON.parse(stdout) as Record<string, unknown>; }
     catch { throw new Error(`Claude Code devolvió una respuesta que no es JSON: ${stdout.slice(0, 300)}`); }
@@ -46,7 +57,9 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
     if (result.structured_output === undefined || result.structured_output === null) {
       throw new Error('Claude Code terminó sin una propuesta estructurada. Reformula la petición o prueba con un modelo más capaz.');
     }
-    return parsePlannerDraft(result.structured_output, 'Claude Code');
+    const usage = (result.usage ?? {}) as Record<string, unknown>, count = (key: string) => typeof usage[key] === 'number' ? usage[key] as number : 0;
+    const used = result.modelUsage && typeof result.modelUsage === 'object' ? Object.keys(result.modelUsage as object)[0] ?? null : null;
+    return { output: result.structured_output, usage: { inputTokens: count('input_tokens'), outputTokens: count('output_tokens'), cacheReadTokens: count('cache_read_input_tokens'), cacheCreationTokens: count('cache_creation_input_tokens'), costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null, model: used ?? model ?? null } };
   }
 
   private run(executable: string, args: string[], env: NodeJS.ProcessEnv, prompt: string): Promise<string> {

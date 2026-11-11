@@ -47,6 +47,15 @@ export const workspaceIpc:WorkspaceIpcClient={
   getFeatureReport:(projectId,featureId)=>invokeCore('metrics:feature_report',[projectId,featureId]),
   getActivity:(projectId,limit)=>invokeCore('activity:list',[projectId,limit]),
  },
+ inception:{
+  get:projectId=>invokeCore('inception:get',[projectId]),
+  start:(projectId,input)=>invokeCore('inception:start',[projectId,input]),
+  answer:(projectId,answers)=>invokeCore('inception:answer',[projectId,answers]),
+  approve:projectId=>invokeCore('inception:approve',[projectId]),
+  restart:projectId=>invokeCore('inception:restart',[projectId]),
+  initializeRepository:(projectId,absolutePath)=>invokeCore('repository:initialize',[projectId,absolutePath]),
+  onUpdated(listener){return subscribe('inception:updated',listener);},
+ },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},
   onArtifactSyncStatusChanged(listener){return subscribe('artifact:sync_status_changed',listener);},

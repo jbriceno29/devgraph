@@ -20,7 +20,7 @@ export class SqliteProjectRepository implements ProjectRepositoryPort {
     return row ? this.mapProject(row) : null;
   }
   private mapProject(row:ProjectRow):Project {
-    return new Project({id:row.id,name:row.name,slug:row.slug,description:row.description,objectives:JSON.parse(row.objectives_json) as string[],techStack:JSON.parse(row.tech_stack_json) as Record<string,unknown>,rules:JSON.parse(row.rules_json) as string[],currentRevision:row.current_revision,createdAt:row.created_at,updatedAt:row.updated_at});
+    return new Project({id:row.id,name:row.name,slug:row.slug,description:row.description,objectives:JSON.parse(row.objectives_json) as string[],outOfScope:row.out_of_scope_json?JSON.parse(row.out_of_scope_json) as string[]:[],techStack:JSON.parse(row.tech_stack_json) as Record<string,unknown>,rules:JSON.parse(row.rules_json) as string[],currentRevision:row.current_revision,createdAt:row.created_at,updatedAt:row.updated_at});
   }
 }
-interface ProjectRow {id:string;name:string;slug:string;description:string|null;objectives_json:string;tech_stack_json:string;rules_json:string;current_revision:number;created_at:string;updated_at:string}
+interface ProjectRow {id:string;name:string;slug:string;description:string|null;objectives_json:string;tech_stack_json:string;rules_json:string;out_of_scope_json?:string;current_revision:number;created_at:string;updated_at:string}

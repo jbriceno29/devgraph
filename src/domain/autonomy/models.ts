@@ -12,12 +12,12 @@ export interface FeatureAutonomy {
   maxAttempts: number;
   /** Fraction (0-1) of the usage window at which the autopilot pauses. */
   usagePauseThreshold: number;
-  /** Etapa 0: the autopilot runs 2–`maxGroupSize` small READY tasks of the feature in one execution. Off by default until measured in real pilots. */
+  /** Etapa 0: the autopilot runs 2–`maxGroupSize` small READY tasks of the feature in one execution. On by default since the eighth measurement (same quality, ~19 % cheaper with groups of 3); a feature whose autonomy was saved before the option existed keeps it off (migration 010 default). */
   groupTasks: boolean;
   /** Most tasks one grouped execution may cover (1–5). */
   maxGroupSize: number;
 }
-export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85, groupTasks: false, maxGroupSize: 3 };
+export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85, groupTasks: true, maxGroupSize: 3 };
 
 export type PilotStatus = 'RUNNING' | 'PAUSED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export const ACTIVE_PILOT_STATUSES: ReadonlySet<PilotStatus> = new Set(['RUNNING', 'PAUSED']);

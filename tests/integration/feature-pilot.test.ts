@@ -224,7 +224,7 @@ describe('feature metrics (Stage 5)',()=>{
 
   await expect(retried.pilot('set_autonomy',{level:'PILOT',maxGroupSize:9})).rejects.toThrow('El tamaño del grupo debe estar entre 1 y 5 tareas.');
   const off=await setup('good',{tasks:[['t0','TASK-000','DONE'],['t1','TASK-001','READY'],['t2','TASK-002','READY']],edges:[]});
-  await off.pilot('set_autonomy',{level:'PILOT'});
+  await off.pilot('set_autonomy',{level:'PILOT',groupTasks:false});
   await off.pilot('start',{acknowledgeCost:true});
   const plain=await off.until(value=>value.run?.status==='COMPLETED');
   expect(plain.events.map(event=>event.kind)).toEqual(['STARTED','TASK_STARTED','TASK_ACCEPTED','TASK_STARTED','TASK_ACCEPTED','COMPLETED']);

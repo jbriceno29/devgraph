@@ -55,7 +55,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 ### Autonomía y piloto
 
 - `autonomy_policies`: rutas escribibles, solo lectura y denegadas, comandos permitidos, aislamiento por worktree, `max_execution_minutes` (005), `decision_policy_json` (006) y `max_turns` (007).
-- `feature_autonomy` (005, 010): nivel por feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`), modelo de ejecución y de escalamiento, intentos máximos (3 por defecto), umbral de pausa por uso (0,85 por defecto), y si el piloto agrupa tareas pequeñas (`group_tasks`, desactivado por defecto) con el tamaño máximo del grupo (`max_group_size`, 3).
+- `feature_autonomy` (005, 010): nivel por feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`), modelo de ejecución y de escalamiento, intentos máximos (3 por defecto), umbral de pausa por uso (0,85 por defecto), y si el piloto agrupa tareas pequeñas (`group_tasks`; la columna nace en 0 para las filas ya guardadas, y una feature sin fila usa el valor por defecto del dominio, activo) con el tamaño máximo del grupo (`max_group_size`, 3).
 - `pilot_runs` (005): corridas del piloto (`RUNNING`, `PAUSED`, `WAITING_USER`, `COMPLETED`, `STOPPED`, `FAILED`) con su razón.
 - `pilot_events` (005): registro de cada decisión del piloto (inicio, tarea iniciada o aceptada, reintento, escalamiento, pausa, espera del usuario, cambios al plan…).
 

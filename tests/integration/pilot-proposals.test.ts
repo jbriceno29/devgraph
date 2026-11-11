@@ -49,7 +49,8 @@ async function setup(blocks:Array<string|null>){
  const status=()=>pilot('get') as Promise<{run:{status:string;reason:string|null}|null;events:Array<{kind:string;message:string}>;tasks:Array<{displayKey:string;title:string;status:string}>}>;
  const until=async(predicate:(value:Awaited<ReturnType<typeof status>>)=>boolean,timeout=20_000)=>{const started=Date.now();for(;;){const value=await status();if(predicate(value))return value;if(Date.now()-started>timeout)throw new Error(`timeout: ${JSON.stringify(value.run)} ${value.events.map(event=>event.kind).join(',')}`);await new Promise(resolve=>setTimeout(resolve,100));}};
  const changeSets=async()=>await core.handle({channel:'changeset:list',args:[project.id]}) as Array<{id:string;status:string;originType:string}>;
- await pilot('set_autonomy',{level:'PILOT'});
+ // Grouping off: these tests count one run per task to follow the proposals; grouping has its own tests in feature-pilot.test.ts.
+ await pilot('set_autonomy',{level:'PILOT',groupTasks:false});
  return {adapter,rootId:opened.selectedEntityId,pilot,status,until,changeSets};
 }
 

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS execution_work_items (
 );
 CREATE INDEX IF NOT EXISTS idx_execution_work_items_task ON execution_work_items(work_item_id);
 
--- Opción del piloto por feature: agrupar tareas pequeñas (desactivada por defecto) y tamaño máximo del grupo.
+-- Opción del piloto por feature: agrupar tareas pequeñas y tamaño máximo del grupo. Las filas ya guardadas quedan en 0 (sin cambio
+-- de comportamiento para features configuradas antes de la opción); una feature sin fila usa DEFAULT_AUTONOMY (activa desde la octava medición).
 ALTER TABLE feature_autonomy ADD COLUMN group_tasks INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE feature_autonomy ADD COLUMN max_group_size INTEGER NOT NULL DEFAULT 3;

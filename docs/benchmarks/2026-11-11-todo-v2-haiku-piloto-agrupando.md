@@ -92,7 +92,7 @@ El plan pedía «al menos un 30 % por debajo de `workspace` en la misma corrida,
 1. **Dejar la opción desactivada por defecto** (lo que dice el plan si no se alcanza el 30 %), documentando el −19 % medido.
 2. **Activarla por defecto con tamaño 3**, porque cuesta menos sin perder calidad ni intervenciones, y el usuario ya decidió apostar por autonomía antes que por costo.
 
-Se recomienda la opción 2, pero es una decisión de producto y queda para el usuario. Tamaño 4 o más: solo con medición propia del proyecto; el panel lo permite y lo advierte.
+Se recomendó la opción 2 y **el usuario la tomó** (2026-11-11, delegando en el criterio del asistente): activa por defecto con tamaño 3 en features nuevas; las features con autonomía guardada antes de la opción conservan su valor. Tamaño 4 o más: solo con medición propia del proyecto; el panel lo permite y lo advierte.
 
 ## Reglas
 

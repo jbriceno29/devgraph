@@ -92,6 +92,14 @@ describe('memory that flows between tasks (Stage 2)',()=>{
   expect(promptForT2).toContain('Archivo src/tasks.ts');
   expect(promptForT2).not.toContain('Archivo src/old.ts');
 
+  // Stage 6: the graph can show which entities formed TASK-002's context, and at which authority tier.
+  const flow=await core.handle({channel:'graph:context_flow',args:[projectId,'t2']}) as {executionId:string|null;sources:Array<{entityId:string;tier:number}>;conventions:string[]};
+  expect(flow.executionId).not.toBeNull();
+  expect(flow.sources.map(source=>source.entityId)).toEqual(expect.arrayContaining(['t1','feat']));
+  expect(flow.sources.some(source=>source.entityId==='t2')).toBe(false);
+  expect(flow.conventions.join('\n')).toContain('RangeError');
+  expect(await core.handle({channel:'graph:context_flow',args:[projectId,'t3']})).toEqual({executionId:null,snapshotId:null,sources:[],conventions:[]});
+
   // TASK-003 has no dependency but shares the feature: finished siblings are part of its memory too.
   const preview=await core.handle({channel:'context:preview_package',args:[{projectId,focusEntityId:'t3',maxAllowedTokens:32_000}]}) as {packageText:string;snapshot:{includedSources:Array<{entityKey?:string;authorityTier:number;sourceType:string}>}};
   expect(preview.snapshot.includedSources.filter(source=>source.entityKey?.startsWith('TASK-')).map(source=>source.entityKey).sort()).toEqual(['TASK-001','TASK-002','TASK-003']);

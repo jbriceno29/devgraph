@@ -1,4 +1,4 @@
-import type { GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
+import type { ContextFlowDto, GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
 import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto } from './agent-view.js';
@@ -51,6 +51,7 @@ export interface WorkspaceIpcQueries {
   'execution:get_detail': (executionId:string)=>Promise<ExecutionDetailDto>;
   'policy:get': (projectId:string)=>Promise<ExecutionPolicyDto>;
   'pilot:get': (projectId:string,featureId:string)=>Promise<FeaturePilotDto>;
+  'graph:context_flow': (projectId:string,workItemId:string)=>Promise<ContextFlowDto>;
   'metrics:feature_report': (projectId:string,featureId:string)=>Promise<FeatureReportDto>;
 }
 export interface WorkspaceIpcEvents {
@@ -105,6 +106,7 @@ export interface WorkspaceIpcClient {
     getExecutionDetail(executionId:string):Promise<ExecutionDetailDto>;
     getExecutionPolicy(projectId:string):Promise<ExecutionPolicyDto>;
     getFeaturePilot(projectId:string,featureId:string):Promise<FeaturePilotDto>;
+    getContextFlow(projectId:string,workItemId:string):Promise<ContextFlowDto>;
     getFeatureReport(projectId:string,featureId:string):Promise<FeatureReportDto>;
   };
   events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void;onPilotUpdated(listener:(event:WorkspaceIpcEvents['pilot:updated'])=>void):()=>void};

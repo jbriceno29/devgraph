@@ -43,6 +43,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
   getExecutionPolicy:projectId=>invokeCore('policy:get',[projectId]),
   getFeaturePilot:(projectId,featureId)=>invokeCore('pilot:get',[projectId,featureId]),
+  getContextFlow:(projectId,workItemId)=>invokeCore('graph:context_flow',[projectId,workItemId]),
   getFeatureReport:(projectId,featureId)=>invokeCore('metrics:feature_report',[projectId,featureId]),
  },
  events:{

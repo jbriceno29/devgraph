@@ -128,6 +128,8 @@ Objetivo: H3. El mismo workspace funciona con Claude Code y con Codex.
 
 > **Cuarta medición: sesión por feature (2026-11-11)** — `docs/benchmarks/2026-11-11-todo-v2-haiku-sesion-por-feature.md`. Misma calidad (12/12, 9/9), pero el costo ponderado sube a 839 k (frente a 603 k sin reutilizar y 414 k del chat largo): la sesión acumulada dispara las lecturas de caché. Queda como opción desactivada por defecto. **Conclusión de la Etapa 5 con Claude:** el workspace iguala en calidad al mejor chat y elimina la intervención humana, a ~1,5 veces el costo ponderado del chat largo. H1 en su forma original (mejor resultado o menos costo) no se cumple; la decisión sobre cómo seguir queda en manos del usuario.
 
+> **Decisión del usuario (2026-11-11): apostar por la autonomía y la trazabilidad.** La propuesta de valor deja de ser "contexto más eficiente que un chat" y pasa a ser "el proyecto avanza solo, con la misma calidad que el mejor chat, cada decisión queda registrada y las convenciones se respetan entre features", aceptando un sobrecosto de ~1,5× en tokens. Se continúa con la Etapa 6 y luego la 4, y se buscan reducciones de costo donde no afecten la calidad (resúmenes de cierre más cortos, menos exploración redundante), midiendo cada cambio con `scripts/benchmark/`.
+
 Objetivo: decidir con datos, según el criterio de corte de la sección 2.
 
 - **Protocolo:** el mismo conjunto de tareas resuelto de tres formas: (a) Claude Code a mano en una conversación, (b) Graph Workspace con el contexto curado y (c) Graph Workspace en piloto automático. Primero en `todo-app`, después en `graphdev2` mismo.
@@ -144,6 +146,8 @@ Objetivo: ver el proyecto como una red que trabaja.
 - Camino crítico de la feature y progreso del piloto sobre el grafo.
 
 Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demuestra las hipótesis.
+
+> **Hecho (2026-11-11):** cada tarea se colorea según su estado (la que está en curso pulsa, las cerradas y bloqueadas se atenúan); cada feature muestra "N/M tareas" y un distintivo "PILOTO" mientras el piloto trabaja; al seleccionar una tarea, el lienzo resalta las entidades que formaron el contexto de su última ejecución, con el color de su nivel de autoridad, y dibuja aristas punteadas hacia la tarea (consulta `graph:context_flow`, con leyenda y botón para ocultarlo). Verificado contra el workspace real de `todo-app`: TASK-002 recibió FEAT-001, los requisitos, el código de TASK-001 (nivel 4) y su resultado (nivel 5). Pendiente: camino crítico de la feature.
 
 ## 6. Orden y dependencias
 

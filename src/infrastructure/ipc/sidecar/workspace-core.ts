@@ -197,6 +197,14 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      const directory=join(workspaceRoot,'projects',projectId,'reports');mkdirSync(directory,{recursive:true});
      const path=join(directory,`feature-${featureId.replace(/[^a-zA-Z0-9-]/g,'')}-${new Date().toISOString().replace(/[:.]/g,'-')}.md`);writeFileSync(path,markdown,'utf8');return {path};
     }
+    case 'graph:context_flow': {
+     const projectId=String(args[0]??''),workItemId=String(args[1]??'');
+     const latest=getExecutionService(projectId).listExecutions(projectId).filter(execution=>execution.workItemId===workItemId&&execution.contextSnapshotId).sort((a,b)=>(b.startedAt??'').localeCompare(a.startedAt??''))[0];
+     if(!latest?.contextSnapshotId)return {executionId:null,snapshotId:null,sources:[],conventions:[]};
+     const snapshot=getContextEngine(projectId).getSnapshot(latest.contextSnapshotId);
+     const known=new Set(store.openProject(projectId).graph.listEntities(projectId).map(entity=>entity.id));
+     return {executionId:latest.id,snapshotId:snapshot.id,sources:snapshot.includedSources.filter(source=>known.has(source.sourceId)&&source.sourceId!==workItemId).map(source=>({entityId:source.sourceId,tier:source.authorityTier,origin:source.retrievalOrigin})),conventions:snapshot.includedSources.filter(source=>source.sourceId.startsWith('convention:')).map(source=>source.extractedContent)};
+    }
     case 'pilot:set_autonomy': {const projectId=String(args[0]??'');return getPilot(projectId).setAutonomy(projectId,String(args[1]??''),args[2] as import('../../../shared/contracts/agent-view.js').SetFeatureAutonomyInput);}
     case 'pilot:start': {const projectId=String(args[0]??'');return getPilot(projectId).start(projectId,String(args[1]??''),{acknowledgeCost:Boolean((args[2] as {acknowledgeCost?:boolean}|undefined)?.acknowledgeCost)});}
     case 'pilot:stop': {const projectId=String(args[0]??'');return getPilot(projectId).stop(projectId,String(args[1]??''));}

@@ -44,6 +44,17 @@ En el paso de la idea puedes adjuntar hasta 5 archivos (png, jpg, webp, gif, pdf
 
 La nota («qué conservar o evitar») ayuda a afinarlo. Después de analizarlas, la pantalla de preguntas muestra «Cómo se entendieron tus referencias» para que compruebes lo que entendió el modelo; si algo no es así, corrígelo en tus respuestas o en las notas de la propuesta. El análisis cuesta unos centavos y tarda unos segundos. El contenido de los archivos se trata como datos: las instrucciones que contengan se ignoran. Los PDF necesitan `pdftoppm` (paquete `poppler-utils`) instalado; sin él, ese archivo no se podrá analizar y el asistente te lo dirá. Solo funciona con Claude Code.
 
+## Diseño del proyecto (opcional)
+
+Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan» (viene marcada si adjuntaste una referencia visual). Un modelo diseña 2 o 3 direcciones distintas, cada una con un prototipo que puedes **probar** (filtrar, añadir, navegar). Tarda de uno a tres minutos y cuesta unos 10 centavos de dólar. Después puedes:
+
+- **Aprobar esta dirección visual y preparar el plan:** la propuesta se apoya en ella (estilo, pantallas y reglas visuales). Aprobar fija el estilo, no el plan: el plan lo apruebas en el paso siguiente.
+- **Pedir ajustes a este prototipo:** cuéntale qué cambiar; solo se regenera ese.
+- **Importar un prototipo** hecho en otra herramienta (por ejemplo, el HTML exportado de Claude Artifacts o Claude Design): súbelo o pégalo y se suma a las demás direcciones (hasta 5).
+- **Saltar el diseño** e ir directo al plan.
+
+Los prototipos se muestran aislados: funcionan sin Internet y no tienen acceso a tus datos ni al resto de la app. Si uno intenta cargar recursos de fuera, no se cargan y se te avisa; si intenta salir de su página o recargarse, la vista previa se detiene y puedes reiniciarla. Si tu proyecto es un programa de terminal, una librería o un servicio, déjalo sin marcar: no hace falta.
+
 ## Dónde queda el código
 
 - Cada ejecución trabaja en un **worktree temporal** (una copia aislada del repositorio en otra carpeta, dentro de los datos de la aplicación) y en una rama `graphdev/…`. Tu carpeta de trabajo no se toca mientras el agente trabaja.
@@ -83,6 +94,7 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 | La ejecución se bloquea por un documento | Hay un documento del proyecto con cambios sin commitear hechos fuera de la aplicación; commitéalo. |
 | El piloto no acepta una tarea | Comprueba que la política tenga comandos de verificación; sin ellos nada se acepta solo. |
 | La aprobación del inicio no avanza | Falta el repositorio: conecta uno o crea uno nuevo. |
+| El asistente dice «La llamada se interrumpió» | La app se cerró mientras trabajaba. Pulsa «Reintentar» (conserva lo que ya estaba hecho) o «Empezar de nuevo». |
 | «No se pudo analizar «archivo»…» al empezar | El modelo no pudo leer esa referencia (vacía, dañada o un PDF sin `pdftoppm`). Pulsa «Reintentar» o «Empezar de nuevo» sin ese archivo. |
 | «El inicio del proyecto ya empezó» | Continúa donde lo dejaste, o reinícialo con el botón de reinicio (solo antes de aprobar). El asistente es solo para proyectos sin plan. |
 | No llegan avisos del sistema | Las notificaciones de escritorio dependen de la API web del webview y del permiso; la bandeja de actividad dentro de la aplicación es la vía fiable. |

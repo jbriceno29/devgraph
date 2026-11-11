@@ -89,7 +89,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
    return new ClaudeInceptionEngine(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription',defaultModel:profile?.models.planning??null});
   };
   // Built per call, so `inception:get` works with any engine and auth changes apply to the next call.
-  const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input)};
+  const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input),exploreUi:input=>claudeEngine().exploreUi(input)};
   // The reference translator is its own model call (the only one with a tool: Read, inside a throwaway folder with copies of the files).
   const translator:ReferenceTranslatorPort=dependencies.referenceTranslator??{translate:input=>{
    if(agentAdapter.providerId!=='claude-code')throw new Error('El análisis de referencias todavía solo funciona con Claude Code.');
@@ -191,7 +191,11 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'inception:get': return getInception(String(args[0]??'')).get(String(args[0]??''));
     case 'inception:start': {const projectId=String(args[0]??'');return getInception(projectId).start(projectId,(args[1]??{}) as StartInceptionInput);}
-    case 'inception:answer': {const projectId=String(args[0]??'');return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined);}
+    case 'inception:answer': {const projectId=String(args[0]??'');const options=args[3] as {exploreUi?:boolean}|undefined;return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined,options&&typeof options==='object'?{exploreUi:options.exploreUi===true}:undefined);}
+    case 'inception:import_prototype': {const projectId=String(args[0]??'');return getInception(projectId).importPrototype(projectId,(args[1]??{}) as {name:string;html:string});}
+    case 'inception:revise_ui': {const projectId=String(args[0]??'');return getInception(projectId).reviseUiOption(projectId,String(args[1]??''),String(args[2]??''));}
+    case 'inception:choose_ui': {const projectId=String(args[0]??'');return getInception(projectId).chooseUiOption(projectId,typeof args[1]==='string'?args[1]:null);}
+    case 'inception:get_ui_prototype': {const projectId=String(args[0]??'');return getInception(projectId).getUiPrototype(projectId,String(args[1]??''));}
     case 'inception:approve': {const projectId=String(args[0]??'');return getInception(projectId).approve(projectId);}
     case 'inception:restart': {const projectId=String(args[0]??'');return getInception(projectId).restart(projectId);}
     case 'repository:get_path': {

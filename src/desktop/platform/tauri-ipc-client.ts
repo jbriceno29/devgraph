@@ -52,7 +52,11 @@ export const workspaceIpc:WorkspaceIpcClient={
  inception:{
   get:projectId=>invokeCore('inception:get',[projectId]),
   start:(projectId,input)=>invokeCore('inception:start',[projectId,input]),
-  answer:(projectId,answers,notes)=>invokeCore('inception:answer',notes===undefined?[projectId,answers]:[projectId,answers,notes]),
+  answer:(projectId,answers,notes,options)=>invokeCore('inception:answer',options===undefined?(notes===undefined?[projectId,answers]:[projectId,answers,notes]):[projectId,answers,notes??null,options]),
+  importPrototype:(projectId,input)=>invokeCore('inception:import_prototype',[projectId,input]),
+  reviseUiOption:(projectId,optionId,notes)=>invokeCore('inception:revise_ui',[projectId,optionId,notes]),
+  chooseUiOption:(projectId,optionId)=>invokeCore('inception:choose_ui',[projectId,optionId]),
+  getUiPrototype:(projectId,optionId)=>invokeCore('inception:get_ui_prototype',[projectId,optionId]),
   approve:projectId=>invokeCore('inception:approve',[projectId]),
   restart:projectId=>invokeCore('inception:restart',[projectId]),
   initializeRepository:(projectId,absolutePath)=>invokeCore('repository:initialize',[projectId,absolutePath]),

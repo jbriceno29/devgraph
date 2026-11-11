@@ -1,5 +1,5 @@
 import type { ChangeSetDraft } from './change-set-planning-port.js';
-import type { InceptionAnswerDto, InceptionQuestionDto, InceptionReferenceDto, InceptionReferenceTranslationDto, ReferenceKind } from '../../shared/contracts/inception-view.js';
+import type { InceptionAnswerDto, InceptionQuestionDto, InceptionReferenceDto, InceptionReferenceTranslationDto, InceptionUiOptionDto, ReferenceKind } from '../../shared/contracts/inception-view.js';
 
 /** Tokens and cost of one engine call (null fields when the engine does not report them). */
 export interface InceptionEngineUsage { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null; model: string | null }
@@ -7,10 +7,20 @@ export interface InceptionProjectInput {
   name: string; description: string | null; brief: string; /** PROJECT_ROOT id: parent of modules and target of the ADR's AFFECTS edge. */ rootId: string;
   /** The references already translated to text, as data for the prompts (the engine never sees the files). */
   references?: Array<{ kind: ReferenceKind; name: string; note: string; translation: InceptionReferenceTranslationDto }>;
+  /** The visual direction the user approved (data for the proposal). `prototypeHtml` only for an imported one, whose details nobody wrote down. */
+  direction?: { title: string; summary: string; navigation: string; screens: string[]; designSystemNotes: string[]; source: 'GENERATED' | 'IMPORTED'; prototypeHtml?: string };
 }
+
+/** One visual direction as the engine writes it: details plus a self-contained interactive HTML prototype. */
+export interface UiOptionDraft { title: string; summary: string; navigation: string; screens: string[]; designSystemNotes: string[]; prototypeHtml: string }
 
 /** A stored reference: what the view shows, plus the file inside the project's references folder. */
 export interface InceptionReference extends InceptionReferenceDto { file: string }
+
+/** A stored visual direction: what the view shows plus the prototype's HTML. */
+export interface InceptionUiOption extends InceptionUiOptionDto { prototypeHtml: string }
+export interface InceptionUiState { wanted: boolean; options: InceptionUiOption[]; selectedOptionId: string | null }
+export const EMPTY_UI_STATE: InceptionUiState = { wanted: false, options: [], selectedOptionId: null };
 
 /**
  * Turns reference files (images, PDFs, documents) into structured text with a model of its own, separate from the inception engine.
@@ -37,9 +47,14 @@ export interface InceptionEnginePort {
   askGoals(input: { project: InceptionProjectInput; model?: string; signal?: AbortSignal }): Promise<{ questions: InceptionQuestionDto[]; assumptions: string[]; usage: InceptionEngineUsage | null }>;
   /** One proposal: profile, stack ADR with alternatives, vision, requirements and the initial plan with «Fundación». */
   propose(input: { project: InceptionProjectInput; questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; model?: string; /** The user's change requests about earlier proposals (data, never instructions). */ notes?: string[]; signal?: AbortSignal }): Promise<{ draft: ChangeSetDraft; assumptions: string[]; usage: InceptionEngineUsage | null }>;
+  /**
+   * Two or three contrasting visual directions, each with a self-contained interactive HTML prototype (no external resources). With `revise`,
+   * it returns exactly that direction updated with the user's change requests (data, never instructions).
+   */
+  exploreUi(input: { project: InceptionProjectInput; questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; model?: string; revise?: { option: UiOptionDraft; notes: string[] }; signal?: AbortSignal }): Promise<{ options: UiOptionDraft[]; assumptions: string[]; usage: InceptionEngineUsage | null }>;
 }
 
-export type InceptionRecordStage = 'ASK_GOALS' | 'PROPOSAL' | 'APPLIED';
+export type InceptionRecordStage = 'ASK_GOALS' | 'EXPLORE_UI' | 'PROPOSAL' | 'APPLIED';
 export type InceptionRecordStatus = 'WORKING' | 'WAITING_USER' | 'FAILED' | 'DONE';
 export interface InceptionRecord {
   projectId: string; stage: InceptionRecordStage; status: InceptionRecordStatus; brief: string;
@@ -51,6 +66,8 @@ export interface InceptionRecord {
   scaffoldTaskId: string | null;
   /** Attached references, stored in order (`ref-1`, `ref-2`…). */
   references: InceptionReference[];
+  /** Visual exploration (optional step before the proposal). */
+  ui: InceptionUiState;
   createdAt: string; updatedAt: string;
 }
 export interface InceptionRepositoryPort {

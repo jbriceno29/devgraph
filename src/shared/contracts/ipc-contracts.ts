@@ -43,7 +43,13 @@ export interface WorkspaceIpcCommands {
   /** Starts the inception: returns at once with status WORKING; `inception:updated` tells when the questions are ready. */
   'inception:start': (projectId:string,input:StartInceptionInput)=>Promise<InceptionViewDto>;
   /** Saves the answers and asks for the proposal (in PROPOSAL, regenerates it; optional `notes` ≤ 2000 chars say what to change and are kept for later regenerations). Returns at once with status WORKING. */
-  'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string)=>Promise<InceptionViewDto>;
+  'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string,options?:{exploreUi?:boolean})=>Promise<InceptionViewDto>;
+  /** Adds a prototype (HTML) the user made elsewhere as one more design direction; only while choosing a direction. Answers at once. */
+  'inception:import_prototype': (projectId:string,input:{name:string;html:string})=>Promise<InceptionViewDto>;
+  /** Regenerates one design direction with the user's change requests; returns at once with status WORKING. */
+  'inception:revise_ui': (projectId:string,optionId:string,notes:string)=>Promise<InceptionViewDto>;
+  /** Approves a design direction and asks for the proposal built on it (`null` skips the design). Returns at once with status WORKING. */
+  'inception:choose_ui': (projectId:string,optionId:string|null)=>Promise<InceptionViewDto>;
   /** Applies the proposal's ChangeSet (needs a primary repository). */
   'inception:approve': (projectId:string)=>Promise<InceptionViewDto>;
   /** Forgets questions, answers and the pending proposal, and stops a running engine call; refused once applied. */
@@ -70,6 +76,8 @@ export interface WorkspaceIpcQueries {
   'metrics:feature_report': (projectId:string,featureId:string)=>Promise<FeatureReportDto>;
   'activity:list': (projectId:string,limit?:number)=>Promise<ActivitySummaryDto>;
   'inception:get': (projectId:string)=>Promise<InceptionViewDto>;
+  /** The HTML of a design direction's prototype (kept out of `inception:get`, which is polled). */
+  'inception:get_ui_prototype': (projectId:string,optionId:string)=>Promise<string>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};

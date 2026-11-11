@@ -22,6 +22,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 | 008 | `008_project_inception.sql` | Tabla `project_inception` y `projects.out_of_scope_json`. |
 | 009 | `009_inception_notes_and_integration.sql` | `project_inception.notes_json` y `scaffold_task_id`; `feature_branches.integrated_at`. |
 | 010 | `010_execution_groups.sql` | Tabla `execution_work_items` (tareas que cubre una ejecución agrupada, con posición) y `feature_autonomy.group_tasks` (0 por defecto) y `max_group_size` (3). |
+| 012 | `012_inception_ui_exploration.sql` | Reconstruye `project_inception` para admitir la etapa `EXPLORE_UI` (SQLite no permite cambiar un `CHECK`; las filas se copian) y añade `ui_json`: las direcciones de diseño con su prototipo HTML, la elegida y si se pidió explorar el diseño. |
 | 011 | `011_inception_references.sql` | `project_inception.references_json`: las referencias adjuntas (tipo, nota, estado y traducción a texto de cada una). Los archivos viven en `projects/<id>/inception/references/`. |
 
 ## Tablas principales
@@ -62,5 +63,5 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 
 ### Inicio de proyecto y actividad
 
-- `project_inception` (008, 009, 011): una fila por proyecto con fase (`ASK_GOALS`, `PROPOSAL`, `APPLIED`), estado (`WORKING`, `WAITING_USER`, `FAILED`, `DONE`), descripción, preguntas, respuestas, suposiciones, el ChangeSet de la propuesta, modelo, uso, error, notas de regeneración y el id de la tarea de scaffold.
+- `project_inception` (008, 009, 011, 012): una fila por proyecto con fase (`ASK_GOALS`, `EXPLORE_UI`, `PROPOSAL`, `APPLIED`), estado (`WORKING`, `WAITING_USER`, `FAILED`, `DONE`), descripción, preguntas, respuestas, suposiciones, el ChangeSet de la propuesta, modelo, uso, error, notas de regeneración y el id de la tarea de scaffold.
 - **La bandeja de actividad no tiene tabla propia:** `activity:list` la deriva de tareas, ejecuciones, aprobaciones, ChangeSets, corridas del piloto, ramas de feature y el estado de `project_inception`.

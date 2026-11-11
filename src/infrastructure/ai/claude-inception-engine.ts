@@ -1,7 +1,7 @@
 import type { InceptionEnginePort } from '../../application/ports/inception-port.js';
 import { ClaudeChangeSetPlanner, type ClaudeChangeSetPlannerOptions } from './claude-change-set-planner.js';
 import { CLAUDE_ISOLATION_ARGS } from './claude-code-adapter.js';
-import { buildProposalPrompt, buildQuestionsPrompt, parseProposal, parseQuestions, proposalSchema, questionsSchema } from './inception-contract.js';
+import { buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, parseProposal, parseQuestions, parseUiOptions, proposalSchema, questionsSchema, uiExplorationSchema } from './inception-contract.js';
 
 /** Inception gates on `claude -p --json-schema`, without tools or session, and without the user's CLI settings or skills. `signal` stops the CLI. */
 export class ClaudeInceptionEngine implements InceptionEnginePort {
@@ -16,5 +16,10 @@ export class ClaudeInceptionEngine implements InceptionEnginePort {
   async propose(input: Parameters<InceptionEnginePort['propose']>[0]) {
     const { output, usage } = await this.runner.structured(buildProposalPrompt(input.project, input.questions, input.answers, input.notes), proposalSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal);
     return { ...parseProposal(output, 'Claude Code'), usage };
+  }
+
+  async exploreUi(input: Parameters<InceptionEnginePort['exploreUi']>[0]) {
+    const { output, usage } = await this.runner.structured(buildUiExplorationPrompt(input.project, input.questions, input.answers, input.revise), uiExplorationSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal);
+    return { ...parseUiOptions(output, 'Claude Code', input.revise ? 1 : 3), usage };
   }
 }

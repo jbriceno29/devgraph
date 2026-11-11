@@ -17,7 +17,7 @@ describe('versioned schema migrations',()=>{
   expect(db.pragma('user_version',{simple:true})).toBe(latest);
   expect(columns(db,'agent_executions')).toContain('base_branch');
   expect(columns(db,'feature_branches')).toEqual(['feature_id','project_id','repository_id','branch_name','source_branch','created_at','integrated_at']);
-  expect(columns(db,'project_inception')).toEqual(expect.arrayContaining(['notes_json','scaffold_task_id','references_json']));
+  expect(columns(db,'project_inception')).toEqual(expect.arrayContaining(['notes_json','scaffold_task_id','references_json','ui_json']));
   expect(columns(db,'execution_work_items')).toEqual(['execution_id','work_item_id','position']);
   expect(columns(db,'feature_autonomy')).toEqual(expect.arrayContaining(['group_tasks','max_group_size']));
   closeDatabase(db);
@@ -38,6 +38,25 @@ describe('versioned schema migrations',()=>{
    expect(db.prepare('SELECT name FROM projects').all()).toEqual([{name:'P'}]);
    closeDatabase(db);
   }
+ });
+});
+
+describe('migration 012: the inception table is rebuilt for the new stage',()=>{
+ it('keeps the rows of an existing workspace and then accepts EXPLORE_UI, which the old CHECK refused',()=>{
+  const root=mkdtempSync(join(tmpdir(),'graphdev2-migrate-012-'));roots.push(root);const filename=join(root,'workspace.sqlite');
+  const previous=new Database(filename);
+  for(const file of MIGRATIONS.filter(item=>item.version<=11).map(item=>item.file))previous.exec(readFileSync(fileURLToPath(new URL(`../../src/infrastructure/persistence/sqlite/migrations/${file}`,import.meta.url)),'utf8'));
+  previous.pragma('user_version = 11');
+  previous.prepare("INSERT INTO projects(id,name,slug,current_revision,created_at,updated_at) VALUES('p','P','p',1,'now','now')").run();
+  previous.prepare("INSERT INTO project_inception(project_id,stage,status,brief,questions_json,answers_json,assumptions_json,model,usage_json,notes_json,scaffold_task_id,references_json,created_at,updated_at) VALUES('p','PROPOSAL','WAITING_USER','Mi idea','[{\"id\":\"q1\"}]','[{\"questionId\":\"q1\",\"answer\":\"a\"}]','[\"supuesto\"]','opus','[]','[\"nota\"]','t1','[{\"id\":\"ref-1\"}]','antes','ahora')").run();
+  expect(()=>previous.prepare("UPDATE project_inception SET stage='EXPLORE_UI'").run()).toThrow(/CHECK/);
+  previous.close();
+  const db=openDatabase({filename});
+  expect(db.pragma('user_version',{simple:true})).toBe(latest);
+  expect(db.prepare('SELECT * FROM project_inception').all()).toEqual([{project_id:'p',stage:'PROPOSAL',status:'WAITING_USER',brief:'Mi idea',questions_json:'[{"id":"q1"}]',answers_json:'[{"questionId":"q1","answer":"a"}]',assumptions_json:'["supuesto"]',change_set_id:null,model:'opus',usage_json:'[]',error:null,notes_json:'["nota"]',scaffold_task_id:'t1',references_json:'[{"id":"ref-1"}]',ui_json:'{}',created_at:'antes',updated_at:'ahora'}]);
+  db.prepare("UPDATE project_inception SET stage='EXPLORE_UI'").run();
+  expect(()=>db.prepare("UPDATE project_inception SET stage='OTRA'").run()).toThrow(/CHECK/);
+  closeDatabase(db);
  });
 });
 

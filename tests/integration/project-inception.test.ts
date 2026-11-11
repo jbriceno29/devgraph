@@ -16,22 +16,7 @@ import { NO_INSTALL_RULE } from '../../src/application/inception/foundation-plan
 const roots:string[]=[];const cores:Array<ReturnType<typeof createWorkspaceCore>>=[];
 afterEach(()=>{for(const core of cores.splice(0))core.close();for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
 
-const usage={inputTokens:100,outputTokens:50,cacheReadTokens:0,cacheCreationTokens:0,costUsd:0.001,model:'fake'};
-const proposal=():ChangeOperation[]=>[
- {type:'SET_PROJECT_PROFILE',description:'Lista de tareas en la terminal.',objectives:['Gestionar tareas personales desde la terminal'],outOfScope:['Sincronización en la nube'],techStack:{lenguaje:'JavaScript (ESM)',runtime:'Node.js 22',pruebas:'node --test'},rules:['Identificadores en inglés; textos de usuario en español.','Pruebas en tests/ con node:test.'],verificationCommands:['node --test']},
- {type:'CREATE_DECISION_RECORD',tempId:'$adr',title:'ADR-001: Stack',contextMd:'Proyecto pequeño.',alternativesMd:'- Node.js sin dependencias: simple.\n- Python: otro runtime.',decisionMd:'Node.js 22 sin dependencias.',consequencesMd:'Sin instalar nada.',relativePath:'docs/architecture/ADR/ADR-001-stack.md'},
- {type:'UPSERT_ARTIFACT',tempId:'$vision',parentId:null,artifactType:'PRD',title:'Visión',relativePath:'docs/VISION.md',markdownContent:'# Visión\n\nTareas en la terminal.\n'},
- {type:'CREATE_REQUIREMENT',tempId:'$req',title:'Crear tareas',summary:'El usuario crea tareas.',reqType:'FUNCTIONAL',priority:'HIGH',acceptanceCriteria:['Se crea una tarea con título']},
- {type:'CREATE_MODULE',tempId:'$mod',title:'Núcleo',summary:'Todo el código.',purpose:'Núcleo de la app'},
- {type:'CREATE_FEATURE',tempId:'$f0',moduleId:'$mod',title:'Fundación',summary:'Scaffold y convenciones.',scope:'Estructura',priority:'CRITICAL'},
- {type:'CREATE_WORK_ITEM',tempId:'$t1',parentId:'$f0',workType:'TASK',title:'Crear el scaffold',summary:'Estructura mínima y prueba de humo.',acceptanceCriteria:['node --test pasa']},
- {type:'CREATE_WORK_ITEM',tempId:'$t2',parentId:'$f0',workType:'TASK',title:'Módulo de errores',summary:'Errores comunes.',acceptanceCriteria:['Hay pruebas']},
- {type:'CREATE_FEATURE',tempId:'$f1',moduleId:'$mod',title:'Gestión de tareas',summary:'Crear y listar.',scope:'CLI',priority:'HIGH'},
- {type:'CREATE_WORK_ITEM',tempId:'$t3',parentId:'$f1',workType:'TASK',title:'Crear tareas',summary:'add',acceptanceCriteria:['ok']},
- {type:'CREATE_WORK_ITEM',tempId:'$t4',parentId:'$f1',workType:'TASK',title:'Listar tareas',summary:'list',acceptanceCriteria:['ok']},
- {type:'CREATE_RELATIONSHIP',sourceId:'$t4',targetId:'$t3',edgeType:'DEPENDS_ON'},
- {type:'CREATE_RELATIONSHIP',sourceId:'$adr',targetId:'ROOT',edgeType:'AFFECTS'},
-];
+import { proposal, usage } from './inception-fixtures.js';
 
 class FakeEngine implements InceptionEnginePort {
  calls:Array<{kind:string;model?:string;answers?:unknown;notes?:string[]}>=[];fail=false;hang=false;signals:AbortSignal[]=[];
@@ -42,6 +27,7 @@ class FakeEngine implements InceptionEnginePort {
  }
  /** Like the real engine: never answers until aborted, then rejects as cancelled. */
  wait(signal?:AbortSignal):Promise<never>{if(signal)this.signals.push(signal);return new Promise((_resolve,reject)=>signal?.addEventListener('abort',()=>reject(Object.assign(new Error('cancelada'),{name:'AbortError'})),{once:true}));}
+ async exploreUi():Promise<never>{throw new Error('not used here');}
  async propose(input:Parameters<InceptionEnginePort['propose']>[0]){
   this.calls.push({kind:'propose',...(input.model?{model:input.model}:{}),answers:input.answers,...(input.notes?{notes:input.notes}:{})});
   if(this.hang)await this.wait(input.signal);

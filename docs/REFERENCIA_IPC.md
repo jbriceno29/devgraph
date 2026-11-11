@@ -58,7 +58,10 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | Canal | Descripción |
 | :--- | :--- |
 | `inception:start` ⛓ | Inicia el asistente con una descripción y, opcionalmente, hasta 5 `references` (`{name, kind: VISUAL\|FUNCTIONAL\|CONCEPTUAL, note?, dataBase64}`); responde al instante con estado `WORKING`. Un modelo aparte traduce las referencias a texto antes de preguntar. Sin `references` en un reintento tras un fallo, reutiliza las ya guardadas. |
-| `inception:answer` ⛓ | Guarda las respuestas y pide la propuesta; en la fase de propuesta la regenera, con `notes` opcionales (hasta 2000 caracteres) que indican qué cambiar. |
+| `inception:answer` ⛓ | Guarda las respuestas y pide la propuesta (o, con `options: {exploreUi: true}`, 2 o 3 direcciones de diseño con prototipo); en la fase de propuesta la regenera, con `notes` opcionales (hasta 2000 caracteres) que indican qué cambiar. |
+| `inception:import_prototype` ⛓ | Añade un prototipo HTML hecho en otra herramienta (`{name, html}`, hasta 120.000 caracteres) como una dirección más (máximo 5); solo mientras se elige una dirección. Responde al instante. |
+| `inception:revise_ui` ⛓ | Regenera una dirección con las indicaciones del usuario (`optionId`, `notes` ≤ 2000); las demás no se tocan. Responde al instante con estado `WORKING`. |
+| `inception:choose_ui` ⛓ | Aprueba una dirección y pide la propuesta sobre ella; con `null` salta el diseño. Responde al instante con estado `WORKING`. |
 | `inception:approve` ⛓ | Aplica el ChangeSet de la propuesta (exige un repositorio principal). |
 | `inception:restart` ⛓ | Olvida preguntas, respuestas, referencias (borra sus archivos) y propuesta pendiente, y detiene la llamada en curso; se rechaza una vez aplicada. |
 
@@ -81,7 +84,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `pilot:get` | Estado del piloto de una feature: autonomía, última corrida, eventos, tareas y uso. |
 | `metrics:feature_report` | Métricas de una feature. |
 | `activity:list` | Bandeja de actividad del proyecto (derivada, sin IA); admite un límite. |
-| `inception:get` | Estado del asistente de inicio. |
+| `inception:get` | Estado del asistente de inicio (incluye las direcciones de diseño sin su HTML). |
+| `inception:get_ui_prototype` | El HTML del prototipo de una dirección (`optionId`). |
 
 ## Eventos (del núcleo a la interfaz)
 

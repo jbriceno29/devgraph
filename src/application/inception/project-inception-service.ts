@@ -3,9 +3,10 @@ import { DEFAULT_DECISION_POLICY, decide } from '../../domain/autonomy/decision-
 import type { ProjectRepositoryPort } from '../ports/project-repository-port.js';
 import type { KnowledgeGraphRepositoryPort } from '../ports/knowledge-graph-repository-port.js';
 import type { ChangeSetDraft } from '../ports/change-set-planning-port.js';
-import type { InceptionEnginePort, InceptionEngineUsage, InceptionRecord, InceptionReference, InceptionReferenceFilesPort, InceptionRepositoryPort, ReferenceTranslatorPort } from '../ports/inception-port.js';
+import { EMPTY_UI_STATE, type InceptionEnginePort, type InceptionEngineUsage, type InceptionRecord, type InceptionReference, type InceptionReferenceFilesPort, type InceptionRepositoryPort, type InceptionUiOption, type ReferenceTranslatorPort, type UiOptionDraft } from '../ports/inception-port.js';
+import { findExternalReferences } from '../../shared/prototype-safety.js';
 import { prepareReferences } from './reference-files.js';
-import { MAX_INCEPTION_NOTE, type InceptionActivityDto, type InceptionAnswerDto, type InceptionNextAction, type InceptionProposalDto, type InceptionStage, type InceptionStatus, type InceptionViewDto, type StartInceptionInput } from '../../shared/contracts/inception-view.js';
+import { MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_UI_OPTIONS, type InceptionActivityDto, type InceptionAnswerDto, type InceptionNextAction, type InceptionProposalDto, type InceptionStage, type InceptionStatus, type InceptionViewDto, type StartInceptionInput } from '../../shared/contracts/inception-view.js';
 import { buildFoundationPlan, scaffoldTempId, summarizeFoundationPlan } from './foundation-plan.js';
 
 /** The ChangeSet flow the inception reuses (validation, review and application are the same as any other proposal). */
@@ -28,9 +29,11 @@ export interface ProjectInceptionDependencies {
 }
 
 const MAX_QUESTIONS = 5, MAX_BRIEF = 4000, MAX_ANSWER = 1000, MAX_NOTES = 5;
+const INTERRUPTED = 'La llamada se interrumpió (la app se cerró). Vuelve a intentarlo.';
+const HTML_START = /<\s*(?:!doctype|html|body|head|div|main|section|header)\b/i;
 
 /**
- * Project inception (MVP with two gates): ASK_GOALS → PROPOSAL (waiting for approval) → APPLIED. Engine calls run in
+ * Project inception (MVP with two gates, plus an optional visual exploration): ASK_GOALS → [EXPLORE_UI] → PROPOSAL (waiting for approval) → APPLIED. Engine calls run in
  * the background (the IPC call returns at once with status WORKING; `inception:updated` reports the end) and each one
  * is independent: brief, questions, answers and the proposal live in the workspace, never in an engine session.
  * The proposal is a normal ChangeSet: validated, classified by the decision policy (PROJECT_FOUNDATION always asks)
@@ -60,7 +63,7 @@ export class ProjectInceptionService {
       for (const item of prepared) this.deps.referenceFiles.save(projectId, item.file, item.content);
       references = prepared.map(({ content: _content, ...rest }): InceptionReference => ({ ...rest, status: 'PENDING', error: null, translation: null }));
     }
-    const record: InceptionRecord = { projectId, stage: 'ASK_GOALS', status: 'WORKING', brief, questions: [], answers: [], assumptions: [], changeSetId: null, model, usage: current?.usage ?? [], error: null, notes: [], scaffoldTaskId: null, references, createdAt: current?.createdAt ?? now, updatedAt: now };
+    const record: InceptionRecord = { projectId, stage: 'ASK_GOALS', status: 'WORKING', brief, questions: [], answers: [], assumptions: [], changeSetId: null, model, usage: current?.usage ?? [], error: null, notes: [], scaffoldTaskId: null, references, ui: EMPTY_UI_STATE, createdAt: current?.createdAt ?? now, updatedAt: now };
     this.deps.store.save(record);
     this.launch(record, async signal => {
       const understood = await this.translateReferences(record, signal);
@@ -75,10 +78,11 @@ export class ProjectInceptionService {
    * Answers the questions and asks for the proposal; in PROPOSAL it regenerates it (the previous one is rejected).
    * `notes` (PROPOSAL only) is what the user wants changed: it is kept, with earlier ones, for every later regeneration.
    */
-  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string | null): InceptionViewDto {
+  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string | null, options?: { exploreUi?: boolean }): InceptionViewDto {
     const project = this.requireProject(projectId), current = this.record(projectId);
     if (!current || current.status === 'WORKING' || current.stage === 'APPLIED' || current.status === 'DONE') throw new Error(!current ? 'Empieza primero el inicio del proyecto.' : current.status === 'WORKING' ? 'Espera a que termine la llamada en curso.' : 'El inicio del proyecto ya se aplicó.');
     if (current.stage === 'ASK_GOALS' && current.status === 'FAILED' && !current.questions.length) throw new Error('Las preguntas no se generaron; vuelve a empezar.');
+    if (current.stage === 'EXPLORE_UI') throw new Error('Elige una dirección visual (o salta el diseño) antes de seguir.');
     const known = new Map(current.questions.map(question => [question.id, question]));
     const given = new Map<string, string>();
     for (const item of Array.isArray(answers) ? answers : []) {
@@ -94,16 +98,71 @@ export class ProjectInceptionService {
     const allNotes = note ? [...(current.notes ?? []), note].slice(-MAX_NOTES) : current.notes ?? [];
     const normalized = current.questions.map(question => ({ questionId: question.id, answer: given.get(question.id) ?? current.answers.find(answer => answer.questionId === question.id)?.answer ?? '' }));
     if (current.changeSetId) { const previous = this.deps.planning.find(current.changeSetId); if (previous && !['APPLIED', 'REJECTED'].includes(previous.status)) this.deps.planning.reject(previous.id); }
-    const record: InceptionRecord = { ...current, status: 'WORKING', answers: normalized, notes: allNotes, changeSetId: null, error: null, updatedAt: new Date().toISOString() };
+    // From the questions the user may ask to see design directions first; a retry keeps what they asked for.
+    const exploring = current.stage === 'ASK_GOALS' && (options?.exploreUi ?? current.ui.wanted);
+    const record: InceptionRecord = { ...current, status: 'WORKING', answers: normalized, notes: allNotes, changeSetId: null, error: null, ui: current.stage === 'ASK_GOALS' ? { ...current.ui, wanted: exploring, options: exploring ? [] : current.ui.options } : current.ui, updatedAt: new Date().toISOString() };
     this.deps.store.save(record);
-    const rootId = this.rootId(projectId);
-    this.launch(record, async signal => {
-      const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: normalized, ...(allNotes.length ? { notes: allNotes } : {}), ...(record.model ? { model: record.model } : {}), signal });
-      const plan = buildFoundationPlan(result.draft.operations, rootId);
-      const changeSet = this.deps.planning.submit(projectId, { title: result.draft.title || 'Inicio del proyecto', rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)].filter(Boolean).join('\n'), operations: plan.operations }, `inception:${projectId}`);
-      return { stage: 'PROPOSAL', status: 'WAITING_USER', assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage, changeSetId: changeSet.id, error: plan.problems.length ? plan.problems.join(' ') : null };
-    }, current.stage);
+    if (exploring) {
+      this.launch(record, async signal => {
+        const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: normalized, ...this.uiModel(record), signal });
+        return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: result.options.map((draft, index) => this.toUiOption(draft, 'GENERATED', `ui-${index + 1}`)), selectedOptionId: null }, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage };
+      }, current.stage);
+    } else this.launch(record, signal => this.proposalWork(record, project.props, signal), current.stage);
     return this.get(projectId);
+  }
+
+  /** Adds a prototype the user made elsewhere (for example exported from Claude Artifacts or Claude Design) as one more direction. No engine call. */
+  importPrototype(projectId: string, input: { name: string; html: string }): InceptionViewDto {
+    const current = this.requireExploring(projectId);
+    if (current.ui.options.length >= MAX_UI_OPTIONS) throw new Error(`Puedes tener como mucho ${MAX_UI_OPTIONS} direcciones; ajusta una de las existentes.`);
+    const name = String(input?.name ?? '').replace(/\\/g, '/').split('/').pop()!.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
+    const html = typeof input?.html === 'string' ? input.html.trim() : '';
+    if (!html) throw new Error('El prototipo está vacío.');
+    if (html.length > MAX_PROTOTYPE_CHARS) throw new Error(`El prototipo supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres; pega uno más pequeño.`);
+    if (html.includes('\u0000') || !HTML_START.test(html)) throw new Error('Eso no parece un documento HTML. Pega o sube el archivo .html del prototipo.');
+    const title = (/<title[^>]*>([^<]{1,80})<\/title>/i.exec(html)?.[1] ?? name.replace(/\.[a-z0-9]+$/i, '')).trim() || 'Prototipo importado';
+    const option = this.toUiOption({ title, summary: 'Prototipo importado por ti. Míralo y pide ajustes si quieres que el asistente lo adapte.', navigation: '', screens: [], designSystemNotes: [], prototypeHtml: html }, 'IMPORTED', this.nextUiId(current.ui.options));
+    this.deps.store.save({ ...current, error: null, ui: { ...current.ui, options: [...current.ui.options, option] }, updatedAt: new Date().toISOString() });
+    return this.get(projectId);
+  }
+
+  /** Regenerates one direction with the user's change requests; the others stay. A failure leaves everything as it was, with the reason. */
+  reviseUiOption(projectId: string, optionId: string, notes: string): InceptionViewDto {
+    const current = this.requireExploring(projectId), project = this.requireProject(projectId);
+    const option = current.ui.options.find(item => item.id === optionId);
+    if (!option) throw new Error('Esa dirección visual ya no existe.');
+    const note = String(notes ?? '').trim();
+    if (!note) throw new Error('Cuéntale al asistente qué quieres cambiar de este prototipo.');
+    if (note.length > MAX_INCEPTION_NOTE) throw new Error(`Lo que quieres cambiar admite como mucho ${MAX_INCEPTION_NOTE} caracteres.`);
+    const record: InceptionRecord = { ...current, status: 'WORKING', error: null, updatedAt: new Date().toISOString() };
+    this.deps.store.save(record);
+    this.launch(record, async signal => {
+      const { prototypeHtml, title, summary, navigation, screens, designSystemNotes } = option;
+      const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title, summary, navigation, screens, designSystemNotes, prototypeHtml }, notes: [note] }, signal });
+      const draft = result.options[0];
+      if (!draft) throw new Error('El asistente no devolvió el prototipo ajustado.');
+      return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: record.ui.options.map(item => (item.id === optionId ? this.toUiOption(draft, item.source, item.id) : item)) }, usage: result.usage };
+    }, 'EXPLORE_UI', 'WAITING_USER');
+    return this.get(projectId);
+  }
+
+  /** Approves a direction and asks for the proposal built on it; `null` skips the design and goes straight to the plan. */
+  chooseUiOption(projectId: string, optionId: string | null): InceptionViewDto {
+    const current = this.requireExploring(projectId), project = this.requireProject(projectId);
+    if (optionId !== null && !current.ui.options.some(item => item.id === optionId)) throw new Error('Esa dirección visual ya no existe.');
+    // While the proposal is prepared the inception is in the proposal gate; if that fails it comes back to choosing, with the reason and the selection kept.
+    const record: InceptionRecord = { ...current, stage: 'PROPOSAL', status: 'WORKING', error: null, changeSetId: null, ui: { ...current.ui, selectedOptionId: optionId }, updatedAt: new Date().toISOString() };
+    this.deps.store.save(record);
+    this.launch(record, signal => this.proposalWork(record, project.props, signal), 'EXPLORE_UI', 'WAITING_USER');
+    return this.get(projectId);
+  }
+
+  /** The HTML of a direction's prototype (the view does not carry it: it is polled while the engine works). */
+  getUiPrototype(projectId: string, optionId: string): string {
+    this.requireProject(projectId);
+    const option = this.record(projectId)?.ui.options.find(item => item.id === optionId);
+    if (!option) throw new Error('Esa dirección visual ya no existe.');
+    return option.prototypeHtml;
   }
 
   /** Applies the proposal: profile, ADR, vision and plan in one ChangeSet; the scaffold task ends READY. */
@@ -151,20 +210,21 @@ export class ProjectInceptionService {
     if (view.stage === 'NOT_STARTED' || view.stage === 'APPLIED') return null;
     const changeSetId = view.proposal?.changeSetId ?? null, at = view.updatedAt ?? new Date().toISOString();
     const base = { stage: view.stage, status: view.status, changeSetId, at };
-    if (view.status === 'WORKING') return { ...base, title: view.stage === 'ASK_GOALS' && !view.questions.length ? 'Inicio del proyecto: preparando las preguntas' : 'Inicio del proyecto: preparando la propuesta', detail: 'El asistente está trabajando; te avisaremos al terminar.', needsAttention: false };
+    if (view.status === 'WORKING') return { ...base, title: view.stage === 'ASK_GOALS' && !view.questions.length ? 'Inicio del proyecto: preparando las preguntas' : view.ui.wanted && !view.ui.options.length || view.stage === 'EXPLORE_UI' ? 'Inicio del proyecto: preparando el diseño' : 'Inicio del proyecto: preparando la propuesta', detail: 'El asistente está trabajando; te avisaremos al terminar.', needsAttention: false };
     if (view.status === 'FAILED') return { ...base, title: 'Inicio del proyecto: falló la última llamada', detail: view.error ?? 'Vuelve a intentarlo.', needsAttention: true };
     if (view.stage === 'ASK_GOALS') return { ...base, title: 'Inicio del proyecto: te falta responder', detail: `${view.questions.length} pregunta${view.questions.length === 1 ? '' : 's'} sobre el objetivo y el alcance.`, needsAttention: true };
+    if (view.stage === 'EXPLORE_UI') return { ...base, title: 'Inicio del proyecto: elige una dirección visual', detail: view.error ?? `${view.ui.options.length} propuesta${view.ui.options.length === 1 ? '' : 's'} de diseño con prototipo. Pruébalas, pide ajustes y aprueba una (o salta el diseño).`, needsAttention: true };
     return { ...base, title: 'Inicio del proyecto: te falta aprobar', detail: view.nextAction === 'SET_UP_REPOSITORY' ? 'Configura o inicializa el repositorio y aprueba la propuesta.' : view.nextAction === 'REVISE_PROPOSAL' ? 'La propuesta tiene problemas; revísala o vuelve a generarla.' : 'Revisa la visión, el stack y el plan inicial, y apruébalos.', needsAttention: true };
   }
 
-  private launch(record: InceptionRecord, work: (signal: AbortSignal) => Promise<Omit<Partial<InceptionRecord>, 'usage'> & { usage: InceptionEngineUsage | null }>, failedStage: InceptionRecord['stage']): void {
+  private launch(record: InceptionRecord, work: (signal: AbortSignal) => Promise<Omit<Partial<InceptionRecord>, 'usage'> & { usage: InceptionEngineUsage | null }>, failedStage: InceptionRecord['stage'], failureStatus: InceptionRecord['status'] = 'FAILED'): void {
     const controller = new AbortController();
     this.controllers.get(record.projectId)?.abort();
     this.controllers.set(record.projectId, controller);
     const task = (async () => {
       let patch: Omit<Partial<InceptionRecord>, 'usage'> & { usage: InceptionEngineUsage | null };
       try { patch = await work(controller.signal); }
-      catch (error) { patch = { stage: failedStage, status: 'FAILED', error: error instanceof Error ? error.message : String(error), usage: null }; }
+      catch (error) { patch = { stage: failedStage, status: failureStatus, error: error instanceof Error ? error.message : String(error), usage: null }; }
       // A voluntary cancellation (restart, shutdown) never turns into FAILED: whoever aborted owns the state.
       if (controller.signal.aborted) return;
       // A restart while the engine worked discards its answer.
@@ -173,8 +233,14 @@ export class ProjectInceptionService {
       const { usage, ...rest } = patch;
       const next: InceptionRecord = { ...latest, ...rest, usage: usage ? [...latest.usage, usage] : latest.usage, updatedAt: new Date().toISOString() };
       if (!('error' in rest)) next.error = null;
-      this.deps.store.save(next);
-      this.notify(next);
+      let stored = next;
+      try { this.deps.store.save(next); }
+      catch (error) {
+        // The engine finished but its result could not be stored: say so instead of leaving the record WORKING for good.
+        stored = { ...latest, stage: failedStage, status: failureStatus, error: `No se pudo guardar el resultado: ${error instanceof Error ? error.message : String(error)}`, usage: usage ? [...latest.usage, usage] : latest.usage, updatedAt: new Date().toISOString() };
+        try { this.deps.store.save(stored); } catch { /* the next read reports the call as interrupted */ }
+      }
+      this.notify(stored);
     })().finally(() => { if (this.running.get(record.projectId) === task) this.running.delete(record.projectId); if (this.controllers.get(record.projectId) === controller) this.controllers.delete(record.projectId); });
     this.running.set(record.projectId, task);
   }
@@ -182,17 +248,16 @@ export class ProjectInceptionService {
   private view(projectId: string, record: InceptionRecord | null): InceptionViewDto {
     const repositoryPath = this.deps.repositoryPath(projectId);
     const usage = (record?.usage ?? []).reduce((total, item) => ({ calls: total.calls + 1, inputTokens: total.inputTokens + item.inputTokens, outputTokens: total.outputTokens + item.outputTokens, cacheReadTokens: total.cacheReadTokens + item.cacheReadTokens, cacheCreationTokens: total.cacheCreationTokens + item.cacheCreationTokens, costUsd: item.costUsd === null ? total.costUsd : (total.costUsd ?? 0) + item.costUsd }), { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: null as number | null });
-    if (!record) return { projectId, stage: 'NOT_STARTED', status: 'IDLE', nextAction: 'START', brief: '', questions: [], answers: [], assumptions: [], proposal: null, error: null, model: null, repositoryPath, usage, notes: [], scaffoldTaskId: null, references: [], updatedAt: null };
-    // WORKING with nothing running here: the app closed during the call.
-    const interrupted = record.status === 'WORKING' && !this.running.has(projectId);
-    const status: InceptionStatus = interrupted ? 'FAILED' : record.status;
+    if (!record) return { projectId, stage: 'NOT_STARTED', status: 'IDLE', nextAction: 'START', brief: '', questions: [], answers: [], assumptions: [], proposal: null, error: null, model: null, repositoryPath, usage, notes: [], scaffoldTaskId: null, references: [], ui: { wanted: false, options: [], selectedOptionId: null }, updatedAt: null };
+    const status: InceptionStatus = record.status;
     const proposal = record.changeSetId ? this.proposal(record.changeSetId) : null;
     const stage: InceptionStage = record.stage;
     const nextAction: InceptionNextAction = status === 'WORKING' ? 'WAIT' : stage === 'APPLIED' ? 'DONE'
-      : status === 'FAILED' ? (stage === 'ASK_GOALS' && !record.questions.length ? 'RETRY_QUESTIONS' : 'RETRY_PROPOSAL')
+      : status === 'FAILED' ? (stage === 'ASK_GOALS' && !record.questions.length ? 'RETRY_QUESTIONS' : stage === 'ASK_GOALS' && record.ui.wanted ? 'RETRY_UI' : 'RETRY_PROPOSAL')
       : stage === 'ASK_GOALS' ? 'ANSWER'
+      : stage === 'EXPLORE_UI' ? 'CHOOSE_UI'
       : !proposal || proposal.status !== 'VALIDATED' || record.error ? 'REVISE_PROPOSAL' : !repositoryPath ? 'SET_UP_REPOSITORY' : 'APPROVE';
-    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: interrupted ? 'La llamada se interrumpió (la app se cerró). Vuelve a intentarlo.' : record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), updatedAt: record.updatedAt };
+    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), ui: { wanted: record.ui.wanted, selectedOptionId: record.ui.selectedOptionId, options: record.ui.options.map(({ prototypeHtml: _html, ...visible }) => visible) }, updatedAt: record.updatedAt };
   }
 
   private proposal(changeSetId: string): InceptionProposalDto | null {
@@ -207,9 +272,9 @@ export class ProjectInceptionService {
     if (model && !models.available.includes(model)) throw new Error(`El modelo ${model} no está disponible para planificar.`);
     return model || models.planning;
   }
-  private projectInput(projectId: string, brief: string, props: { name: string; description?: string | null }, references: readonly InceptionReference[] = []) {
+  private projectInput(projectId: string, brief: string, props: { name: string; description?: string | null }, references: readonly InceptionReference[] = [], direction?: ReturnType<ProjectInceptionService['approvedDirection']>) {
     const understood = references.flatMap(item => (item.status === 'TRANSLATED' && item.translation ? [{ kind: item.kind, name: item.name, note: item.note, translation: item.translation }] : []));
-    return { name: props.name, description: props.description ?? null, brief, rootId: this.rootId(projectId), ...(understood.length ? { references: understood } : {}) };
+    return { name: props.name, description: props.description ?? null, brief, rootId: this.rootId(projectId), ...(understood.length ? { references: understood } : {}), ...(direction ? { direction } : {}) };
   }
 
   /**
@@ -239,7 +304,43 @@ export class ProjectInceptionService {
     return references;
   }
   private rootId(projectId: string): string { const root = this.deps.graph.listEntities(projectId).find(entity => entity.entityType === 'PROJECT_ROOT'); if (!root) throw new Error('El proyecto no tiene nodo raíz.'); return root.id; }
-  private record(projectId: string): InceptionRecord | null { return this.deps.store.find(projectId); }
+  /**
+   * The stored record, with a call left WORKING by a closed app read as what it is: failed (or, while choosing a design, back to waiting with the reason).
+   * Every action reads it through here, so what the view offers to retry is also accepted.
+   */
+  private record(projectId: string): InceptionRecord | null {
+    const stored = this.deps.store.find(projectId);
+    if (stored && stored.status === 'WORKING' && !this.running.has(projectId)) return { ...stored, status: stored.stage === 'EXPLORE_UI' ? 'WAITING_USER' : 'FAILED', error: INTERRUPTED };
+    return stored;
+  }
+  private requireExploring(projectId: string): InceptionRecord {
+    this.requireProject(projectId);
+    const current = this.record(projectId);
+    if (!current || current.stage !== 'EXPLORE_UI') throw new Error('No estás eligiendo una dirección visual.');
+    if (current.status === 'WORKING') throw new Error('Espera a que termine la llamada en curso.');
+    return current;
+  }
+  private uiModel(record: InceptionRecord): { model?: string } {
+    const models = this.deps.models(record.projectId);
+    const model = ['sonnet', 'opus'].find(alias => models.available.includes(alias)) ?? record.model ?? models.planning;
+    return model ? { model } : {};
+  }
+  private nextUiId(options: readonly InceptionUiOption[]): string { return `ui-${options.reduce((highest, item) => Math.max(highest, Number(item.id.replace(/\D/g, '')) || 0), 0) + 1}`; }
+  private toUiOption(draft: UiOptionDraft, source: InceptionUiOption['source'], id: string): InceptionUiOption {
+    return { id, title: draft.title, summary: draft.summary, navigation: draft.navigation, screens: draft.screens, designSystemNotes: draft.designSystemNotes, source, htmlBytes: Buffer.byteLength(draft.prototypeHtml), externalReferences: findExternalReferences(draft.prototypeHtml), prototypeHtml: draft.prototypeHtml };
+  }
+  /** The proposal gate: one engine call, validated and stored as a ChangeSet awaiting the user's approval. */
+  private async proposalWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
+    const projectId = record.projectId, rootId = this.rootId(projectId);
+    const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, props, record.references ?? [], this.approvedDirection(record)), questions: record.questions, answers: record.answers, ...(record.notes?.length ? { notes: record.notes } : {}), ...(record.model ? { model: record.model } : {}), signal });
+    const plan = buildFoundationPlan(result.draft.operations, rootId);
+    const changeSet = this.deps.planning.submit(projectId, { title: result.draft.title || 'Inicio del proyecto', rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)].filter(Boolean).join('\n'), operations: plan.operations }, `inception:${projectId}`);
+    return { stage: 'PROPOSAL' as const, status: 'WAITING_USER' as const, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage, changeSetId: changeSet.id, error: plan.problems.length ? plan.problems.join(' ') : null };
+  }
+  private approvedDirection(record: InceptionRecord) {
+    const option = record.ui.options.find(item => item.id === record.ui.selectedOptionId);
+    return option ? { title: option.title, summary: option.summary, navigation: option.navigation, screens: option.screens, designSystemNotes: option.designSystemNotes, source: option.source, ...(option.source === 'IMPORTED' ? { prototypeHtml: option.prototypeHtml } : {}) } : undefined;
+  }
   private requireProject(projectId: string) { const project = this.deps.projects.findById(projectId); if (!project) throw new Error('Proyecto no encontrado.'); return project; }
   private notify(record: InceptionRecord): void { this.deps.emit?.('inception:updated', { projectId: record.projectId, stage: record.stage, status: record.status }); }
 }

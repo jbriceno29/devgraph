@@ -9,12 +9,17 @@ import { useResetOnChange } from '../use-reset-on-change.js';
 import { QuestionsStep } from './QuestionsStep.js';
 import { ProposalReview, approvalBlockers, taskCount } from './ProposalReview.js';
 import { RepositoryCreated, RepositorySetup } from './RepositorySetup.js';
+import { VisualExplorationStep } from './VisualExplorationStep.js';
 import { ReferencesField, ReferencesSummary, type DraftReference } from './ReferencesField.js';
 
 /** Pasado este tiempo trabajando se avisa de que sigue en marcha (no es un error). */
 export const SLOW_AFTER_MS = 120_000;
 const MAX_BRIEF = 4000;
-const STEPS = ['Objetivo y alcance', 'Revisar propuesta', 'Listo'];
+/** Los pasos del inicio; «Diseño» aparece solo si el usuario pidió explorar el diseño. */
+const stepsFor = (design: boolean) => (design ? ['Objetivo y alcance', 'Diseño', 'Revisar propuesta', 'Listo'] : ['Objetivo y alcance', 'Revisar propuesta', 'Listo']);
+type StepKey = 'goals' | 'design' | 'proposal' | 'done';
+const stepIndex = (design: boolean, key: StepKey) => ({ goals: 0, design: 1, proposal: design ? 2 : 1, done: design ? 3 : 2 })[key];
+const eyebrowFor = (design: boolean, key: StepKey) => `Paso ${stepIndex(design, key) + 1} de ${stepsFor(design).length}`;
 const card = 'rounded-xl border border-border bg-surface-raised p-5';
 type Mode = 'view' | 'revise' | 'answers' | 'confirm';
 interface Props { projectId:string; nodes:GraphNodeView[]; onNavigate(target:ShellTarget):void; onApplied?():void }
@@ -22,7 +27,7 @@ interface Props { projectId:string; nodes:GraphNodeView[]; onNavigate(target:She
 /** Asistente de inicio por pasos: brief → preguntas → propuesta → aprobación. Un único botón primario por pantalla. */
 export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props) {
  const {client,view,loadError,actionError,setActionError,busy,reload,act}=useInception(projectId);
- const [mode,setMode]=useState<Mode>('view'),[created,setCreated]=useState<InitializeRepositoryResultDto|null>(null);
+ const [mode,setMode]=useState<Mode>('view'),[created,setCreated]=useState<InitializeRepositoryResultDto|null>(null),[wantDesign,setWantDesign]=useState<boolean|null>(null);
  const heading=useRef<HTMLHeadingElement>(null),screenKey=view?`${view.stage}:${view.status}:${mode}`:'loading',firstScreen=useRef(true);
  // Un paso nuevo del motor vuelve a la vista normal; en el render, no en un efecto que pisaría un clic hecho justo después.
  useResetOnChange(view?`${view.stage}:${view.status}`:null,()=>setMode('view'));
@@ -36,7 +41,10 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
  const restartButton=<button type="button" onClick={restart} disabled={busy} className={`min-h-9 text-sm ${secondary}`}>Empezar de nuevo</button>;
  const repository=<RepositorySetup projectId={projectId} client={client} onCreated={result=>{setCreated(result);void reload();}} onConnectExisting={()=>onNavigate({view:'documents'})}/>;
  // Con las respuestas enviadas, preparar la propuesta ya es el paso 2 aunque la etapa siga en ASK_GOALS.
- const step=view.stage==='APPLIED'?2:view.stage==='PROPOSAL'||(view.status==='WORKING'&&view.questions.length>0)?1:0;
+ const design=view.ui.wanted,designing=view.stage==='EXPLORE_UI'||(view.stage==='ASK_GOALS'&&view.status==='WORKING'&&design&&view.questions.length>0&&!view.ui.options.length);
+ const step=stepIndex(design,view.stage==='APPLIED'?'done':designing?'design':view.stage==='PROPOSAL'||(view.status==='WORKING'&&view.questions.length>0)?'proposal':'goals');
+ // Por defecto se ofrece explorar el diseño cuando adjuntó una referencia visual.
+ const designChecked=wantDesign??(view.ui.wanted||view.references.some(item=>item.kind==='VISUAL'));
  const hasPlan=nodes.some(node=>(node.type==='FEATURE'||node.type==='WORK_ITEM')&&node.status!=='ARCHIVED');
  let screen:ReactNode;
  if(view.status==='WORKING')screen=<Working view={view} heading={heading}/>;
@@ -45,20 +53,22 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
   {view.nextAction==='SET_UP_REPOSITORY'&&!view.repositoryPath&&<div className="mt-4">{repository}</div>}
   <div className="mt-4 flex flex-wrap gap-3">
    {view.nextAction==='RETRY_QUESTIONS'&&<button type="button" disabled={busy} onClick={()=>void act(ipc=>ipc.start(projectId,{brief:view.brief,...(view.model?{model:view.model}:{})}))} className={`min-h-9 text-sm ${primary}`}>Reintentar las preguntas</button>}
+   {view.nextAction==='RETRY_UI'&&<button type="button" disabled={busy} onClick={()=>void act(ipc=>ipc.answer(projectId,view.answers,undefined,{exploreUi:true}))} className={`min-h-9 text-sm ${primary}`}>Reintentar las direcciones visuales</button>}
    {view.nextAction==='RETRY_PROPOSAL'&&<button type="button" disabled={busy} onClick={()=>void act(ipc=>ipc.answer(projectId,view.answers))} className={`min-h-9 text-sm ${primary}`}>Reintentar la propuesta</button>}
    {restartButton}
   </div>
  </Screen>;
  else if(view.stage==='NOT_STARTED')screen=hasPlan
-  ?<Screen heading={heading} eyebrow="Paso 1 de 3" title="Este proyecto ya tiene un plan"><p className="text-sm text-fg-muted">El asistente de inicio es para proyectos vacíos. Para cambiar el plan, describe lo que quieres en Planificar.</p><button type="button" onClick={()=>onNavigate({view:'planning'})} className={`mt-4 min-h-9 text-sm ${primary}`}>Ir a Planificar</button></Screen>
+  ?<Screen heading={heading} eyebrow={eyebrowFor(false,'goals')} title="Este proyecto ya tiene un plan"><p className="text-sm text-fg-muted">El asistente de inicio es para proyectos vacíos. Para cambiar el plan, describe lo que quieres en Planificar.</p><button type="button" onClick={()=>onNavigate({view:'planning'})} className={`mt-4 min-h-9 text-sm ${primary}`}>Ir a Planificar</button></Screen>
   :<StartStep projectId={projectId} view={view} heading={heading} busy={busy} repository={repository} onStart={(brief,model,references)=>void act(ipc=>ipc.start(projectId,{brief,...(model?{model}:{}),...(references.length?{references:references.map(({key:_key,bytes:_bytes,...input})=>input)}:{})}))}/>;
- else if(view.stage==='ASK_GOALS')screen=<Screen heading={heading} eyebrow="Paso 1 de 3" title="Unas preguntas antes de proponer" intro="Responde lo que tengas claro; en lo demás elige «Decide tú» y el asistente usará la opción recomendada.">
+ else if(view.stage==='ASK_GOALS')screen=<Screen heading={heading} eyebrow={eyebrowFor(design,'goals')} title="Unas preguntas antes de proponer" intro="Responde lo que tengas claro; en lo demás elige «Decide tú» y el asistente usará la opción recomendada.">
   <Brief text={view.brief}/>
   <ReferencesSummary references={view.references}/>
-  <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Enviar respuestas" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}>{restartButton}</QuestionsStep>
+  <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel={designChecked?'Enviar respuestas y diseñar':'Enviar respuestas'} design={{checked:designChecked,onChange:setWantDesign}} onSubmit={answers=>void act(ipc=>designChecked||view.ui.wanted?ipc.answer(projectId,answers,undefined,{exploreUi:designChecked}):ipc.answer(projectId,answers))}>{restartButton}</QuestionsStep>
  </Screen>;
+ else if(view.stage==='EXPLORE_UI')screen=<VisualExplorationStep client={client} projectId={projectId} view={view} heading={heading} busy={busy} eyebrow={eyebrowFor(true,'design')} onChoose={optionId=>void act(ipc=>ipc.chooseUiOption(projectId,optionId))} onRevise={(optionId,notes)=>void act(ipc=>ipc.reviseUiOption(projectId,optionId,notes))} onImport={(name,html)=>void act(ipc=>ipc.importPrototype(projectId,{name,html}))}/>;
  else if(view.stage==='PROPOSAL'&&mode==='revise')screen=<ReviseStep view={view} heading={heading} busy={busy} onSubmit={notes=>void act(ipc=>ipc.answer(projectId,view.answers,notes))} onChangeAnswers={()=>setMode('answers')} onCancel={()=>setMode('view')}/>;
- else if(view.stage==='PROPOSAL'&&mode==='answers')screen=<Screen heading={heading} eyebrow="Paso 2 de 3" title="Cambiar tus respuestas" intro="Cambia las respuestas que quieras. El asistente preparará una propuesta nueva y descartará la actual; los cambios que ya pediste se mantienen.">
+ else if(view.stage==='PROPOSAL'&&mode==='answers')screen=<Screen heading={heading} eyebrow={eyebrowFor(design,'proposal')} title="Cambiar tus respuestas" intro="Cambia las respuestas que quieras. El asistente preparará una propuesta nueva y descartará la actual; los cambios que ya pediste se mantienen.">
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Generar otra propuesta" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}><button type="button" onClick={()=>setMode('view')} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button></QuestionsStep>
  </Screen>;
  else if(view.stage==='PROPOSAL'&&mode==='confirm'&&view.proposal)screen=<Confirm view={view} heading={heading} busy={busy} onCancel={()=>setMode('view')} onApprove={()=>void act(async ipc=>{const next=await ipc.approve(projectId);onApplied?.();return next;})}/>;
@@ -66,7 +76,7 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
  else screen=<Done view={view} nodes={nodes} heading={heading} onNavigate={onNavigate}/>;
 
  return <Wrapper>
-  <Stepper current={step}/>
+  <Stepper current={step} steps={stepsFor(design)}/>
   {screen}
   {created&&view.stage!=='APPLIED'&&<RepositoryCreated result={created}/>}
   <ErrorNotice error={actionError}/>
@@ -76,8 +86,8 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
 
 const Wrapper=({children}:{children:ReactNode})=><div className="min-h-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-3xl space-y-4 pb-2 pr-1">{children}</div></div>;
 
-function Stepper({current}:{current:number}) {
- return <ol aria-label="Pasos del inicio" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">{STEPS.map((label,index)=>{const done=index<current,active=index===current;return <li key={label} aria-current={active?'step':undefined} className="flex items-center gap-2">
+function Stepper({current,steps}:{current:number;steps:string[]}) {
+ return <ol aria-label="Pasos del inicio" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">{steps.map((label,index)=>{const done=index<current,active=index===current;return <li key={label} aria-current={active?'step':undefined} className="flex items-center gap-2">
   {index>0&&<span aria-hidden="true" className="h-px w-6 bg-border-strong"/>}
   <span aria-hidden="true" className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-semibold ${active?'bg-accent text-accent-fg':done?'bg-success-soft text-success':'bg-surface-sunken text-fg-subtle'}`}>{done?'✓':index+1}</span>
   <span className={active?'font-semibold text-fg':done?'text-fg-muted':'text-fg-subtle'}>{label}<span className="sr-only">{done?' (hecho)':active?' (paso actual)':''}</span></span>
@@ -100,7 +110,7 @@ function StartStep({projectId,view,heading,busy,repository,onStart}:{projectId:s
  const [brief,setBrief]=useState(view.brief),[error,setError]=useState<string|null>(null),[references,setReferences]=useState<DraftReference[]>([]);
  const [models,setModels]=useState<{list:string[];recommended:string|null}>({list:[],recommended:null}),[model,setModel]=useState('');
  useEffect(()=>{let live=true;void window.workspaceIpc.queries.listAgentProfiles(projectId).then(profiles=>{const profile=profiles.find(item=>item.roleKey==='DEVELOPER')??profiles[0];if(!live||!profile)return;setModels({list:profile.availableModels??[],recommended:profile.planningModel??null});setModel(profile.planningModel??profile.availableModels?.[0]??'');}).catch(()=>undefined);return ()=>{live=false;};},[projectId]);
- return <Screen heading={heading} eyebrow="Paso 1 de 3" title="Cuéntanos tu idea">
+ return <Screen heading={heading} eyebrow={eyebrowFor(false,'goals')} title="Cuéntanos tu idea">
   <div className="space-y-1 text-sm text-fg-muted">
    <p>El asistente te hará hasta 5 preguntas sobre objetivo y alcance.</p>
    <p>Después propondrá la visión, el stack, las reglas y un plan inicial con sus tareas. Nada se crea hasta que lo apruebes.</p>
@@ -128,16 +138,16 @@ function StartStep({projectId,view,heading,busy,repository,onStart}:{projectId:s
 }
 
 function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>}) {
- const proposing=view.questions.length>0;
+ const adjusting=view.stage==='EXPLORE_UI',designing=!adjusting&&view.ui.wanted&&view.stage==='ASK_GOALS'&&view.questions.length>0&&!view.ui.options.length,proposing=!adjusting&&!designing&&view.questions.length>0;
  const [since]=useState(()=>{const at=Date.parse(view.updatedAt??''),now=Date.now();return Number.isNaN(at)||at>now||now-at>3_600_000?now:at;});
  const [now,setNow]=useState(Date.now());
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return ()=>clearInterval(timer);},[]);
  const elapsed=Math.max(0,now-since),slow=elapsed>=SLOW_AFTER_MS,seconds=Math.floor(elapsed/1000);
  const analysing=!proposing&&view.references.some(item=>item.status!=='TRANSLATED');
- const title=proposing?'Preparando la propuesta, puede tardar un minuto':analysing?'Analizando tus referencias…':'Pensando el objetivo…';
- return <Screen heading={heading} eyebrow={proposing?'Paso 2 de 3':'Paso 1 de 3'} title={title}>
+ const title=adjusting?'Ajustando el prototipo, puede tardar un par de minutos':designing?'Diseñando direcciones visuales, puede tardar unos minutos':proposing?'Preparando la propuesta, puede tardar un minuto':analysing?'Analizando tus referencias…':'Pensando el objetivo…';
+ return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,adjusting||designing?'design':proposing?'proposal':'goals')} title={title}>
   <div role="status" aria-live="polite" className="space-y-2 text-sm text-fg-muted">
-   <p>{proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':analysing?'Un modelo está describiendo en texto tus archivos; después el asistente leerá esa descripción junto con tu idea y preparará unas pocas preguntas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
+   <p>{adjusting?'El asistente está aplicando tus cambios a ese prototipo; las demás direcciones se quedan como están.':designing?'El asistente está diseñando 2 o 3 direcciones distintas, cada una con un prototipo que podrás probar.':proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':analysing?'Un modelo está describiendo en texto tus archivos; después el asistente leerá esa descripción junto con tu idea y preparará unas pocas preguntas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
    {slow&&<p className="font-medium text-fg">Sigue trabajando. Algunas respuestas tardan más; no hace falta que esperes aquí.</p>}
   </div>
   <div aria-hidden="true" className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full w-full animate-pulse rounded-full bg-accent/60 motion-reduce:animate-none"/></div>
@@ -147,8 +157,9 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
 
 function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRevise}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void}) {
  const id=useId(),blockers=approvalBlockers(view),canApprove=view.nextAction==='APPROVE'&&!blockers.length;
- return <Screen heading={heading} eyebrow="Paso 2 de 3" title={view.proposal?.title||'Revisa la propuesta'} intro="Léela con calma: al aprobarla se crean los documentos, la decisión de stack, las reglas y el plan.">
+ return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'proposal')} title={view.proposal?.title||'Revisa la propuesta'} intro="Léela con calma: al aprobarla se crean los documentos, la decisión de stack, las reglas y el plan.">
   <ReferencesSummary references={view.references}/>
+  {view.ui.selectedOptionId&&<p className="mb-4 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs text-fg-muted"><span className="font-medium text-fg">Dirección visual aprobada:</span> {view.ui.options.find(option=>option.id===view.ui.selectedOptionId)?.title??'—'}. La propuesta se apoya en ella.</p>}
   <ProposalReview view={view}/>
   {!view.repositoryPath&&<div className="mt-4 rounded-lg border border-border bg-surface-sunken p-4"><h3 className="mb-2 text-sm font-semibold text-fg">Crear un repositorio nuevo</h3>{repository}</div>}
   {!canApprove&&blockers.length>0&&<ul id={`${id}-blockers`} className="mt-4 list-disc space-y-0.5 pl-5 text-xs text-fg-muted">{blockers.map(item=><li key={item}>{item}</li>)}</ul>}
@@ -163,7 +174,7 @@ function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRe
 /** «Pedir otra propuesta»: qué cambiar en texto libre; mantiene las respuestas (cambiarlas es opcional). */
 function ReviseStep({view,heading,busy,onSubmit,onChangeAnswers,onCancel}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;onSubmit(notes:string):void;onChangeAnswers():void;onCancel():void}) {
  const id=useId(),[notes,setNotes]=useState('');
- return <Screen heading={heading} eyebrow="Paso 2 de 3" title="Pedir otra propuesta" intro="Cuéntale al asistente qué no te convence. Preparará una propuesta nueva con tus mismas respuestas y descartará la actual.">
+ return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'proposal')} title="Pedir otra propuesta" intro="Cuéntale al asistente qué no te convence. Preparará una propuesta nueva con tus mismas respuestas y descartará la actual.">
   {view.notes.length>0&&<div className="mb-4 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs text-fg-muted"><p className="font-medium text-fg">Ya pediste (se sigue teniendo en cuenta)</p><ul className="mt-1 list-disc space-y-0.5 pl-5">{view.notes.map((note,index)=><li key={index} className="whitespace-pre-wrap break-words">{note}</li>)}</ul></div>}
   <form noValidate className="space-y-4" onSubmit={event=>{event.preventDefault();onSubmit(notes.trim());}}>
    <div>
@@ -190,7 +201,7 @@ function Confirm({view,heading,busy,onApprove,onCancel}:{view:InceptionViewDto;h
   `${proposal.features.length} features y ${taskCount(proposal)} tareas.`,
   proposal.scaffoldTaskTitle&&`La primera tarea, «${proposal.scaffoldTaskTitle}», quedará lista para ejecutarse.`,
  ].filter((item):item is string=>typeof item==='string');
- return <Screen heading={heading} eyebrow="Paso 2 de 3" title="¿Crear el plan?" intro="Al aprobar se creará:">
+ return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'proposal')} title="¿Crear el plan?" intro="Al aprobar se creará:">
   <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">{items.map(item=><li key={item}>{item}</li>)}</ul>
   <p className="mt-3 text-xs text-fg-subtle">No se ejecuta ningún agente todavía. Después podrás cambiar el plan desde Planificar.</p>
   <div className="mt-4 flex flex-wrap gap-3">
@@ -205,7 +216,7 @@ function Done({view,nodes,heading,onNavigate}:{view:InceptionViewDto;nodes:Graph
  // El id llega del núcleo al aplicar la propuesta; el título queda como respaldo (núcleos anteriores).
  const taskId=view.scaffoldTaskId??(first?nodes.find(node=>node.type==='WORK_ITEM'&&node.label===first&&node.status!=='ARCHIVED')?.id:undefined);
  return <>
-  <Screen heading={heading} eyebrow="Paso 3 de 3" title="Proyecto listo">
+  <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'done')} title="Proyecto listo">
    {proposal?.profile?.description&&<p className="text-sm text-fg">{proposal.profile.description}</p>}
    {proposal&&<p className="mt-2 text-sm text-fg-muted">Se crearon {proposal.features.length} features y {taskCount(proposal)} tareas{proposal.decision?`, la decisión «${proposal.decision.title}»`:''}{proposal.documents.length?` y ${proposal.documents.length} documentos`:''}.</p>}
    <div className="mt-4 rounded-lg border border-success/50 bg-success-soft px-4 py-3">

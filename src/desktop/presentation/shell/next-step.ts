@@ -46,6 +46,8 @@ export function nextStep(graph:{nodes:GraphNodeView[];edges?:GraphEdgeView[]}, a
  const proposal=items.find(item=>item.needsAttention&&item.kind==='PLAN_PROPOSAL'&&!(inception?.changeSetId&&item.changeSetId===inception.changeSetId));
  if(inception?.needsAttention) return inception.status==='FAILED'
   ?{id:'inception-failed',title:'El asistente de inicio no pudo terminar',detail:inception.detail,actionLabel:'Ver qué pasó',target:{view:'inception'},tone:'attention'}
+  :inception.stage==='EXPLORE_UI'
+  ?{id:'inception-design',title:'Elige una dirección visual',detail:inception.detail,actionLabel:'Ver las propuestas',target:{view:'inception'},tone:'attention'}
   :inception.stage==='PROPOSAL'
   ?{id:'inception-approve',title:'Revisa y aprueba la propuesta',detail:inception.detail,actionLabel:'Revisar la propuesta',target:{view:'inception'},tone:'attention'}
   :{id:'inception-answer',title:'Responde las preguntas del asistente de inicio',detail:inception.detail,actionLabel:'Responder',target:{view:'inception'},tone:'attention'};

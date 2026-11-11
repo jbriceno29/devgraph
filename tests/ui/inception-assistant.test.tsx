@@ -6,7 +6,7 @@ import { WorkspaceNavigationProvider } from '@desktop/state/workspace-navigation
 import { WorkspaceShell } from '@desktop/state/WorkspaceShell.js';
 import type { GraphNodeView } from '../../src/shared/contracts/graph-view.js';
 import { installShellIpc } from './shell-ipc.js';
-import { fakeInception, proposal, questions, usage2 } from './inception-fake.js';
+import { fakeInception, prototypeHtml, proposal, questions, uiOptions, usage2 } from './inception-fake.js';
 
 const root:GraphNodeView={id:'root',key:'PROJ-01',type:'PROJECT_ROOT',label:'Example Workspace',status:'ACTIVE'};
 const applied:GraphNodeView[]=[root,{id:'f1',key:'FEAT-001',type:'FEATURE',label:'Fundación',status:'DRAFT',parentId:'root'},{id:'t1',key:'TASK-001',type:'WORK_ITEM',label:'Preparar el proyecto',status:'READY',parentId:'f1'}];
@@ -310,5 +310,149 @@ describe('Asistente de inicio: referencias',()=>{
   expect(details.textContent).toMatch(/Colores:.*azul #2255ff/);
   expect(details.textContent).toMatch(/Por aclarar:.*¿Modo oscuro\?/);
   expect(details.textContent).toMatch(/No se pudo analizar: El archivo está vacío\./);
+ });
+});
+
+describe('Visor del prototipo: navegación',()=>{
+ it('drops the frame when the prototype navigates away or reloads itself, tells the user, and a reset brings it back',async()=>{
+  const {PrototypeFrame}=await import('@desktop/presentation/inception/VisualExplorationStep.js');
+  render(<PrototypeFrame html="<main>hola</main>"/>);
+  const frame=screen.getByTitle('Vista previa del prototipo');
+  fireEvent.load(frame);                                  // its own document loading is normal
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.load(screen.getByTitle('Vista previa del prototipo'));   // a second load: it navigated or reloaded
+  expect((await screen.findByRole('alert')).textContent).toMatch(/intentó salir de su página o recargarse/);
+  expect(screen.queryByTitle('Vista previa del prototipo')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Reiniciar la vista previa'}));
+  expect(screen.getByTitle('Vista previa del prototipo').getAttribute('srcdoc')).toContain('hola');
+  expect(screen.queryByRole('alert')).toBeNull();
+ });
+
+ it('changing the prototype is not mistaken for a navigation',async()=>{
+  const {PrototypeFrame}=await import('@desktop/presentation/inception/VisualExplorationStep.js');
+  const view=render(<PrototypeFrame html="<main>uno</main>"/>);
+  fireEvent.load(screen.getByTitle('Vista previa del prototipo'));
+  view.rerender(<PrototypeFrame html="<main>dos</main>"/>);
+  fireEvent.load(screen.getByTitle('Vista previa del prototipo'));
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByTitle('Vista previa del prototipo').getAttribute('srcdoc')).toContain('dos');
+ });
+});
+
+describe('Asistente de inicio: exploración visual',()=>{
+ const exploring=(over:Parameters<typeof fakeInception>[0]={})=>setup({stage:'EXPLORE_UI',status:'WAITING_USER',nextAction:'CHOOSE_UI',brief:'Un panel',questions,ui:{wanted:true,options:uiOptions,selectedOptionId:null},updatedAt:new Date().toISOString(),...over});
+ const iframe=()=>screen.getByTitle('Vista previa del prototipo') as HTMLIFrameElement;
+
+ it('offers the design step with the questions, checked by default when a visual reference was attached, and sends the choice',async()=>{
+  const first=setup({stage:'ASK_GOALS',status:'WAITING_USER',nextAction:'ANSWER',brief:'Un panel',questions});
+  const box=await screen.findByLabelText(/Mi proyecto tiene una interfaz gráfica/) as HTMLInputElement;
+  expect(box.checked).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Enviar respuestas'}));
+  await waitFor(()=>expect(first.client.answer).toHaveBeenCalledWith('p',expect.any(Array)));
+  expect((first.client.answer as ReturnType<typeof vi.fn>).mock.calls[0]).toHaveLength(2);
+  cleanup();
+
+  const withVisual={id:'ref-1',name:'panel.png',kind:'VISUAL' as const,note:'',mimeType:'image/png',bytes:10,status:'TRANSLATED' as const,error:null,translation:{summary:'Panel.',palette:[],typography:'',layout:'',screens:[],actions:[],flows:[],states:[],ideas:[],openQuestions:[]}};
+  const second=setup({stage:'ASK_GOALS',status:'WAITING_USER',nextAction:'ANSWER',brief:'Un panel',questions,references:[withVisual]});
+  expect((await screen.findByLabelText(/Mi proyecto tiene una interfaz gráfica/) as HTMLInputElement).checked).toBe(true);
+  expect(within(screen.getByRole('list',{name:'Pasos del inicio'})).getAllByRole('listitem')).toHaveLength(3);
+  fireEvent.click(screen.getByRole('button',{name:'Enviar respuestas y diseñar'}));
+  await waitFor(()=>expect(second.client.answer).toHaveBeenCalledWith('p',expect.any(Array),undefined,{exploreUi:true}));
+ });
+
+ it('shows a Diseño step and the design-specific waiting texts once the user asked for it',async()=>{
+  setup({stage:'ASK_GOALS',status:'WORKING',nextAction:'WAIT',brief:'Un panel',questions,ui:{wanted:true,options:[],selectedOptionId:null},updatedAt:new Date().toISOString()});
+  expect(await screen.findByRole('heading',{name:/Diseñando direcciones visuales/})).toBeTruthy();
+  const steps=within(screen.getByRole('list',{name:'Pasos del inicio'})).getAllByRole('listitem');
+  expect(steps).toHaveLength(4);
+  ['Objetivo y alcance','Diseño','Revisar propuesta','Listo'].forEach((label,index)=>expect(steps[index]!.textContent).toContain(label));
+  expect(currentStep().textContent).toMatch(/Diseño/);
+  expect(screen.getByText(/Paso 2 de 4/)).toBeTruthy();
+  cleanup();
+  setup({stage:'EXPLORE_UI',status:'WORKING',nextAction:'WAIT',brief:'Un panel',questions,ui:{wanted:true,options:uiOptions,selectedOptionId:null},updatedAt:new Date().toISOString()});
+  expect(await screen.findByRole('heading',{name:/Ajustando el prototipo/})).toBeTruthy();
+ });
+
+ it('shows each direction with its prototype in an isolated frame: scripts yes, same origin no, and a policy with no network',async()=>{
+  exploring();
+  expect(await screen.findByRole('heading',{name:'Elige una dirección visual'})).toBeTruthy();
+  expect(screen.getAllByRole('radio').map(radio=>(radio.closest('label') as HTMLElement).textContent)).toEqual([expect.stringContaining('Panel claro'),expect.stringContaining('Lista minimalista')]);
+  await waitFor(()=>expect(screen.getByTitle('Vista previa del prototipo')).toBeTruthy());
+  const frame=iframe();
+  // Scripts and forms (without allow-forms a prototype's submit handlers never run); never the same origin, popups, top navigation or modals.
+  expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
+  expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+  const doc=new DOMParser().parseFromString(frame.getAttribute('srcdoc')!,'text/html');
+  expect(doc.head.firstElementChild?.getAttribute('http-equiv')).toBe('Content-Security-Policy');
+  expect(doc.head.firstElementChild?.getAttribute('content')).toMatch(/default-src 'none'.*connect-src 'none'/);
+  expect(doc.querySelector('script')).not.toBeNull();
+  expect(screen.getByText(/funciona sin Internet y no tiene acceso a tus datos/)).toBeTruthy();
+  expect(screen.getByText('Barra lateral con tres secciones.')).toBeTruthy();
+  expect(screen.getByText('Inicio · Tareas · Ajustes')).toBeTruthy();
+ });
+
+ it('switching direction loads that prototype, and warns when it tries to reach the Internet',async()=>{
+  const {client}=exploring();
+  await waitFor(()=>expect(client.getUiPrototype).toHaveBeenCalledWith('p','ui-1'));
+  expect(screen.queryByText(/intenta usar recursos externos/)).toBeNull();
+  fireEvent.click(screen.getAllByRole('radio')[1]!);
+  await waitFor(()=>expect(client.getUiPrototype).toHaveBeenCalledWith('p','ui-2'));
+  expect((await screen.findByRole('status')).textContent).toMatch(/recursos externos \(cdn.example.com, fetch\(\)\). No se cargarán/);
+  // The frame shows the hardened version of that prototype (re-serialised), not the original string.
+  await waitFor(()=>expect(iframe().getAttribute('srcdoc')).toContain('<h1>ui-2</h1>'));
+ });
+
+ it('approves the selected direction, skips the design, or asks for changes with the notes',async()=>{
+  const {client}=exploring();
+  await screen.findByTitle('Vista previa del prototipo');
+  fireEvent.click(screen.getAllByRole('radio')[1]!);
+  fireEvent.click(screen.getByRole('button',{name:'Pedir ajustes a este prototipo'}));
+  const regenerate=screen.getByRole('button',{name:'Regenerar este prototipo'}) as HTMLButtonElement;
+  expect(regenerate.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('¿Qué quieres cambiar de este prototipo?'),{target:{value:'  Más color  '}});
+  fireEvent.click(regenerate);
+  await waitFor(()=>expect(client.reviseUiOption).toHaveBeenCalledWith('p','ui-2','Más color'));
+  cleanup();
+  const second=exploring();
+  await screen.findByTitle('Vista previa del prototipo');
+  fireEvent.click(screen.getByRole('button',{name:'Aprobar esta dirección visual y preparar el plan'}));
+  await waitFor(()=>expect(second.client.chooseUiOption).toHaveBeenCalledWith('p','ui-1'));
+  cleanup();
+  const third=exploring();
+  await screen.findByTitle('Vista previa del prototipo');
+  fireEvent.click(screen.getByRole('button',{name:'Saltar el diseño e ir directo al plan'}));
+  await waitFor(()=>expect(third.client.chooseUiOption).toHaveBeenCalledWith('p',null));
+ });
+
+ it('imports a pasted prototype or an HTML file, refuses other files, and selects the new direction',async()=>{
+  const {client}=exploring();
+  await screen.findByTitle('Vista previa del prototipo');
+  fireEvent.click(screen.getByText(/Importar un prototipo hecho en otra herramienta/));
+  fireEvent.change(screen.getByLabelText('O pegar el HTML'),{target:{value:'<main>mi diseño</main>'}});
+  fireEvent.change(screen.getByLabelText('Nombre'),{target:{value:'Mi diseño'}});
+  fireEvent.click(screen.getByRole('button',{name:'Importar el HTML pegado'}));
+  await waitFor(()=>expect(client.importPrototype).toHaveBeenCalledWith('p',{name:'Mi diseño',html:'<main>mi diseño</main>'}));
+  await waitFor(()=>expect((screen.getAllByRole('radio').at(-1) as HTMLInputElement).checked).toBe(true));
+  expect(screen.getAllByRole('radio')).toHaveLength(3);
+  const input=screen.getByLabelText('Subir un archivo .html') as HTMLInputElement;
+  await act(async()=>{fireEvent.change(input,{target:{files:[new File(['x'],'foto.png',{type:'image/png'})]}});});
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Sube el archivo .html/);
+  await act(async()=>{fireEvent.change(input,{target:{files:[new File(['<div>desde archivo</div>'],'proto.html',{type:'text/html'})]}});});
+  await waitFor(()=>expect(client.importPrototype).toHaveBeenCalledWith('p',{name:'proto.html',html:'<div>desde archivo</div>'}));
+ });
+
+ it('shows why an action failed without leaving the choice, and the approved direction in the proposal',async()=>{
+  exploring({error:'propuesta caída'});
+  expect((await screen.findByText('propuesta caída')).closest('[role="alert"]')).not.toBeNull();
+  expect(screen.getAllByRole('radio')).toHaveLength(2);
+  cleanup();
+  setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal,repositoryPath:'/home/ana/app',ui:{wanted:true,options:uiOptions,selectedOptionId:'ui-1'},updatedAt:new Date().toISOString()});
+  expect((await screen.findByText(/Dirección visual aprobada:/)).closest('p')!.textContent).toMatch(/Panel claro\. La propuesta se apoya en ella/);
+ });
+
+ it('offers to retry the design when generating it failed',async()=>{
+  const {client}=setup({stage:'ASK_GOALS',status:'FAILED',nextAction:'RETRY_UI',brief:'Un panel',questions,answers:[{questionId:'q1',answer:'Solo yo'}],error:'motor caído',ui:{wanted:true,options:[],selectedOptionId:null}});
+  fireEvent.click(await screen.findByRole('button',{name:'Reintentar las direcciones visuales'}));
+  await waitFor(()=>expect(client.answer).toHaveBeenCalledWith('p',[{questionId:'q1',answer:'Solo yo'}],undefined,{exploreUi:true}));
  });
 });

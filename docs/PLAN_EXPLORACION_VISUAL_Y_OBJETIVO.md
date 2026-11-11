@@ -105,7 +105,7 @@ Sin embargo, **cuando el proyecto tiene interfaz de usuario**:
   - El motor conectado puede proponer **2 a 3 direcciones visuales contrastantes** con prototipos HTML interactivos autocontenidos.
   - O bien el usuario puede **importar** prototipos/diseños generados externamente en **Claude Artifacts** o **Claude Design** (archivos HTML/React/imágenes).
 - **Iteración y aprobación:**
-  - El usuario prueba los prototipos dentro de un visor seguro en la app (`<iframe sandbox="allow-scripts">`), pide ajustes con notas o aprueba la dirección elegida.
+  - El usuario prueba los prototipos dentro de un visor seguro en la app (`<iframe sandbox="allow-scripts allow-forms">` con una política de seguridad que prohíbe toda red; ver la Etapa V2), pide ajustes con notas o aprueba la dirección elegida.
   - **Separación de responsabilidades:** aprobar la dirección visual fija la experiencia de usuario, pero la arquitectura y el plan de tareas se aprueban en la puerta de propuesta (`PROPOSAL`).
 - **Conversión del diseño en conocimiento estructurado (`docs/UI_SPEC.md`):**
   - El diseño aprobado nunca queda como un archivo suelto; se compila en un artefacto Markdown versionado (`docs/UI_SPEC.md`, tipo `SPEC`, Nivel 3 de autoridad) vinculado por aristas `DOCUMENTED_BY` a las features del grafo, con 8 apartados obligatorios:
@@ -224,38 +224,32 @@ Antes de expandir el asistente de inicio, cerrar los 4 ajustes técnicos detecta
 
 ---
 
-### Etapa V2: Etapa `EXPLORE_UI` y Prototipado Interactivo / Importación (Tamaño: M — ~1 día)
+### Etapa V2: Etapa `EXPLORE_UI`, prototipos interactivos y su visor aislado (Tamaño: M — ~1 día)
 
-0. **Migración `012_inception_ui_exploration.sql`** con `ui_options_json` y `selected_ui_option_id` en `project_inception` (`USER_VERSION = 12`). Las referencias ya llegan traducidas a texto desde V1: el generador de direcciones visuales las lee de `references_json`, no de los archivos.
+**Estado (2026-11-11): hecha.** Decisión del usuario sobre el visor: **scripts permitidos, sin red** (el prototipo es interactivo y una política de seguridad le prohíbe cargar o enviar nada fuera de su documento).
 
-1. **Contrato de exploración visual (`src/shared/contracts/inception-view.ts` y `src/application/ports/inception-port.ts`):**
-   - Añadir `'EXPLORE_UI'` a `InceptionStage` y `'CHOOSE_UI' | 'RETRY_UI'` a `InceptionNextAction`.
-   - Definir `InceptionUiOptionDto`:
-     ```ts
-     export interface InceptionUiOptionDto {
-       id: string;
-       title: string;
-       summary: string;
-       navigation: string;
-       screens: string[];
-       designSystemNotes: string[];
-       prototypeHtml: string;
-       source: 'GENERATED' | 'IMPORTED';
-     }
-     ```
-   - Añadir `exploreUi(...)` a `InceptionEnginePort` y `ClaudeInceptionEngine` con un esquema JSON (`uiExplorationSchema`) que pida 2–3 alternativas de interfaz con un prototipo HTML autocontenido cada una.
-2. **Servicio (`src/application/inception/project-inception-service.ts`):**
-   - En `answer()`: permitir elegir si tras responder las preguntas se pasa a `EXPLORE_UI` (proyectos con interfaz) o directo a `PROPOSAL` (proyectos sin interfaz o cuando el usuario decide saltar la exploración visual).
-   - Añadir `importPrototype(projectId, input)`: permite incorporar un prototipo HTML externo (por ejemplo, exportado de **Claude Artifacts** o **Claude Design**) como una opción seleccionable e iterable.
-   - Añadir `selectUiOption(projectId, optionId, notes?)`: si incluye `notes`, regenera/ajusta el prototipo; si confirma la opción, guarda `selectedUiOptionId` y lanza `engine.propose(...)` con la dirección visual aprobada.
-3. **UI (`src/desktop/presentation/inception/VisualExplorationStep.tsx`):**
-   - Tarjetas para alternar entre las 2–3 direcciones visuales propuestas.
-   - Visor en vivo aislado: `<iframe title="Vista previa del prototipo" sandbox="allow-scripts" srcDoc={selectedOption.prototypeHtml} />`.
-   - Formulario plegable *"Importar prototipo externo (HTML / Claude Artifact)"*.
-   - Botones de acción claros:
-     - Primario: **«Aprobar esta dirección visual y preparar el plan»**.
-     - Secundario: **«Pedir ajustes a este prototipo»** (usando el flujo de notas).
-     - Secundario: **«Saltar diseño e ir directo al plan»**.
+**Cómo funciona**
+
+1. **Pedirla.** Al responder las primeras preguntas aparece la casilla «Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan» (marcada por defecto si adjuntó una referencia visual). Si no se marca, el flujo es el de siempre (preguntas, propuesta, aprobación). Con la casilla, el stepper gana el paso «Diseño» (4 pasos en lugar de 3). `inception:answer` acepta `{exploreUi: true}`; un reintento conserva lo pedido.
+2. **Generar.** Un modelo con vocación de diseño (`sonnet`, no el modelo de planificación) devuelve 2 o 3 direcciones contrastantes: título, resumen, navegación, pantallas, notas del sistema de diseño y un prototipo HTML de un solo archivo, con todo en línea y sin recursos externos, interactivo con JavaScript sencillo, con datos de ejemplo en español y el estado vacío alcanzable. Los prompts reciben las referencias ya traducidas (V1) y piden respetar su paleta y sus pantallas. Un prototipo que no sea HTML utilizable o supere los 120.000 caracteres se descarta; si ninguno sirve, el paso falla con el motivo. Si el proyecto no tiene interfaz gráfica, el modelo diseña la representación más útil (la sesión de terminal, una vista web mínima) y lo dice en sus suposiciones.
+3. **Elegir** (`EXPLORE_UI`). El usuario prueba cada prototipo en un visor, y puede: **aprobar** una dirección (la propuesta se prepara sobre ella: sus detalles, o el HTML recortado a 40.000 caracteres si fue importada, entran como datos inertes entre marcadores), **pedir ajustes** a una (se regenera solo esa, con sus notas; el resto no se toca), **importar** un HTML hecho en otra herramienta (Claude Artifacts, Claude Design…; hasta 5 direcciones en total) o **saltar el diseño** e ir directo al plan. Aprobar fija el estilo, no el plan: la aprobación del plan sigue siendo el paso siguiente. Si el ajuste o la propuesta fallan, el usuario vuelve a esta pantalla con el motivo y sin perder nada.
+4. **Datos.** Migración `012_inception_ui_exploration.sql`: la etapa `EXPLORE_UI` exige reconstruir `project_inception` (SQLite no permite cambiar un `CHECK`), copiando las filas; las direcciones, la elegida y si se pidió el diseño van en un solo `ui_json`. La vista no lleva el HTML de los prototipos (se consulta con `inception:get_ui_prototype`) porque se consulta cada pocos segundos.
+
+**El visor y su aislamiento (probado en un navegador real)**
+
+- `<iframe sandbox="allow-scripts allow-forms">` con el documento endurecido por `hardenPrototype` (se *parsea*, no se busca con expresiones regulares, así que un `<head>` dentro de un comentario no puede esconder la política): una `Content-Security-Policy` como primer elemento (`default-src 'none'`, `connect-src 'none'`, `form-action 'none'`, `frame-src`, `object-src` y `base-uri` en `'none'`, imágenes y fuentes solo `data:`/`blob:`, scripts y estilos solo en línea), y se eliminan los enlaces a otros sitios, las acciones de formulario, los `iframe`/`object`/`embed`/`base`/`link` y los `meta http-equiv`. Sin `allow-same-origin`, `allow-popups`, `allow-top-navigation` ni `allow-modals`.
+- **Qué demostró la prueba** (Chromium, prototipo hostil que intenta salir a la red, tocar la app y navegar): con *solo* `sandbox="allow-scripts"` el prototipo **sí salía a Internet** (una petición y una imagen a sitios públicos tuvieron éxito); el sandbox sí protegía la app (no pudo leer el documento padre, ni su almacenamiento, ni su cookie, ni navegar la ventana principal, ni abrir ventanas). Con la política, todo quedó bloqueado y el navegador registró cada violación (`connect-src` para fetch, XHR y beacon; `img-src` para imágenes; `form-action` para un formulario cuya acción se cambió en ejecución, que sin política se fue a otra página llevándose los datos del formulario en la URL).
+- **`allow-forms` hace falta.** Con `sandbox="allow-scripts"` a secas el navegador bloquea los formularios por completo (el evento `submit` ni se dispara), así que un prototipo que añade elementos con un formulario parecía roto; se descubrió usando uno real. Es seguro con esta política y sin acciones de formulario.
+- **Límite conocido y su mitigación.** Ninguna política impide que un script asigne `location.href` y saque a *su propio iframe* a otra página (probado: ocurre). No puede leer nada de la app, pero «sin red» no es absoluto. El visor cuenta las cargas del iframe: la primera es la del documento; cualquier otra (navegación, o un formulario sin `preventDefault` que se recarga a sí mismo en bucle) descarta el iframe, avisa y ofrece «Reiniciar la vista previa». Los prompts piden mantener el estado en memoria (el sandbox no tiene `localStorage`) y cancelar siempre el envío de formularios.
+- Los recursos externos que un prototipo importado pida se listan como aviso («intenta usar recursos externos: cdn.example.com, fetch()»); no se cargan.
+
+**Verificación.** 389 pruebas (contrato y parseo, endurecimiento con documentos tramposos, servicio con motor falso incluidos fallos y reintentos, la reconstrucción de la tabla con filas reales, interfaz del paso completo y del visor). Corrida real (`haiku` preguntando, `sonnet` diseñando): 3 direcciones distintas (papel minimalista, panel oscuro denso, tablero cálido) en 50 s, un ajuste en 18 s, 0,11 USD en total; los prototipos pesan unos 5 KB y uno de ellos se probó funcionando bajo la política (filtrar, contadores, añadir una tarea).
+
+**Defectos previos que esta etapa destapó y corrigió.** (1) Si la app se cerraba a mitad de una llamada, la vista ofrecía «Reintentar» pero la acción lo rechazaba (leía el estado crudo «en curso»); ahora se lee como lo que es. (2) Si el resultado de una llamada no se podía guardar, el registro se quedaba «en curso» para siempre sin avisar; ahora pasa a fallido con el motivo.
+
+**Cambios respecto al plan original.** Las direcciones, la elegida y el deseo de explorar van en un solo `ui_json` (no dos columnas); la elección es `chooseUiOption(optionId | null)` y el ajuste `reviseUiOption` (en lugar de un `selectUiOption` con notas); el HTML no viaja en la vista; se añadió `allow-forms` y la política y detección de navegación del visor.
+
+**Límites.** Solo HTML se importa (no imágenes ni React sin compilar); no se puede volver a explorar el diseño una vez pasada la elección sin empezar de nuevo; las direcciones se generan con el motor de Claude y cuestan algunos centavos; no se probó el visor dentro de la ventana de la app (Tauri/WebKitGTK), solo en un navegador Chromium y con pruebas de interfaz.
 
 ---
 

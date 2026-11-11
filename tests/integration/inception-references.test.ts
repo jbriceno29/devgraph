@@ -23,6 +23,7 @@ class RecordingEngine implements InceptionEnginePort {
     return { questions: [{ id: 'q1', text: '¿Quién la usa?', options: ['Solo yo'], default: 'Solo yo', why: 'Alcance.' }], assumptions: [], usage };
   }
   async propose(input: Parameters<InceptionEnginePort['propose']>[0]): Promise<never> { this.proposed.push(input.project); throw new Error('captured'); }
+  async exploreUi(): Promise<never> { throw new Error('not used here'); }
 }
 
 /** Reads the stored copies like the real translator would and answers per id; `fail` makes one reference unreadable. */

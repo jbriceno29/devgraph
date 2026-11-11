@@ -1,0 +1,19 @@
+import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+
+/** A complete, valid foundation proposal and the usage the fake engines report; shared by the inception integration tests. `ROOT` stands for the project root's id. */
+export const usage={inputTokens:100,outputTokens:50,cacheReadTokens:0,cacheCreationTokens:0,costUsd:0.001,model:'fake'};
+export const proposal=():ChangeOperation[]=>[
+ {type:'SET_PROJECT_PROFILE',description:'Lista de tareas en la terminal.',objectives:['Gestionar tareas personales desde la terminal'],outOfScope:['Sincronización en la nube'],techStack:{lenguaje:'JavaScript (ESM)',runtime:'Node.js 22',pruebas:'node --test'},rules:['Identificadores en inglés; textos de usuario en español.','Pruebas en tests/ con node:test.'],verificationCommands:['node --test']},
+ {type:'CREATE_DECISION_RECORD',tempId:'$adr',title:'ADR-001: Stack',contextMd:'Proyecto pequeño.',alternativesMd:'- Node.js sin dependencias: simple.\n- Python: otro runtime.',decisionMd:'Node.js 22 sin dependencias.',consequencesMd:'Sin instalar nada.',relativePath:'docs/architecture/ADR/ADR-001-stack.md'},
+ {type:'UPSERT_ARTIFACT',tempId:'$vision',parentId:null,artifactType:'PRD',title:'Visión',relativePath:'docs/VISION.md',markdownContent:'# Visión\n\nTareas en la terminal.\n'},
+ {type:'CREATE_REQUIREMENT',tempId:'$req',title:'Crear tareas',summary:'El usuario crea tareas.',reqType:'FUNCTIONAL',priority:'HIGH',acceptanceCriteria:['Se crea una tarea con título']},
+ {type:'CREATE_MODULE',tempId:'$mod',title:'Núcleo',summary:'Todo el código.',purpose:'Núcleo de la app'},
+ {type:'CREATE_FEATURE',tempId:'$f0',moduleId:'$mod',title:'Fundación',summary:'Scaffold y convenciones.',scope:'Estructura',priority:'CRITICAL'},
+ {type:'CREATE_WORK_ITEM',tempId:'$t1',parentId:'$f0',workType:'TASK',title:'Crear el scaffold',summary:'Estructura mínima y prueba de humo.',acceptanceCriteria:['node --test pasa']},
+ {type:'CREATE_WORK_ITEM',tempId:'$t2',parentId:'$f0',workType:'TASK',title:'Módulo de errores',summary:'Errores comunes.',acceptanceCriteria:['Hay pruebas']},
+ {type:'CREATE_FEATURE',tempId:'$f1',moduleId:'$mod',title:'Gestión de tareas',summary:'Crear y listar.',scope:'CLI',priority:'HIGH'},
+ {type:'CREATE_WORK_ITEM',tempId:'$t3',parentId:'$f1',workType:'TASK',title:'Crear tareas',summary:'add',acceptanceCriteria:['ok']},
+ {type:'CREATE_WORK_ITEM',tempId:'$t4',parentId:'$f1',workType:'TASK',title:'Listar tareas',summary:'list',acceptanceCriteria:['ok']},
+ {type:'CREATE_RELATIONSHIP',sourceId:'$t4',targetId:'$t3',edgeType:'DEPENDS_ON'},
+ {type:'CREATE_RELATIONSHIP',sourceId:'$adr',targetId:'ROOT',edgeType:'AFFECTS'},
+];

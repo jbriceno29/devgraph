@@ -12,7 +12,7 @@ const toAnswer=(choice:Choice)=>choice.kind==='decide'?'':choice.text.trim();
 const card=(checked:boolean)=>`flex min-h-9 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${checked?'border-accent bg-accent-soft text-fg':'border-border bg-surface-sunken text-fg-muted hover:border-border-strong hover:text-fg'}`;
 
 /** Preguntas de objetivo y alcance: opciones tipo radio (la sugerida marcada «Recomendada»), «Decide tú» y una respuesta libre. */
-export function QuestionsStep({questions,answers,busy,submitLabel,onSubmit,children}:{questions:InceptionQuestionDto[];answers:InceptionAnswerDto[];busy:boolean;submitLabel:string;onSubmit(answers:InceptionAnswerDto[]):void;children?:ReactNode}) {
+export function QuestionsStep({questions,answers,busy,submitLabel,onSubmit,design,children}:{questions:InceptionQuestionDto[];answers:InceptionAnswerDto[];busy:boolean;submitLabel:string;onSubmit(answers:InceptionAnswerDto[]):void;/** Opción de ver propuestas de diseño antes del plan (solo al responder las primeras preguntas). */design?:{checked:boolean;onChange(next:boolean):void};children?:ReactNode}) {
  const id=useId();
  const [choices,setChoices]=useState<Record<string,Choice>>(()=>Object.fromEntries(questions.map(question=>[question.id,initialChoice(question,answers)])));
  const [invalid,setInvalid]=useState<string[]>([]);
@@ -52,6 +52,7 @@ export function QuestionsStep({questions,answers,busy,submitLabel,onSubmit,child
      </div>}
     </fieldset>
    </li>;})}</ol>
+  {design&&<div className="rounded-lg border border-border bg-surface p-4"><label className="flex cursor-pointer items-start gap-2 text-sm text-fg"><input type="checkbox" checked={design.checked} onChange={event=>design.onChange(event.target.checked)} className="mt-0.5 accent-[var(--accent)]"/><span><span className="font-medium">Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan</span><span className="mt-1 block text-xs leading-5 text-fg-muted">Un modelo diseña 2 o 3 direcciones con un prototipo que puedes probar, ajustar o reemplazar por uno tuyo. Tarda unos minutos más y cuesta algunos centavos. Si es un programa de terminal, una librería o un servicio, déjalo sin marcar.</span></span></label></div>}
   <div className="flex flex-wrap items-center gap-3"><button type="submit" disabled={busy} className={`min-h-9 text-sm ${primary}`}>{submitLabel}</button>{children}</div>
  </form>;
 }

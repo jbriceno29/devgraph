@@ -34,7 +34,7 @@ describe('domain state machines',()=>{
   expect(()=>transitionWorkItem(item,'DONE')).toThrow(/Invalid WorkItem transition/);
  });
  it('enforces every AgentExecution status transition',()=>{
-  const execution:AgentExecution={id:'e',projectId:'p',workItemId:null,profileId:'pr',providerId:'codex',sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:null,initialCommit:'abc',finalCommit:null,branchOrWorktree:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
+  const execution:AgentExecution={id:'e',projectId:'p',workItemId:null,profileId:'pr',providerId:'codex',sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:null,initialCommit:'abc',finalCommit:null,branchOrWorktree:null,baseBranch:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
   expect(canTransitionExecution('QUEUED','PREPARING_CONTEXT')).toBe(true);
   expect(transitionExecution(execution,'PREPARING_CONTEXT').status).toBe('PREPARING_CONTEXT');
   expect(()=>transitionExecution(execution,'COMPLETED')).toThrow(/Invalid AgentExecution transition/);

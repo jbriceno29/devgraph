@@ -15,6 +15,8 @@ export class GitIsolationService implements GitIsolationPort {
   const topLevel=await git(repositoryRoot,['rev-parse','--show-toplevel']);
   if(resolve(topLevel.trim())!==repositoryRoot)throw new Error('The configured repository path must be the Git repository root.');
   const baseCommit=(await git(repositoryRoot,['rev-parse','HEAD'])).trim();
+  // The branch checked out in the user's repository; null when HEAD is detached.
+  const baseBranch=(await git(repositoryRoot,['symbolic-ref','--quiet','--short','HEAD']).catch(()=>'')).trim()||null;
   const safeKey=input.workItemKey.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'task';
   const branchName=`graphdev/${safeKey}-${input.executionId.slice(0,8)}`;
   const workingDirectory=join(input.workspaceRoot,'projects',input.projectId,'worktrees',input.executionId);
@@ -24,7 +26,7 @@ export class GitIsolationService implements GitIsolationPort {
   } catch(error) {
    throw new Error(`Unable to create isolated Git worktree: ${error instanceof Error?error.message:String(error)}`);
   }
-  return {workingDirectory,branchName,baseCommit};
+  return {workingDirectory,branchName,baseCommit,baseBranch};
  }
 
  async discard(input:{repositoryRoot:string;workspaceRoot:string;workingDirectory:string;branchName:string}):Promise<void> {

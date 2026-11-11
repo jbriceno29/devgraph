@@ -3,6 +3,7 @@ import type { AgentEvent, AgentExecution, ApprovalDecision, ExecutionStatus } fr
 import { transitionExecution } from '../../domain/agents/models.js';
 import { GovernanceInterceptor } from '../governance/governance-interceptor.js';
 import type { AutonomyPolicy } from '../../domain/governance/models.js';
+import type { WorkItemStatus } from '../../domain/work-management/entities.js';
 import type { AgentAdapterPort } from '../ports/agent-adapter-port.js';
 import type { AgentContextBuilderPort, AgentExecutionRepositoryPort, ExecutionEventLogPort, ExecutionEventSink, ExecutionValidatorPort, GitIsolationPort } from '../ports/agent-execution-port.js';
 
@@ -21,6 +22,8 @@ export class AgentOrchestrator {
   const workItem=this.repository.findWorkItem(input.projectId,input.workItemId);
   if(!workItem)throw new Error('La entidad seleccionada no es una tarea de este proyecto.');
   if(workItem.status!=='READY')throw new Error(`La tarea ${workItem.displayKey} debe estar en estado READY para iniciar.`);
+  const pendingDependencies=this.repository.listDependencies(input.projectId,workItem.id).filter(dependency=>dependency.status!=='DONE');
+  if(pendingDependencies.length)throw new Error(`La tarea ${workItem.displayKey} depende de tareas sin terminar: ${pendingDependencies.map(dependency=>`${dependency.displayKey} (${dependency.status})`).join(', ')}.`);
   const profile=this.repository.findProfile(input.projectId,input.profileId);
   if(!profile||profile.roleKey!=='DEVELOPER')throw new Error('Selecciona un perfil DEVELOPER del proyecto.');
   if(profile.provider.providerKey!==this.adapter.providerId)throw new Error(`El adaptador ${profile.provider.providerKey} no está disponible.`);
@@ -35,20 +38,21 @@ export class AgentOrchestrator {
   if(this.repository.listExecutions(input.projectId).some(item=>item.workItemId===workItem.id&&!terminalStatuses.has(item.status)))throw new Error('Esta tarea ya tiene una ejecución activa.');
 
   const now=new Date().toISOString();
-  let execution:AgentExecution={id:randomUUID(),projectId:input.projectId,workItemId:workItem.id,profileId:profile.id,providerId:profile.provider.id,sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:requestedModel??null,initialCommit:'PENDING_ISOLATION',finalCommit:null,branchOrWorktree:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
+  let execution:AgentExecution={id:randomUUID(),projectId:input.projectId,workItemId:workItem.id,profileId:profile.id,providerId:profile.provider.id,sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:requestedModel??null,initialCommit:'PENDING_ISOLATION',finalCommit:null,branchOrWorktree:null,baseBranch:null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
   this.repository.createExecution(execution);this.publishStatus(execution);
   execution=transitionExecution(execution,'PREPARING_CONTEXT');this.repository.updateExecution(execution);this.publishStatus(execution);
   this.active.add(execution.id);let handedToConsumer=false;
-  let isolated:{workingDirectory:string;branchName:string;baseCommit:string}|null=null;
+  let isolated:{workingDirectory:string;branchName:string;baseCommit:string;baseBranch:string|null}|null=null;
   try{
    isolated=await this.isolation.prepare({projectId:input.projectId,executionId:execution.id,workItemKey:workItem.displayKey,repositoryRoot,workspaceRoot:this.workspaceRoot,requireWorktree:policy.requireWorktreeIsolation});
    const afterIsolation=this.repository.findExecution(execution.id);if(!afterIsolation||afterIsolation.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterIsolation??execution,repositoryRoot,isolated);
-   execution={...execution,initialCommit:isolated.baseCommit,branchOrWorktree:isolated.workingDirectory};this.repository.updateExecution(execution);
+   execution={...execution,initialCommit:isolated.baseCommit,branchOrWorktree:isolated.workingDirectory,baseBranch:isolated.baseBranch};this.repository.updateExecution(execution);
    const context=await this.contextBuilder.build({projectId:input.projectId,focusEntityId:workItem.id,repositoryRoot,executionId:execution.id});
    const afterContext=this.repository.findExecution(execution.id);if(!afterContext||afterContext.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterContext??execution,repositoryRoot,isolated);
    if(!this.adapter.getCapabilities().supportsStreaming)throw new Error('El adaptador seleccionado no soporta eventos en streaming.');
    execution={...execution,contextSnapshotId:context.snapshot.id,startedAt:now};
    execution=transitionExecution(execution,'RUNNING');this.repository.updateExecution(execution);this.publishStatus(execution);
+   this.moveTask(execution,'READY','IN_PROGRESS');
    const prompt=buildTaskPrompt(profile.systemInstructions,workItem.title,workItem.summary,workItem.acceptanceCriteria.map(item=>item.description),context.packageText,policy);
    const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt,...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
    handedToConsumer=true;void this.consume(execution,stream);
@@ -70,6 +74,7 @@ export class AgentOrchestrator {
   const orphan=!this.active.has(executionId);
   // Persist CANCELLED before waking the consumer or stopping the engine, so no later write can overwrite it.
   const updated=transitionExecution(execution,'CANCELLED');let result={...updated,completedAt:new Date().toISOString(),resultSummary:orphan?'Ejecución interrumpida cancelada por el usuario.':'Ejecución cancelada por el usuario.'};this.repository.updateExecution(result);this.publishStatus(result);
+  this.moveTask(result,'IN_PROGRESS','READY');
   if(orphan)return result;
   this.governance.cancel(executionId);
   try{await this.adapter.cancel(executionId);}
@@ -86,7 +91,7 @@ export class AgentOrchestrator {
    const event:AgentEvent={type:'EXECUTION_FAILED',timestamp:new Date().toISOString(),errorCode:'EXECUTION_INTERRUPTED',errorMessage,isRecoverable:true};
    this.repository.appendEvent(execution.id,event);this.emit('execution:event_received',{executionId:execution.id,event});
    const failed={...transitionExecution(execution,'FAILED'),resultSummary:errorMessage,completedAt:new Date().toISOString()};
-   this.repository.updateExecution(failed);this.publishStatus(failed);interrupted.push(failed);
+   this.repository.updateExecution(failed);this.publishStatus(failed);this.moveTask(failed,'IN_PROGRESS','READY');interrupted.push(failed);
   }
   return interrupted;
  }
@@ -107,7 +112,8 @@ export class AgentOrchestrator {
    const validating=transitionExecution(current,'VALIDATING');this.repository.updateExecution(validating);this.publishStatus(validating);
    const repositoryId=this.repository.getRepositoryId(execution.projectId);if(!repositoryId)throw new Error('No se encontró el repositorio para auditar el diff.');
    const policy=this.repository.getAutonomyPolicy(execution.projectId,execution.profileId);const repositoryRoot=this.repository.getRepositoryRoot(execution.projectId)!;
-   const result=await this.validator.validate({projectId:execution.projectId,executionId:execution.id,workingDirectory:execution.branchOrWorktree!,repositoryRoot,repositoryId,initialCommit:execution.initialCommit,policy});
+   const task=execution.workItemId?this.repository.findWorkItem(execution.projectId,execution.workItemId):null;
+   const result=await this.validator.validate({projectId:execution.projectId,executionId:execution.id,workingDirectory:execution.branchOrWorktree!,repositoryRoot,repositoryId,initialCommit:execution.initialCommit,policy,...(task?{commitMessage:`${task.displayKey}: ${task.title}\n\nGraph Workspace execution ${execution.id}`}:{})});
    // The user may have cancelled while validation ran; never overwrite a terminal status.
    const latest=this.repository.findExecution(execution.id);if(!latest||latest.status!=='VALIDATING')return;
    const failure=terminal?.type==='EXECUTION_FAILED'?terminal:null;
@@ -116,6 +122,8 @@ export class AgentOrchestrator {
    const finished=transitionExecution(latest,finalStatus);
    const resultSummary=failure?failure.errorMessage:result.resultSummary;
    const updated={...finished,finalCommit:result.finalCommit,testSummary:result.testSummary,resultSummary,completedAt:new Date().toISOString()};this.repository.updateExecution(updated);this.publishStatus(updated);
+   // COMPLETED leaves the task waiting for review; a failed run makes it available again.
+   this.moveTask(updated,'IN_PROGRESS',finalStatus==='COMPLETED'?'IN_REVIEW':'READY');
   }catch(error){
    // consume() runs detached; a throw here would be an unhandled rejection that kills the sidecar.
    // If the record cannot be updated (e.g. the database closed on shutdown), reconcileInterrupted() fixes it on the next open.
@@ -123,12 +131,27 @@ export class AgentOrchestrator {
     const current=this.repository.findExecution(execution.id);
     if(current&&!terminalStatuses.has(current.status)){
      const failed=transitionExecution(current,'FAILED');const result={...failed,resultSummary:error instanceof Error?error.message:String(error),completedAt:new Date().toISOString()};this.repository.updateExecution(result);this.publishStatus(result);
+     this.moveTask(result,'IN_PROGRESS','READY');
     }
    }catch{/* left non-terminal on purpose; see above */}
   }finally{
    this.active.delete(execution.id);
    this.governance.cancel(execution.id);
   }
+ }
+
+ /**
+  * Keeps the WorkItem in step with its execution, only from the expected state: a status the user changed
+  * meanwhile is never overwritten. Best effort: a failure here must not break the execution flow.
+  */
+ private moveTask(execution:AgentExecution,from:WorkItemStatus,to:WorkItemStatus):void{
+  if(!execution.workItemId)return;
+  try{
+   const task=this.repository.findWorkItem(execution.projectId,execution.workItemId);
+   if(!task||task.status!==from)return;
+   const revision=this.repository.transitionWorkItem(execution.projectId,execution.workItemId,to);
+   this.emit('graph:revision_updated',{projectId:execution.projectId,revision});
+  }catch{/* the execution outcome is still recorded */}
  }
 
  private async discardIsolation(execution:AgentExecution,repositoryRoot:string,isolated:{workingDirectory:string;branchName:string}):Promise<AgentExecution>{

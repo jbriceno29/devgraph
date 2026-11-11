@@ -13,7 +13,7 @@ type GitRunner=(args:string[])=>Promise<string>;
 export class ExecutionValidator implements ExecutionValidatorPort {
  constructor(private readonly workspaceRoot:string,private readonly recordDiffs:(executionId:string,repositoryId:string,diffs:ExecutionFileDiff[])=>void){}
 
- async validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy}) {
+ async validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}) {
   if(!/^[a-f0-9-]{36}$/i.test(input.projectId)||!/^[a-f0-9-]{36}$/i.test(input.executionId))throw new Error('Invalid identifiers for execution artifact paths.');
   const worktree=input.workingDirectory,policy=input.policy;
   // The worktree is agent-writable, so its `.git` pointer and any config it leads to are untrusted.
@@ -52,8 +52,10 @@ export class ExecutionValidator implements ExecutionValidatorPort {
   }
   const testReport=await this.runAllowedChecks(worktree,policy.allowedCommands);
   await writeFile(join(executionDirectory,'test-output.log'),testReport.log,'utf8');
-  const finalCommit=(await run(['rev-parse','HEAD'])).trim();
   const failed=testReport.results.find(result=>result.exitCode!==0);
+  // Accepted work is committed on the execution branch so it can be reviewed and merged as a unit.
+  if(!failed&&input.commitMessage)await commitAll(run,input.commitMessage);
+  const finalCommit=(await run(['rev-parse','HEAD'])).trim();
   return {passed:!failed,finalCommit,resultSummary:failed?`Verification command failed: ${failed.command}`:'Diff audit passed.'+(testReport.results.length?' Configured checks passed.':' No verification commands are allowlisted.'),testSummary:{passed:!failed,commands:testReport.results,skipped:testReport.results.length===0,patchPath:'changes.patch',testLogPath:'test-output.log'}};
  }
 
@@ -94,6 +96,18 @@ export class ExecutionValidator implements ExecutionValidatorPort {
 }
 
 export interface ExecutionFileDiff {filePath:string;changeType:'ADDED'|'MODIFIED'|'DELETED'|'RENAMED';additions:number;deletions:number;diffPatch:string|null}
+
+/**
+ * Commits every non-ignored change. Uses the repository's identity when configured, otherwise a neutral one.
+ * Hooks stay disabled (see pinnedGit): the audit and the policy's checks are the gate, not repository hooks.
+ */
+async function commitAll(run:GitRunner,message:string):Promise<void> {
+ await run(['add','-A']);
+ if(!(await run(['status','--porcelain'])).trim())return;
+ const hasIdentity=await run(['config','user.email']).then(value=>Boolean(value.trim()),()=>false);
+ const identity=hasIdentity?[]:['-c','user.name=Graph Workspace','-c','user.email=graph-workspace@localhost'];
+ await run([...identity,'commit','--no-verify','--quiet','-m',message]);
+}
 
 /** Runs Git against the trusted admin directory with repository-controlled command hooks disabled. */
 function pinnedGit(worktree:string,gitDir:string,args:string[]):Promise<string> {

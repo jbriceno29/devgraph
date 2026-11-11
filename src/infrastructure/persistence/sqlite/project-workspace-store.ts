@@ -36,7 +36,8 @@ export class ProjectWorkspaceStore {
     if(!/^[a-f0-9-]{36}$/i.test(id))throw new Error('Invalid project id.');
     const existing=this.open.get(id);if(existing)return existing;
     const dbPath=join(this.rootDirectory,'projects',id,'workspace.sqlite');if(!existsSync(dbPath))throw new Error(`Project not found: ${id}`);
-    const database=openDatabase({filename:dbPath,initialize:false});const projects=new SqliteProjectRepository(database);
+    // Opening a project brings its schema up to date (existing workspaces were created at older versions).
+    const database=openDatabase({filename:dbPath});const projects=new SqliteProjectRepository(database);
     if(!projects.findById(id)){closeDatabase(database);throw new Error(`Project database is missing project ${id}.`);}
     const workspace={id,database,projects,graph:new SqliteKnowledgeGraphRepository(database),artifacts:new SqliteArtifactRepository(database),repositories:new SqliteRepositoryLocationRepository(database)};this.open.set(id,workspace);return workspace;
   }

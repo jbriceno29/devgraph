@@ -3,6 +3,7 @@ import { AgentOrchestrator, describePolicy } from '../../src/application/executi
 import type { AgentAdapterPort } from '../../src/application/ports/agent-adapter-port.js';
 import type { AgentExecutionRepositoryPort, ExecutionValidatorPort, GitIsolationPort } from '../../src/application/ports/agent-execution-port.js';
 import type { AgentCapabilities, AgentEvent, AgentExecution } from '../../src/domain/agents/models.js';
+import { canTransitionWorkItem, type WorkItemStatus } from '../../src/domain/work-management/entities.js';
 
 const capabilities:AgentCapabilities={supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true};
 const now=()=>new Date().toISOString();
@@ -10,11 +11,14 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[]}={}){
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>}={}){
+ const task={status:options.taskStatus??'READY' as WorkItemStatus};let revision=1;const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
  const events:Array<{executionId:string;event:AgentEvent}>=[];const statuses:string[]=[];
  const repository={
-  findWorkItem:()=>({id:'task',displayKey:'TASK-001',status:'READY',title:'Task',summary:'Summary',acceptanceCriteria:[]}),
+  findWorkItem:()=>({id:'task',displayKey:'TASK-001',status:task.status,title:'Task',summary:'Summary',acceptanceCriteria:[]}),
+  transitionWorkItem:(_projectId:string,_id:string,to:WorkItemStatus)=>{if(!canTransitionWorkItem(task.status,to))throw new Error(`invalid ${task.status}->${to}`);task.status=to;revision+=1;return revision;},
+  listDependencies:()=>options.dependencies??[],
   findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'}}),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
   getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true}),
@@ -24,12 +28,12 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   findExecution:(id:string)=>executions.has(id)?{...executions.get(id)!}:null,
   appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
  } as unknown as AgentExecutionRepositoryPort;
- const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base'})),discard:vi.fn(async()=>undefined)} satisfies GitIsolationPort;
+ const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined)} satisfies GitIsolationPort;
  const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>capabilities,async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
  const validator:ExecutionValidatorPort={validate:options.validate??(async()=>({passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null}))};
  const contextBuilder={build:vi.fn(async()=>{await options.build?.();return {snapshot:{id:'snapshot'},packageText:''};})};
- const orchestrator=new AgentOrchestrator(repository,contextBuilder as never,{append:async()=>undefined},adapter,isolation,validator,'/ws',(channel,payload)=>{if(channel==='execution:status_changed')statuses.push((payload as {status:string}).status);});
- return {orchestrator,repository,isolation,adapter,events,statuses,executions};
+ const orchestrator=new AgentOrchestrator(repository,contextBuilder as never,{append:async()=>undefined},adapter,isolation,validator,'/ws',(channel,payload)=>{emitted.push({channel,payload});if(channel==='execution:status_changed')statuses.push((payload as {status:string}).status);});
+ return {orchestrator,repository,isolation,adapter,events,statuses,executions,task,emitted,validator};
 }
 
 const start=(orchestrator:AgentOrchestrator)=>orchestrator.start({projectId:'project',workItemId:'task',profileId:'profile'});
@@ -58,7 +62,7 @@ describe('AgentOrchestrator cancellation (D5)',()=>{
 });
 
 describe('AgentOrchestrator interrupted executions (D4)',()=>{
- const orphan=(status:AgentExecution['status']):AgentExecution=>({id:`orphan-${status}`,projectId:'project',workItemId:'task',profileId:'profile',providerId:'provider',sessionId:null,contextSnapshotId:'snapshot',status,modelUsed:null,initialCommit:'base',finalCommit:null,branchOrWorktree:'/ws/projects/p/worktrees/old',testSummary:null,resultSummary:null,startedAt:now(),completedAt:null});
+ const orphan=(status:AgentExecution['status']):AgentExecution=>({id:`orphan-${status}`,projectId:'project',workItemId:'task',profileId:'profile',providerId:'provider',sessionId:null,contextSnapshotId:'snapshot',status,modelUsed:null,initialCommit:'base',finalCommit:null,branchOrWorktree:'/ws/projects/p/worktrees/old',baseBranch:'main',testSummary:null,resultSummary:null,startedAt:now(),completedAt:null});
 
  it('fails every non-terminal execution the process is not running and records why',()=>{
   const {orchestrator,repository,events}=harness({seed:[orphan('RUNNING'),orphan('VALIDATING'),orphan('AWAITING_APPROVAL'),{...orphan('COMPLETED'),completedAt:now()}]});
@@ -129,5 +133,56 @@ describe('AgentOrchestrator task prompt',()=>{
   expect(text).toContain('no tuberías, redirecciones ni `&&`');
   expect(text).toContain('Rutas prohibidas (no las leas ni las modifiques):\n- `.env*`');
   expect(text).toContain('Rutas de solo lectura:\n- `docs/adr/**`');
+ });
+});
+
+describe('AgentOrchestrator work item lifecycle (Stage 1)',()=>{
+ it('moves the task READY → IN_PROGRESS → IN_REVIEW, records the base branch and announces each graph revision',async()=>{
+  const {orchestrator,repository,task,emitted}=harness();
+  const execution=await start(orchestrator);
+  expect(task.status).toBe('IN_PROGRESS');
+  await flush();
+  expect(repository.findExecution(execution.id)).toMatchObject({status:'COMPLETED',baseBranch:'main'});
+  expect(task.status).toBe('IN_REVIEW');
+  expect(emitted.filter(item=>item.channel==='graph:revision_updated').map(item=>item.payload)).toEqual([{projectId:'project',revision:2},{projectId:'project',revision:3}]);
+ });
+
+ it('makes the task available again when the run fails or is cancelled',async()=>{
+  const failing=harness({validate:async()=>({passed:false,finalCommit:null,resultSummary:'audit failed',testSummary:null})});
+  await start(failing.orchestrator);await flush();
+  expect(failing.task.status).toBe('READY');
+  const hanging=harness({adapter:{async *run(){yield {type:'SESSION_INITIALIZED',timestamp:now(),externalSessionId:'s'};await new Promise(()=>undefined);}}});
+  const execution=await start(hanging.orchestrator);await flush();
+  expect(hanging.task.status).toBe('IN_PROGRESS');
+  await hanging.orchestrator.cancel(execution.id);
+  expect(hanging.task.status).toBe('READY');
+ });
+
+ it('refuses to start while a DEPENDS_ON task is not DONE',async()=>{
+  const {orchestrator,isolation}=harness({dependencies:[{id:'t0',displayKey:'TASK-000',title:'Base',status:'DONE'},{id:'t2',displayKey:'TASK-002',title:'Schema',status:'IN_PROGRESS'}]});
+  await expect(start(orchestrator)).rejects.toThrow('depende de tareas sin terminar: TASK-002 (IN_PROGRESS)');
+  expect(isolation.prepare).not.toHaveBeenCalled();
+ });
+
+ it('returns the task of an interrupted execution to READY',()=>{
+  const orphan:AgentExecution={id:'orphan',projectId:'project',workItemId:'task',profileId:'profile',providerId:'provider',sessionId:null,contextSnapshotId:null,status:'RUNNING',modelUsed:null,initialCommit:'base',finalCommit:null,branchOrWorktree:null,baseBranch:null,testSummary:null,resultSummary:null,startedAt:now(),completedAt:null};
+  const {orchestrator,task}=harness({seed:[orphan],taskStatus:'IN_PROGRESS'});
+  orchestrator.reconcileInterrupted('project');
+  expect(task.status).toBe('READY');
+ });
+
+ it('never overwrites a status the user changed while the agent was running',async()=>{
+  const gate=deferred();
+  const {orchestrator,task}=harness({validate:async()=>{await gate.promise;return {passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null};}});
+  await start(orchestrator);await flush();
+  task.status='BLOCKED';gate.resolve();await flush();
+  expect(task.status).toBe('BLOCKED');
+ });
+
+ it('asks the validator to commit the work with the task key and title',async()=>{
+  let message:string|undefined;
+  const {orchestrator}=harness({validate:async input=>{message=input.commitMessage;return {passed:true,finalCommit:'abc',resultSummary:'ok',testSummary:null};}});
+  const execution=await start(orchestrator);await flush();
+  expect(message).toBe(`TASK-001: Task\n\nGraph Workspace execution ${execution.id}`);
  });
 });

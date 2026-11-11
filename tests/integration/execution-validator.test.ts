@@ -106,6 +106,31 @@ describe('ExecutionValidator',()=>{
   expect(existsSync(join(worktree,'src','environment.ts'))).toBe(true);
  });
 
+ it('commits accepted work on the execution branch, with a neutral identity when none is configured (Stage 1)',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  execFileSync('git',['config','--unset','user.email'],{cwd:join(root,'repo')});execFileSync('git',['config','--unset','user.name'],{cwd:join(root,'repo')});
+  const emptyGlobal=join(root,'empty.gitconfig');writeFileSync(emptyGlobal,'');
+  const saved={GIT_CONFIG_GLOBAL:process.env.GIT_CONFIG_GLOBAL,GIT_CONFIG_NOSYSTEM:process.env.GIT_CONFIG_NOSYSTEM};
+  Object.assign(process.env,{GIT_CONFIG_GLOBAL:emptyGlobal,GIT_CONFIG_NOSYSTEM:'1'});
+  try{
+   writeFileSync(join(worktree,'src','feature.ts'),'export const feature = 1;\n');
+   const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy,commitMessage:'TASK-001: Add feature\n\nGraph Workspace execution x'});
+   expect(result.passed).toBe(true);expect(result.finalCommit).not.toBe(base);
+   const log=execFileSync('git',['log','-1','--format=%s|%an|%ae'],{cwd:worktree,encoding:'utf8'}).trim();
+   expect(log).toBe('TASK-001: Add feature|Graph Workspace|graph-workspace@localhost');
+   expect(execFileSync('git',['status','--porcelain'],{cwd:worktree,encoding:'utf8'})).toBe('');
+   expect(execFileSync('git',['show','--name-only','--format=',result.finalCommit!],{cwd:worktree,encoding:'utf8'}).trim()).toBe('src/feature.ts');
+  }finally{for(const [key,value] of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
+ });
+
+ it('does not commit when a verification command fails',async()=>{
+  const {root,workspace,worktree,base,id,projectId}=isolated('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+  writeFileSync(join(worktree,'src','broken.ts'),'export const broken = 1;\n');
+  const result=await new ExecutionValidator(workspace,()=>undefined).validate({projectId,executionId:id,workingDirectory:worktree,repositoryRoot:join(root,'repo'),repositoryId:'repo-id',initialCommit:base,policy:{...policy,allowedCommands:['node -e process.exit(1)']},commitMessage:'TASK-002: Broken'});
+  expect(result.passed).toBe(false);expect(result.finalCommit).toBe(base);
+  expect(execFileSync('git',['status','--porcelain'],{cwd:worktree,encoding:'utf8'})).toContain('src/broken.ts');
+ });
+
  it('runs only commands listed in the autonomy policy and writes their output',async()=>{
   const root=repository(),workspace=join(root,'workspace'),id='44444444-4444-4444-8444-444444444444',projectId=policy.projectId;
   const base=execFileSync('git',['rev-parse','HEAD'],{cwd:join(root,'repo'),encoding:'utf8'}).trim();

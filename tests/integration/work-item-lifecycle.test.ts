@@ -1,0 +1,57 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
+import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import type { AgentAdapterPort, AgentRunInput } from '../../src/application/ports/agent-adapter-port.js';
+import type { AgentCapabilities, AgentEvent } from '../../src/domain/agents/models.js';
+
+const roots:string[]=[];const cores:Array<ReturnType<typeof createWorkspaceCore>>=[];
+afterEach(()=>{for(const core of cores.splice(0))core.close();for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
+
+/** Writes one file per run in the worktree, like a well-behaved agent. */
+class WritingAdapter implements AgentAdapterPort {
+ readonly providerId='codex' as const;
+ getCapabilities():AgentCapabilities{return {supportsResume:false,supportsStreaming:true,supportsApprovals:false,supportsCancellation:true,supportsStructuredOutput:true,supportsWorktrees:true};}
+ async *run(input:AgentRunInput):AsyncIterable<AgentEvent>{writeFileSync(join(input.workingDirectory,'src','done.ts'),'export const done = true;\n');yield {type:'EXECUTION_FINISHED',timestamp:new Date().toISOString(),summary:'Wrote src/done.ts'};}
+ async cancel():Promise<void>{}
+ async respondToApproval():Promise<void>{}
+}
+
+describe('work item lifecycle through the workspace core (Stage 1)',()=>{
+ it('blocks a task until its dependency is done, then commits the run on its branch and moves the task to IN_REVIEW',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'graphdev2-lifecycle-'));roots.push(root);
+  const repo=join(root,'repo');mkdirSync(join(repo,'src'),{recursive:true});execFileSync('git',['init','--quiet','-b','main',repo]);
+  execFileSync('git',['config','user.name','Graphdev Tests'],{cwd:repo});execFileSync('git',['config','user.email','tests@graphdev.local'],{cwd:repo});
+  writeFileSync(join(repo,'src','base.ts'),'export const base = 1;\n');execFileSync('git',['add','.'],{cwd:repo});execFileSync('git',['commit','--quiet','-m','base'],{cwd:repo});
+  const workspaceRoot=join(root,'workspace');const revisions:number[]=[];
+  const core=createWorkspaceCore(workspaceRoot,(channel,payload)=>{if(channel==='graph:revision_updated')revisions.push((payload as {revision:number}).revision);},{agentAdapter:new WritingAdapter()});cores.push(core);
+  const project=await core.handle({channel:'project:create',args:[{name:'Lifecycle',slug:'lifecycle'}]}) as {id:string};
+  const opened=await core.handle({channel:'project:open',args:[project.id]}) as {selectedEntityId:string};
+  await core.handle({channel:'repository:configure',args:[project.id,repo]});
+  const db=openDatabase({filename:join(workspaceRoot,'projects',project.id,'workspace.sqlite'),initialize:false});
+  try{
+   for(const [id,key,title] of [['t1','TASK-001','Create schema'],['t2','TASK-002','Use schema']]){
+    db.prepare(`INSERT INTO knowledge_entities(id,project_id,entity_type,display_key,title,summary,status,parent_id,created_revision,updated_revision,created_at,updated_at) VALUES(?,?,'WORK_ITEM',?,?,'s','READY',?,1,1,'now','now')`).run(id,project.id,key,title,opened.selectedEntityId);
+    db.prepare(`INSERT INTO work_items(entity_id,work_type,priority,acceptance_criteria_json,recommended_profile_role) VALUES(?,'TASK','HIGH','[]','DEVELOPER')`).run(id);
+   }
+   db.prepare(`INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES('e1',?,'t2','t1','DEPENDS_ON','USER',NULL,NULL,NULL,1,'now')`).run(project.id);
+  }finally{closeDatabase(db);}
+  const developer=(await core.handle({channel:'agent:list_profiles',args:[project.id]}) as Array<{id:string;roleKey:string}>).find(item=>item.roleKey==='DEVELOPER')!;
+  await expect(core.handle({channel:'execution:start',args:[{projectId:project.id,workItemId:'t2',profileId:developer.id}]})).rejects.toThrow('TASK-001 (READY)');
+
+  const started=await core.handle({channel:'execution:start',args:[{projectId:project.id,workItemId:'t1',profileId:developer.id}]}) as {id:string;baseBranch:string|null;branchOrWorktree:string};
+  expect(started.baseBranch).toBe('main');
+  let done:{status:string;initialCommit:string;finalCommit:string|null}|undefined;
+  for(let attempt=0;attempt<100&&done?.status!=='COMPLETED';attempt+=1){done=(await core.handle({channel:'execution:list',args:[project.id]}) as Array<{id:string;status:string;initialCommit:string;finalCommit:string|null}>).find(item=>item.id===started.id);await new Promise(resolve=>setTimeout(resolve,30));}
+  expect(done!.status).toBe('COMPLETED');
+  expect(done!.finalCommit).not.toBe(done!.initialCommit);
+  expect(execFileSync('git',['log','-1','--format=%s',done!.finalCommit!],{cwd:repo,encoding:'utf8'}).trim()).toBe('TASK-001: Create schema');
+  expect(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'})).toBe('');
+  const graph=await core.handle({channel:'graph:get_view',args:[project.id]}) as {nodes:Array<{id:string;status:string}>;revision:number};
+  expect(graph.nodes.find(node=>node.id==='t1')!.status).toBe('IN_REVIEW');
+  expect(revisions.length).toBe(2);expect(graph.revision).toBe(revisions.at(-1));
+ });
+});

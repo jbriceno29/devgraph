@@ -200,6 +200,8 @@ export class AgentOrchestrator {
     this.repository.updateExecution(conflicted);this.publishStatus(conflicted);
     return {execution:conflicted,merged:false,conflict:{reason:result.reason,detail:result.detail,files:result.conflicts},proposal:null};
    }
+   // New work on the feature branch: it is no longer integrated in its base branch.
+   if(result.changed)this.repository.setFeatureIntegrated?.(execution.projectId,execution.baseBranch,null);
    let accepted:AgentExecution={...execution,reviewStatus:'ACCEPTED',reviewNote:options.note??null,mergedCommit:result.commit,reviewedAt};
    this.repository.updateExecution(accepted);
    if(execution.branchOrWorktree&&execution.executionBranch){
@@ -362,6 +364,14 @@ export class AgentOrchestrator {
   return reasons.length?reasons.join(' '):null;
  }
 
+ /** The feature's integration branch and open tasks, from the workspace only (null without a branch). */
+ featureIntegration(projectId:string,featureId:string):import('../../shared/contracts/agent-view.js').FeatureIntegrationStateDto|null{
+  const branch=this.repository.getIntegrationBranch(featureId);
+  if(!branch)return null;
+  const tasks=this.repository.listFeatureTasks(projectId,featureId);
+  return {branchName:branch.branchName,targetBranch:branch.sourceBranch&&branch.sourceBranch!=='HEAD'?branch.sourceBranch:null,integratedAt:branch.integratedAt??null,taskCount:tasks.length,openTaskCount:tasks.filter(task=>!closedStatuses.has(task.status)).length};
+ }
+
  /**
   * Integrates a finished feature into the project's base branch (the branch its integration branch was created from)
   * with a merge commit, so the features that depend on it simply start from the updated base. Refused with open tasks,
@@ -384,9 +394,11 @@ export class AgentOrchestrator {
   if(this.accepting.has(`feature:${feature.id}`))throw new Error(`${feature.displayKey} ya se está integrando.`);
   this.accepting.add(`feature:${feature.id}`);
   try{
-   if(await this.isolation.isAncestor(repositoryRoot,branch.branchName,targetBranch))return {...base,merged:false,alreadyIntegrated:true,commit:null};
+   const mark=()=>this.repository.setFeatureIntegrated?.(projectId,branch.branchName,new Date().toISOString());
+   if(await this.isolation.isAncestor(repositoryRoot,branch.branchName,targetBranch)){mark();return {...base,merged:false,alreadyIntegrated:true,commit:null};}
    const result=await this.isolation.mergeIntoBase({repositoryRoot,workspaceRoot:this.workspaceRoot,projectId,targetBranch,sourceRef:branch.branchName,message:`Integra ${branch.branchName} (${feature.displayKey}: ${feature.title}) en ${targetBranch}`});
    if(!result.ok)throw new Error(`No se pudo integrar ${feature.displayKey} en ${targetBranch}: ${result.detail}${result.conflicts.length?` (${result.conflicts.join(', ')})`:''}`);
+   mark();
    return {...base,merged:result.changed,alreadyIntegrated:!result.changed,commit:result.commit};
   }finally{this.accepting.delete(`feature:${feature.id}`);}
  }

@@ -6,14 +6,14 @@ export interface InceptionEngineUsage { inputTokens: number; outputTokens: numbe
 export interface InceptionProjectInput { name: string; description: string | null; brief: string; /** PROJECT_ROOT id: parent of modules and target of the ADR's AFFECTS edge. */ rootId: string }
 
 /**
- * The engine behind each inception gate. Every call is independent (no engine session): the prompt is rebuilt from
+ * The engine behind each inception gate. `signal` aborts the call (restart or app shutdown): the engine stops its process. Every call is independent (no engine session): the prompt is rebuilt from
  * the brief and the stored answers, so one gate can run on Claude and the next on another engine.
  */
 export interface InceptionEnginePort {
   /** Up to 5 short questions about goal and scope, with suggested options. */
-  askGoals(input: { project: InceptionProjectInput; model?: string }): Promise<{ questions: InceptionQuestionDto[]; assumptions: string[]; usage: InceptionEngineUsage | null }>;
+  askGoals(input: { project: InceptionProjectInput; model?: string; signal?: AbortSignal }): Promise<{ questions: InceptionQuestionDto[]; assumptions: string[]; usage: InceptionEngineUsage | null }>;
   /** One proposal: profile, stack ADR with alternatives, vision, requirements and the initial plan with «Fundación». */
-  propose(input: { project: InceptionProjectInput; questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; model?: string }): Promise<{ draft: ChangeSetDraft; assumptions: string[]; usage: InceptionEngineUsage | null }>;
+  propose(input: { project: InceptionProjectInput; questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; model?: string; /** The user's change requests about earlier proposals (data, never instructions). */ notes?: string[]; signal?: AbortSignal }): Promise<{ draft: ChangeSetDraft; assumptions: string[]; usage: InceptionEngineUsage | null }>;
 }
 
 export type InceptionRecordStage = 'ASK_GOALS' | 'PROPOSAL' | 'APPLIED';
@@ -22,6 +22,10 @@ export interface InceptionRecord {
   projectId: string; stage: InceptionRecordStage; status: InceptionRecordStatus; brief: string;
   questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; assumptions: string[];
   changeSetId: string | null; model: string | null; usage: InceptionEngineUsage[]; error: string | null;
+  /** Change requests for the proposal, oldest first. */
+  notes: string[];
+  /** The scaffold task's graph id, resolved when the proposal is applied. */
+  scaffoldTaskId: string | null;
   createdAt: string; updatedAt: string;
 }
 export interface InceptionRepositoryPort {

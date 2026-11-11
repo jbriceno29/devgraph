@@ -20,5 +20,7 @@ export interface ActivitySnapshot {
   /** Agent plan proposals already applied (most recent `limit`). */
   appliedProposals: ActivityChangeSetRow[];
   pendingApprovals: ActivityApprovalRow[];
+  /** Integration branches of features (optional for fakes). */
+  featureBranches?: Array<{ featureId: string; branchName: string; sourceBranch: string; integratedAt: string | null }>;
 }
 export interface ActivitySourcePort { snapshot(projectId: string, limit: number): ActivitySnapshot }

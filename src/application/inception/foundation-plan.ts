@@ -59,6 +59,12 @@ export function buildFoundationPlan(operations: ChangeOperation[], rootId: strin
   return { operations: [...ops, ...added, ...statuses], problems };
 }
 
+/** tempId of the scaffold task: the first task of «Fundación» (null when the plan has none). */
+export function scaffoldTempId(operations: ChangeOperation[]): string | null {
+  const foundation = operations.find((op): op is Op<'CREATE_FEATURE'> => op.type === 'CREATE_FEATURE' && FOUNDATION.test(op.title));
+  return foundation ? operations.find((op): op is Op<'CREATE_WORK_ITEM'> => op.type === 'CREATE_WORK_ITEM' && op.parentId === foundation.tempId)?.tempId ?? null : null;
+}
+
 /** What the wizard shows of a proposal (no ids from the graph: the plan does not exist yet). */
 export function summarizeFoundationPlan(operations: ChangeOperation[]): Pick<InceptionProposalDto, 'profile' | 'decision' | 'documents' | 'requirements' | 'features' | 'scaffoldTaskTitle'> {
   const profile = operations.find((op): op is Op<'SET_PROJECT_PROFILE'> => op.type === 'SET_PROJECT_PROFILE');

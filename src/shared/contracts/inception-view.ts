@@ -39,8 +39,14 @@ export interface InceptionViewDto {
   /** Primary repository; approving needs one (repository:configure or repository:initialize). */
   repositoryPath: string | null;
   usage: InceptionUsageDto;
+  /** Change requests the user gave when asking for another proposal (oldest first); every regeneration applies all of them. */
+  notes: string[];
+  /** Graph id of the «Fundación» scaffold task once the proposal is applied (null before, or when it could not be resolved). */
+  scaffoldTaskId: string | null;
   updatedAt: string | null;
 }
+/** Limits of `inception:answer` notes (one change request per regeneration). */
+export const MAX_INCEPTION_NOTE = 2000;
 export interface StartInceptionInput { brief: string; /** Model alias; defaults to the provider's planning model (opus). */ model?: string }
 /** Activity inbox summary of the inception (see ActivitySummaryDto.inception). */
 export interface InceptionActivityDto { stage: InceptionStage; status: InceptionStatus; title: string; detail: string; needsAttention: boolean; changeSetId: string | null; at: string }
@@ -50,7 +56,8 @@ export interface InitializeRepositoryResultDto { projectId: string; localPath: s
 export interface InceptionIpcClient {
   get(projectId: string): Promise<InceptionViewDto>;
   start(projectId: string, input: StartInceptionInput): Promise<InceptionViewDto>;
-  answer(projectId: string, answers: InceptionAnswerDto[]): Promise<InceptionViewDto>;
+  /** `notes`: optional free text with what to change; only while reviewing a proposal (it regenerates it keeping the answers). */
+  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string): Promise<InceptionViewDto>;
   approve(projectId: string): Promise<InceptionViewDto>;
   restart(projectId: string): Promise<InceptionViewDto>;
   initializeRepository(projectId: string, absolutePath: string): Promise<InitializeRepositoryResultDto>;

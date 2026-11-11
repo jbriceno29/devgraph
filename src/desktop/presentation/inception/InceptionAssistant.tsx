@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
-import type { InceptionUsageDto, InceptionViewDto, InitializeRepositoryResultDto } from '../../../shared/contracts/inception-view.js';
+import { MAX_INCEPTION_NOTE, type InceptionUsageDto, type InceptionViewDto, type InitializeRepositoryResultDto } from '../../../shared/contracts/inception-view.js';
 import type { ShellTarget } from '../shell/next-step.js';
 import { ErrorNotice } from '../errors.js';
 import { control, primary, secondary } from '../ui.js';
@@ -14,7 +14,7 @@ export const SLOW_AFTER_MS = 120_000;
 const MAX_BRIEF = 4000;
 const STEPS = ['Objetivo y alcance', 'Revisar propuesta', 'Listo'];
 const card = 'rounded-xl border border-border bg-surface-raised p-5';
-type Mode = 'view' | 'revise' | 'confirm';
+type Mode = 'view' | 'revise' | 'answers' | 'confirm';
 interface Props { projectId:string; nodes:GraphNodeView[]; onNavigate(target:ShellTarget):void; onApplied?():void }
 
 /** Asistente de inicio por pasos: brief → preguntas → propuesta → aprobación. Un único botón primario por pantalla. */
@@ -53,8 +53,9 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
   <Brief text={view.brief}/>
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Enviar respuestas" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}>{restartButton}</QuestionsStep>
  </Screen>;
- else if(view.stage==='PROPOSAL'&&mode==='revise')screen=<Screen heading={heading} eyebrow="Paso 2 de 3" title="Pedir otra propuesta" intro="Cambia las respuestas que quieras. El asistente preparará una propuesta nueva y descartará la actual.">
-  <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Pedir otra propuesta" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}><button type="button" onClick={()=>setMode('view')} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button></QuestionsStep>
+ else if(view.stage==='PROPOSAL'&&mode==='revise')screen=<ReviseStep view={view} heading={heading} busy={busy} onSubmit={notes=>void act(ipc=>ipc.answer(projectId,view.answers,notes))} onChangeAnswers={()=>setMode('answers')} onCancel={()=>setMode('view')}/>;
+ else if(view.stage==='PROPOSAL'&&mode==='answers')screen=<Screen heading={heading} eyebrow="Paso 2 de 3" title="Cambiar tus respuestas" intro="Cambia las respuestas que quieras. El asistente preparará una propuesta nueva y descartará la actual; los cambios que ya pediste se mantienen.">
+  <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Generar otra propuesta" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}><button type="button" onClick={()=>setMode('view')} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button></QuestionsStep>
  </Screen>;
  else if(view.stage==='PROPOSAL'&&mode==='confirm'&&view.proposal)screen=<Confirm view={view} heading={heading} busy={busy} onCancel={()=>setMode('view')} onApprove={()=>void act(async ipc=>{const next=await ipc.approve(projectId);onApplied?.();return next;})}/>;
  else if(view.stage==='PROPOSAL')screen=<ProposalStep view={view} heading={heading} busy={busy} repository={repository} restartButton={restartButton} onApprove={()=>{setActionError(null);setMode('confirm');}} onRevise={()=>setMode('revise')}/>;
@@ -152,6 +153,26 @@ function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRe
  </Screen>;
 }
 
+/** «Pedir otra propuesta»: qué cambiar en texto libre; mantiene las respuestas (cambiarlas es opcional). */
+function ReviseStep({view,heading,busy,onSubmit,onChangeAnswers,onCancel}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;onSubmit(notes:string):void;onChangeAnswers():void;onCancel():void}) {
+ const id=useId(),[notes,setNotes]=useState('');
+ return <Screen heading={heading} eyebrow="Paso 2 de 3" title="Pedir otra propuesta" intro="Cuéntale al asistente qué no te convence. Preparará una propuesta nueva con tus mismas respuestas y descartará la actual.">
+  {view.notes.length>0&&<div className="mb-4 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs text-fg-muted"><p className="font-medium text-fg">Ya pediste (se sigue teniendo en cuenta)</p><ul className="mt-1 list-disc space-y-0.5 pl-5">{view.notes.map((note,index)=><li key={index} className="whitespace-pre-wrap break-words">{note}</li>)}</ul></div>}
+  <form noValidate className="space-y-4" onSubmit={event=>{event.preventDefault();onSubmit(notes.trim());}}>
+   <div>
+    <label htmlFor={`${id}-notes`} className="mb-1 block text-sm font-medium text-fg">¿Qué quieres cambiar?</label>
+    <textarea id={`${id}-notes`} rows={4} maxLength={MAX_INCEPTION_NOTE} value={notes} onChange={event=>setNotes(event.target.value)} aria-describedby={`${id}-notes-help`} placeholder="Por ejemplo: usa Python en lugar de Node, o deja las etiquetas para más adelante." className={`${control} py-2 text-sm leading-6`}/>
+    <p id={`${id}-notes-help`} className="mt-1 text-[11px] text-fg-subtle">Si lo dejas vacío, lo intentará de nuevo con lo mismo. {notes.length}/{MAX_INCEPTION_NOTE}</p>
+   </div>
+   <div className="flex flex-wrap gap-3">
+    <button type="submit" disabled={busy} className={`min-h-9 text-sm ${primary}`}>Generar otra propuesta</button>
+    <button type="button" onClick={onChangeAnswers} disabled={busy} className={`min-h-9 text-sm ${secondary}`}>Cambiar mis respuestas</button>
+    <button type="button" onClick={onCancel} disabled={busy} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button>
+   </div>
+  </form>
+ </Screen>;
+}
+
 function Confirm({view,heading,busy,onApprove,onCancel}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;onApprove():void;onCancel():void}) {
  const proposal=view.proposal!,profile=proposal.profile;
  const items=[
@@ -174,7 +195,8 @@ function Confirm({view,heading,busy,onApprove,onCancel}:{view:InceptionViewDto;h
 
 function Done({view,nodes,heading,onNavigate}:{view:InceptionViewDto;nodes:GraphNodeView[];heading:RefObject<HTMLHeadingElement|null>;onNavigate(target:ShellTarget):void}) {
  const proposal=view.proposal,first=proposal?.scaffoldTaskTitle??null;
- const task=first?nodes.find(node=>node.type==='WORK_ITEM'&&node.label===first&&node.status!=='ARCHIVED'):undefined;
+ // El id llega del núcleo al aplicar la propuesta; el título queda como respaldo (núcleos anteriores).
+ const taskId=view.scaffoldTaskId??(first?nodes.find(node=>node.type==='WORK_ITEM'&&node.label===first&&node.status!=='ARCHIVED')?.id:undefined);
  return <>
   <Screen heading={heading} eyebrow="Paso 3 de 3" title="Proyecto listo">
    {proposal?.profile?.description&&<p className="text-sm text-fg">{proposal.profile.description}</p>}
@@ -185,7 +207,7 @@ function Done({view,nodes,heading,onNavigate}:{view:InceptionViewDto;nodes:Graph
     <p className="mt-0.5 text-xs text-fg-muted">Un agente la hace en su propia rama; tú revisas el resultado antes de aceptarlo.</p>
    </div>
    <div className="mt-4 flex flex-wrap gap-3">
-    {task?<><button type="button" onClick={()=>onNavigate({view:'agents',workItemId:task.id})} className={`min-h-9 text-sm ${primary}`}>Ir a la primera tarea</button><button type="button" onClick={()=>onNavigate({view:'graph'})} className={`min-h-9 text-sm ${secondary}`}>Ver el plan en el grafo</button></>
+    {taskId?<><button type="button" onClick={()=>onNavigate({view:'agents',workItemId:taskId})} className={`min-h-9 text-sm ${primary}`}>Ir a la primera tarea</button><button type="button" onClick={()=>onNavigate({view:'graph'})} className={`min-h-9 text-sm ${secondary}`}>Ver el plan en el grafo</button></>
      :<button type="button" onClick={()=>onNavigate({view:'graph'})} className={`min-h-9 text-sm ${primary}`}>Ver el plan en el grafo</button>}
    </div>
   </Screen>

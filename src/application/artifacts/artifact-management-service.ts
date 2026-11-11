@@ -137,7 +137,8 @@ export class ArtifactManagementService {
       : this.documents.listDocuments(projectId);
     const location=this.repositories.findPrimaryForProject(projectId);
     if(!location) return;
-    for(const document of candidates) void this.reconcile(document,location.localPath);
+    // A late file event after the workspace closed (shutdown, tests) has nothing left to update.
+    for(const document of candidates) void this.reconcile(document,location.localPath).catch(()=>undefined);
   }
 
   private async reconcile(document:ArtifactDocumentRecord,root:string):Promise<void> {

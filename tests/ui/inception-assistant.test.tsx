@@ -139,10 +139,51 @@ describe('Asistente de inicio',()=>{
   expect((screen.getByRole('button',{name:'Aprobar y crear el plan'}) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
   expect(await screen.findByRole('heading',{name:'Pedir otra propuesta'})).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Cambiar mis respuestas'}));
+  expect(await screen.findByRole('heading',{name:'Cambiar tus respuestas'})).toBeTruthy();
   expect((within(screen.getByRole('group',{name:'1. ¿Quién va a usar la app?'})).getByRole('radio',{name:/^Solo yo/}) as HTMLInputElement).checked).toBe(true);
   expect((screen.getByLabelText('Tu respuesta a la pregunta 3') as HTMLInputElement).value).toBe('Algo propio');
-  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(screen.getByRole('button',{name:'Generar otra propuesta'}));
   await waitFor(()=>expect(client.answer).toHaveBeenCalledWith('p',[{questionId:'q1',answer:'Solo yo'},{questionId:'q2',answer:''},{questionId:'q3',answer:'Algo propio'}]));
+ });
+
+ it('«Pedir otra propuesta» asks what to change and regenerates with the same answers, without going through the questions',async()=>{
+  const answers=[{questionId:'q1',answer:'Solo yo'},{questionId:'q2',answer:''},{questionId:'q3',answer:''}];
+  const {client,emit}=setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Idea',repositoryPath:'/home/ana/app',questions,answers,proposal,notes:['Sin base de datos']});
+  expect(await screen.findByText('Sin base de datos')).toBeTruthy();
+  expect(screen.getByText('Esta propuesta tiene en cuenta lo que pediste')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  const title=await screen.findByRole('heading',{name:'Pedir otra propuesta'});
+  await waitFor(()=>expect(document.activeElement).toBe(title));
+  expect(screen.queryByRole('group',{name:/¿Quién va a usar la app\?/})).toBeNull();
+  expect(screen.getByText(/Ya pediste/).parentElement!.textContent).toMatch(/Sin base de datos/);
+  const field=screen.getByLabelText('¿Qué quieres cambiar?') as HTMLTextAreaElement;
+  expect(field.maxLength).toBe(2000);expect(document.getElementById(field.getAttribute('aria-describedby')!)!.textContent).toMatch(/0\/2000/);
+  fireEvent.change(field,{target:{value:'  Usa Python en lugar de Node  '}});
+  expect(document.getElementById(field.getAttribute('aria-describedby')!)!.textContent).toMatch(/31\/2000/);
+  fireEvent.click(screen.getByRole('button',{name:'Generar otra propuesta'}));
+  await waitFor(()=>expect(client.answer).toHaveBeenCalledWith('p',answers,'Usa Python en lugar de Node'));
+  expect(await screen.findByRole('heading',{name:'Preparando la propuesta, puede tardar un minuto'})).toBeTruthy();
+  act(()=>emit({status:'WAITING_USER',nextAction:'APPROVE',notes:['Sin base de datos','Usa Python en lugar de Node']}));
+  expect(await screen.findByText('Usa Python en lugar de Node')).toBeTruthy();
+  // «Volver a la propuesta» no llama al motor; vacío vuelve a intentarlo con lo mismo.
+  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Volver a la propuesta'}));
+  expect(await screen.findByRole('heading',{name:proposal.title})).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Generar otra propuesta'}));
+  await waitFor(()=>expect(client.answer).toHaveBeenLastCalledWith('p',answers,''));
+ });
+
+ it('«Proyecto listo» opens Agentes with the scaffold task by id, and falls back to its title',async()=>{
+  const {onNavigate,view}=setup({stage:'APPLIED',status:'DONE',nextAction:'DONE',proposal:{...proposal,status:'APPLIED'},scaffoldTaskId:'t-real'},applied);
+  expect(await screen.findByRole('heading',{name:'Proyecto listo'})).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Ir a la primera tarea'}));
+  expect(onNavigate).toHaveBeenCalledWith({view:'agents',workItemId:'t-real'});
+  view.unmount();
+  const fallback=setup({stage:'APPLIED',status:'DONE',nextAction:'DONE',proposal:{...proposal,status:'APPLIED'},scaffoldTaskId:null},applied);
+  fireEvent.click(await screen.findByRole('button',{name:'Ir a la primera tarea'}));
+  expect(fallback.onNavigate).toHaveBeenCalledWith({view:'agents',workItemId:'t1'});
  });
 
  it('FAILED shows the reason and the right retry; «Empezar de nuevo» asks first',async()=>{

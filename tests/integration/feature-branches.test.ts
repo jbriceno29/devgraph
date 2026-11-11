@@ -129,8 +129,11 @@ describe('feature integration branches',()=>{
  });
 
  it('(e) integrates a finished feature into the base branch, refusing pending tasks and a dirty checkout',async()=>{
-  const {repo,git,runAndAccept,integrate,files,start,adapter}=await setup(twoFeatures([['fb','fa']],[{id:'a2',key:'TASK-003',feature:'fa',title:'Más de a',summary:'WRITE src/a2.js :: export const a2 = 2;'}]));
+  const {core,projectId,repo,git,runAndAccept,integrate,files,start,adapter}=await setup(twoFeatures([['fb','fa']],[{id:'a2',key:'TASK-003',feature:'fa',title:'Más de a',summary:'WRITE src/a2.js :: export const a2 = 2;'}]));
+  const state=async()=>({pilot:(await core.handle({channel:'pilot:get',args:[projectId,'fa']}) as {integration?:unknown}).integration,inspector:(await core.handle({channel:'entity:get_inspector_details',args:['fa']}) as {integration?:unknown}).integration,activity:(await core.handle({channel:'activity:list',args:[projectId]}) as {integrations?:Array<{featureId:string}>}).integrations?.find(item=>item.featureId==='fa')});
   await runAndAccept('a1');
+  // Cheap integration state (no git): branch, base branch and open tasks, in the pilot panel, the inspector and the activity.
+  expect(await state()).toEqual({pilot:{branchName:'feature/feat-001-fundacion',targetBranch:'main',integratedAt:null,taskCount:2,openTaskCount:1},inspector:{branchName:'feature/feat-001-fundacion',targetBranch:'main',integratedAt:null,taskCount:2,openTaskCount:1},activity:{featureId:'fa',branchName:'feature/feat-001-fundacion',targetBranch:'main',integratedAt:null}});
   await expect(integrate('fa')).rejects.toThrow('FEAT-001 aún tiene tareas pendientes: TASK-003.');
   await runAndAccept('a2');
   writeFileSync(join(repo,'README.md'),'# cambio local\n');
@@ -143,6 +146,8 @@ describe('feature integration branches',()=>{
   // The user's checkout (on main, clean) follows the branch; the feature branch is kept.
   expect(existsSync(join(repo,'src','a.js'))).toBe(true);
   expect(git('branch','--format=%(refname:short)')).toContain(result.branchName);
+  const integrated=await state();
+  expect(integrated.pilot).toMatchObject({openTaskCount:0,integratedAt:expect.any(String)});expect(integrated.activity).toMatchObject({integratedAt:expect.any(String)});
   expect(await integrate('fa')).toMatchObject({merged:false,alreadyIntegrated:true});
   // A dependent feature started now finds A's work in the base: no second merge of A's branch.
   await start('b1');
@@ -152,10 +157,15 @@ describe('feature integration branches',()=>{
  });
 
  it('(e2) integrates into the base branch when it is not checked out, without touching the checkout',async()=>{
-  const {git,runAndAccept,integrate,files}=await setup(twoFeatures([]));
+  const {core,projectId,addTask,git,runAndAccept,integrate,files}=await setup(twoFeatures([]));
   await runAndAccept('a1');
   git('checkout','--quiet','-b','otra');
   await expect(integrate('fa')).resolves.toMatchObject({merged:true,targetBranch:'main'});
+  // New work accepted on the feature branch clears the «integrated» mark, so the next step offers it again.
+  const mark=async()=>(await core.handle({channel:'pilot:get',args:[projectId,'fa']}) as {integration:{integratedAt:string|null}}).integration.integratedAt;
+  expect(await mark()).toEqual(expect.any(String));
+  addTask({id:'a3',key:'TASK-009',feature:'fa',title:'Más',summary:'WRITE src/a3.js :: export const a3 = 3;'});await runAndAccept('a3');
+  expect(await mark()).toBeNull();
   expect(files('main')).toContain('src/a.js');
   expect(git('symbolic-ref','--short','HEAD').trim()).toBe('otra');
   expect(files('otra')).toEqual(['README.md']);

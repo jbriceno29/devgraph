@@ -45,8 +45,10 @@ export interface AgentExecutionRepositoryPort {
   /** Work items under a feature (subtasks included), ordered by key. */
   listFeatureTasks(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
   /** Integration branch owned by a feature (or by a work item without a feature). */
-  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null;
+  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string;integratedAt?:string|null}|null;
   saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void;
+  /** Records when a feature branch was integrated into its base branch (null: it has new work since). Optional for fakes. */
+  setFeatureIntegrated?(projectId:string,branchName:string,at:string|null):void;
   /** Repository paths of the project's Markdown documents (artifacts and decision records). */
   listDocumentPaths(projectId:string):string[];
   /**

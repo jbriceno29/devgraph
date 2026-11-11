@@ -5,6 +5,8 @@ import { useState, type ReactNode } from 'react';
 import { ContextPills } from '../planning/ContextPills.js';
 import { capitalize, edgeLabel, entityLabel, executionStatusLabel, fileChangeLabel, inverseEdgeLabel, provenanceLabel, shortDate, statusLabel } from '../labels.js';
 import { errorText } from '../errors.js';
+import { FeatureIntegration } from '../agents/FeatureIntegration.js';
+import type { FeatureIntegrationResultDto } from '../../../shared/contracts/agent-view.js';
 
 const focusRing='focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 const shell='flex w-[clamp(15rem,32vw,20.625rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface-raised';
@@ -16,7 +18,7 @@ const attributeName=(key:string)=>attributeNames[key]??capitalize(key.replace(/(
 const statusHelp:Record<string,string>={IN_PROGRESS:'Hay una ejecución en curso; el estado lo controla la ejecución.',IN_REVIEW:'Revisa la ejecución en Agentes para aceptarla o pedir ajustes.'};
 
 /** Detalle del elemento elegido en el grafo: qué es, en qué estado está, qué hacer ahora y con qué se relaciona. */
-export function ContextualInspector({details,contextPackage,contextLoading,contextError,onRefreshContext,onChangeStatus,onOpenAgents,nodes}:{details:EntityInspectorDto|null;contextPackage:ContextPackageDto|null;contextLoading:boolean;contextError:string|null;onRefreshContext(maxTokens:number,query?:string):void;onChangeStatus?(status:string):Promise<void>;onOpenAgents?(workItemId:string,executionId?:string):void;nodes?:GraphNodeView[]}) {
+export function ContextualInspector({details,contextPackage,contextLoading,contextError,onRefreshContext,onChangeStatus,onOpenAgents,nodes,onIntegrateFeature,onFeatureIntegrated}:{details:EntityInspectorDto|null;contextPackage:ContextPackageDto|null;contextLoading:boolean;contextError:string|null;onRefreshContext(maxTokens:number,query?:string):void;onChangeStatus?(status:string):Promise<void>;onOpenAgents?(workItemId:string,executionId?:string):void;nodes?:GraphNodeView[];onIntegrateFeature?(featureId:string):Promise<FeatureIntegrationResultDto>;onFeatureIntegrated?(result:FeatureIntegrationResultDto):void}) {
  if(!details)return <aside aria-label="Inspector" className={`${shell} p-5`}><h2 className="text-sm font-semibold text-fg">Inspector</h2><p className="mt-4 text-sm text-fg-muted">Selecciona un elemento del grafo para ver su detalle.</p></aside>;
  const {entity,attributes,relationships,executionHistory}=details;
  const parent=entity.parentId?nodes?.find(node=>node.id===entity.parentId)?.label??relationships.find(edge=>edge.sourceId===entity.parentId)?.sourceLabel??relationships.find(edge=>edge.targetId===entity.parentId)?.targetLabel:undefined;
@@ -25,6 +27,7 @@ export function ContextualInspector({details,contextPackage,contextLoading,conte
  return <aside aria-label="Inspector" className={shell}>
   <header className="border-b border-border p-4"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="rounded-md border border-border-strong bg-surface-sunken px-2 py-0.5 font-mono text-[11px] text-fg-muted">{entity.key}</span><span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[11px] font-medium text-fg-muted">{statusLabel(entity.status)}</span></div><p className="text-[11px] font-semibold uppercase tracking-wider text-accent">{entityLabel(entity.type)}</p><h2 className="mt-1 text-base font-semibold leading-snug text-fg">{entity.label}</h2><p className="mt-2 text-xs leading-relaxed text-fg-muted">{entity.summary||'Sin resumen registrado.'}</p>
    {entity.type==='WORK_ITEM'&&onOpenAgents&&<TaskAction status={entity.status} onRun={()=>onOpenAgents(entity.id)} onOpen={()=>onOpenAgents(entity.id,runs[0]?.id)}/>}
+   {entity.type==='FEATURE'&&<FeatureIntegration className="mt-3" featureKey={entity.key} state={details.integration} onIntegrate={onIntegrateFeature?()=>onIntegrateFeature(entity.id):undefined} {...(onFeatureIntegrated?{onDone:onFeatureIntegrated}:{})}/>}
   </header>
   <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">{onChangeStatus&&details.allowedStatusChanges&&<StatusControl key={entity.id+entity.status} current={entity.status} options={details.allowedStatusChanges} onChange={onChangeStatus}/>}{details.outcome&&<OutcomeSection outcome={details.outcome}/>}
    {(parent||properties.length>0)&&<section><h3 className={`mb-2 ${heading}`}>Propiedades</h3><dl className="space-y-2">{parent&&<Property name="Pertenece a" value={parent}/>}{properties.map(([key,value])=><Property key={key} name={attributeName(key)} value={<Value value={value}/>}/>)}</dl></section>}

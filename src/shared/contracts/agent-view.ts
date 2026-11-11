@@ -9,6 +9,11 @@ export interface StartAgentExecutionInput {projectId:string;workItemId:string;pr
 export interface RequestExecutionChangesInput {executionId:string;feedback:string;model?:string}
 /** Result of `feature:integrate`: `alreadyIntegrated` when the base branch already contained the feature branch. */
 export interface FeatureIntegrationResultDto {featureId:string;branchName:string;targetBranch:string;merged:boolean;alreadyIntegrated:boolean;commit:string|null}
+/**
+ * Integration state of a feature, read from the workspace only (no git): its branch, the base branch it integrates into
+ * (null when unknown), when the app last integrated it (null: never, or new work since) and how many tasks are still open.
+ */
+export interface FeatureIntegrationStateDto {branchName:string;targetBranch:string|null;integratedAt:string|null;taskCount:number;openTaskCount:number}
 export interface AcceptExecutionResultDto {execution:AgentExecutionDto;merged:boolean;conflict:{reason:string;detail:string;files:string[]}|null;proposal?:{changeSetId:string|null;outcome:'APPLIED'|'PENDING'|'INVALID';reasons:string[];title:string}|null}
 export interface ExecutionDetailDto {execution:AgentExecutionDto;taskStatus:string|null;files:Array<{path:string;changeType:string;additions:number;deletions:number;patch:string|null}>;testLog:string|null;deniedActions:Array<{toolName:string;target:string;reason:string}>;canAccept:boolean;canRequestChanges:boolean}
 export interface ExecutionPolicyDto {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[];maxExecutionMinutes?:number;maxTurns?:number|null;decisionPolicy?:{rules:Record<'NEW_TASK'|'TASK_DEPENDENCY'|'TASK_STATUS'|'DECISION_RECORD'|'SCOPE_CHANGE','AUTO'|'ASK'>;maxAutoTasksPerFeature:number}}
@@ -18,6 +23,8 @@ export interface SetFeatureAutonomyInput {level:AutonomyLevelDto;executionModel?
 export type PilotStatusDto='RUNNING'|'PAUSED'|'WAITING_USER'|'COMPLETED'|'STOPPED'|'FAILED';
 export interface PilotRunDto {id:string;featureId:string;status:PilotStatusDto;reason:string|null;startedAt:string;endedAt:string|null}
 export interface PilotEventDto {id:string;sequenceNo:number;kind:string;message:string;workItemId:string|null;executionId:string|null;createdAt:string}
-export interface FeaturePilotDto {autonomy:FeatureAutonomyDto;run:PilotRunDto|null;events:PilotEventDto[];tasks:Array<{id:string;displayKey:string;title:string;status:string;dependsOn:string[]}>;usage:{utilization:number|null;window:string;resetsAt:string|null;status:string}|null;running:boolean;authMode:'subscription'|'api_key';apiKeyAvailable:boolean;availableModels:string[]}
+export interface FeaturePilotDto {autonomy:FeatureAutonomyDto;run:PilotRunDto|null;events:PilotEventDto[];tasks:Array<{id:string;displayKey:string;title:string;status:string;dependsOn:string[]}>;usage:{utilization:number|null;window:string;resetsAt:string|null;status:string}|null;running:boolean;authMode:'subscription'|'api_key';apiKeyAvailable:boolean;availableModels:string[];
+ /** The feature's integration branch, when it has one (optional: older cores do not send it). */
+ integration?:FeatureIntegrationStateDto|null}
 export interface FeatureReportDto {report:import('../../application/execution/feature-metrics.js').FeatureReport;markdown:string}
 export interface ResolveExecutionApprovalInput {executionId:string;requestId:string;decision:{approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string}}

@@ -13,8 +13,9 @@ it('updates navigation focus and inspector immediately when a graph node is sele
  fireEvent.click(screen.getByRole('tab',{name:/Grafo/}));
  fireEvent.click(await screen.findByRole('button',{name:'Feature: Feature work'}));
  await waitFor(()=>expect(client.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('feature'));
- expect(screen.getByRole('heading',{name:'Feature work'})).toBeTruthy();
- expect(screen.getByText('Summary for feature')).toBeTruthy();
+ // The inspector renders when the IPC answer arrives, a tick after the call: wait for it instead of reading at once.
+ expect(await screen.findByRole('heading',{name:'Feature work'})).toBeTruthy();
+ expect(await screen.findByText('Summary for feature')).toBeTruthy();
 });
 
 it('opens the project on Actividad with breadcrumb, explanation and the next step',async()=>{
@@ -35,5 +36,6 @@ it('follows inbox actions to the target view and selects the work item',async()=
  fireEvent.click(await screen.findByRole('button',{name:'Ver en el grafo'}));
  await waitFor(()=>expect(screen.getByRole('tab',{name:/Grafo/}).getAttribute('aria-selected')).toBe('true'));
  await waitFor(()=>expect(window.workspaceIpc.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('task'));
- expect(document.activeElement).toBe(screen.getByRole('heading',{level:1,name:'Grafo del proyecto'}));
+ // The shell moves focus on the next animation frame.
+ await waitFor(()=>expect(document.activeElement).toBe(screen.getByRole('heading',{level:1,name:'Grafo del proyecto'})));
 });

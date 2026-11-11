@@ -21,7 +21,7 @@ export const proposal:InceptionProposalDto={
  ],
  scaffoldTaskTitle:'Preparar el proyecto',
 };
-export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},updatedAt:null};
+export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,updatedAt:null};
 export const usage2={calls:2,inputTokens:9000,outputTokens:3000,cacheReadTokens:0,cacheCreationTokens:0,costUsd:0.043};
 
 /** Cliente `inception` falso con estado: start/answer responden WORKING y `emit` simula el aviso del motor. */
@@ -33,7 +33,7 @@ export function fakeInception(initial:Partial<InceptionViewDto>={}) {
  const client:InceptionIpcClient={
   get:vi.fn(async()=>view),
   start:vi.fn(async(_projectId,input)=>set({stage:'ASK_GOALS',status:'WORKING',nextAction:'WAIT',brief:input.brief,model:input.model??null,error:null,updatedAt:new Date().toISOString()})),
-  answer:vi.fn(async(_projectId,answers)=>set({status:'WORKING',nextAction:'WAIT',answers,error:null,updatedAt:new Date().toISOString()})),
+  answer:vi.fn(async(_projectId,answers,_notes?:string)=>set({status:'WORKING',nextAction:'WAIT',answers,error:null,updatedAt:new Date().toISOString()})),
   approve:vi.fn(async()=>set({stage:'APPLIED',status:'DONE',nextAction:'DONE',proposal:view.proposal&&{...view.proposal,status:'APPLIED'}})),
   restart:vi.fn(async()=>set({...notStarted,repositoryPath:view.repositoryPath})),
   initializeRepository:vi.fn(async(projectId,localPath)=>{set({repositoryPath:localPath});return {projectId,localPath,initialCommit:'abc1234def5678',files:['README.md','.gitignore','docs/']};}),

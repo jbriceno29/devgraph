@@ -53,4 +53,24 @@ describe('nextStep',()=>{
   expect(nextStep(graph(feature),null)).toMatchObject({id:'break-down',target:{view:'planning'}});
   expect(nextStep(graph(feature,task('t1','TASK-001','BLOCKED')),null)).toMatchObject({id:'review',target:{view:'activity'}});
  });
+ it('a finished feature with an unintegrated branch: «Integra FEAT-00X» when the next one depends on it or nothing is left',()=>{
+  const second:GraphNodeView={id:'f2',key:'FEAT-002',type:'FEATURE',label:'Listado',status:'DRAFT',parentId:'m'};
+  const b=(id:string,key:string,status:string):GraphNodeView=>({...task(id,key,status),parentId:'f2'});
+  const depends={id:'e',source:'f2',target:'f',type:'DEPENDS_ON' as const,provenance:'USER' as const};
+  const branch=(integratedAt:string|null=null,targetBranch:string|null='main')=>({...activity([]),integrations:[{featureId:'f',branchName:'feature/feat-001',targetBranch,integratedAt}]});
+  const nodes=[feature,task('t1','TASK-001','DONE'),task('t2','TASK-002','ARCHIVED'),second,b('t3','TASK-003','READY')];
+  // FEAT-002 depends on FEAT-001: integrate before running its tasks.
+  expect(nextStep({nodes:graph(...nodes).nodes,edges:[depends]},branch())).toMatchObject({id:'integrate-f',title:'Integra FEAT-001 «Búsqueda» en main',actionLabel:'Integrar FEAT-001',target:{view:'graph',workItemId:'f'},tone:'success',detail:expect.stringMatching(/FEAT-002 depende de ella/)});
+  // Independent and work left: keep running tasks.
+  expect(nextStep({nodes:graph(...nodes).nodes,edges:[]},branch())).toMatchObject({id:'run-ready'});
+  // Nothing left: integrate instead of «Todo cerrado»; unknown base branch reads «la rama principal».
+  const done=[feature,task('t1','TASK-001','DONE')];
+  expect(nextStep(graph(...done),branch(null,null))).toMatchObject({id:'integrate-f',title:'Integra FEAT-001 «Búsqueda» en la rama principal',detail:expect.stringMatching(/no queda más trabajo/)});
+  // Already integrated, no branch, or tasks still open: no suggestion.
+  expect(nextStep(graph(...done),branch('2026-11-11T00:00:00Z'))).toMatchObject({id:'all-done'});
+  expect(nextStep(graph(...done),activity([]))).toMatchObject({id:'all-done'});
+  expect(nextStep({nodes:graph(feature,task('t1','TASK-001','DONE'),task('t2','TASK-002','READY'),second,b('t3','TASK-003','BLOCKED')).nodes,edges:[depends]},branch())).toMatchObject({id:'run-ready',target:{workItemId:'t2'}});
+  // Pending decisions still come first.
+  expect(nextStep({nodes:graph(...nodes).nodes,edges:[depends]},{...branch(),items:[item({kind:'APPROVAL_PENDING'})]})).toMatchObject({id:'decide'});
+ });
 });

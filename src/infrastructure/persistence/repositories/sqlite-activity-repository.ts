@@ -31,6 +31,8 @@ export class SqliteActivityRepository implements ActivitySourcePort {
     const pendingApprovals = (this.db.prepare(`SELECT a.id,a.execution_id,a.requested_action,a.reason,a.requested_at,e.work_item_id FROM approval_requests a JOIN agent_executions e ON e.id=a.execution_id
       WHERE e.project_id=? AND a.status='PENDING' AND e.status NOT IN ('COMPLETED','FAILED','CANCELLED') ORDER BY a.requested_at DESC`).all(projectId) as Array<{ id: string; execution_id: string; requested_action: string; reason: string; requested_at: string; work_item_id: string | null }>)
       .map((row): ActivityApprovalRow => ({ id: row.id, executionId: row.execution_id, workItemId: row.work_item_id, requestedAction: row.requested_action, reason: row.reason, requestedAt: row.requested_at }));
-    return { tasks, latestExecutions, pilots, autonomy, pendingProposals, appliedProposals, pendingApprovals };
+    const featureBranches = (this.db.prepare(`SELECT b.feature_id,b.branch_name,b.source_branch,b.integrated_at FROM feature_branches b JOIN knowledge_entities f ON f.id=b.feature_id AND f.entity_type='FEATURE' WHERE b.project_id=?`).all(projectId) as Array<{ feature_id: string; branch_name: string; source_branch: string; integrated_at: string | null }>)
+      .map(row => ({ featureId: row.feature_id, branchName: row.branch_name, sourceBranch: row.source_branch, integratedAt: row.integrated_at }));
+    return { tasks, latestExecutions, pilots, autonomy, pendingProposals, appliedProposals, pendingApprovals, featureBranches };
   }
 }

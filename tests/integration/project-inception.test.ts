@@ -34,13 +34,17 @@ const proposal=():ChangeOperation[]=>[
 ];
 
 class FakeEngine implements InceptionEnginePort {
- calls:Array<{kind:string;model?:string;answers?:unknown}>=[];fail=false;
+ calls:Array<{kind:string;model?:string;answers?:unknown;notes?:string[]}>=[];fail=false;hang=false;signals:AbortSignal[]=[];
  async askGoals(input:Parameters<InceptionEnginePort['askGoals']>[0]){
   this.calls.push({kind:'ask',...(input.model?{model:input.model}:{})});if(this.fail)throw new Error('motor caído');
+  if(this.hang)await this.wait(input.signal);
   return {questions:[{id:'q1',text:'¿Quién la usa?',options:['Solo yo','Un equipo'],default:'Solo yo',why:'Define el alcance.'},{id:'q2',text:'¿Interfaz?',options:['Terminal','Web'],default:'Terminal',why:'Define la plataforma.'},{id:'q3',text:'¿Qué queda fuera?',options:[],default:null,why:'Evita sobrediseñar.'}],assumptions:['Uso personal'],usage};
  }
+ /** Like the real engine: never answers until aborted, then rejects as cancelled. */
+ wait(signal?:AbortSignal):Promise<never>{if(signal)this.signals.push(signal);return new Promise((_resolve,reject)=>signal?.addEventListener('abort',()=>reject(Object.assign(new Error('cancelada'),{name:'AbortError'})),{once:true}));}
  async propose(input:Parameters<InceptionEnginePort['propose']>[0]){
-  this.calls.push({kind:'propose',...(input.model?{model:input.model}:{}),answers:input.answers});
+  this.calls.push({kind:'propose',...(input.model?{model:input.model}:{}),answers:input.answers,...(input.notes?{notes:input.notes}:{})});
+  if(this.hang)await this.wait(input.signal);
   const operations=proposal().map(op=>op.type==='CREATE_RELATIONSHIP'&&op.targetId==='ROOT'?{...op,targetId:input.project.rootId}:op);
   return {draft:{title:'Inicio: tareas en terminal',rationale:'Lo más simple.',operations},assumptions:['Sin nube'],usage};
  }
@@ -141,6 +145,52 @@ describe('project inception (core)',()=>{
   await expect(call('inception:start',projectId,{brief:'Nuevo',model:'gpt-x'})).rejects.toThrow(/no está disponible/);
   await call('inception:start',projectId,{brief:'De nuevo'});
   expect(await settled()).toMatchObject({stage:'ASK_GOALS',status:'WAITING_USER',brief:'De nuevo'});
+ });
+
+ it('«pedir otra» with notes: they reach the engine, are validated, kept for later regenerations, and the scaffold task id is resolved on approval',async()=>{
+  const {root,engine,projectId,call,settled,dbPath}=await setup();
+  await call('inception:start',projectId,{brief:'Tareas en la terminal'});await settled();
+  await expect(call('inception:answer',projectId,[],'Usa Python')).rejects.toThrow(/propuesta ya preparada/);
+  await call('inception:answer',projectId,[{questionId:'q1',answer:'Solo yo'}]);
+  const first=await settled();expect(first.notes).toEqual([]);expect(engine.calls.at(-1)).not.toHaveProperty('notes');
+  await expect(call('inception:answer',projectId,[],'x'.repeat(2001))).rejects.toThrow(/como mucho 2000 caracteres/);
+  expect((await call<InceptionViewDto>('inception:get',projectId)).proposal!.changeSetId).toBe(first.proposal!.changeSetId);
+  expect(await call<InceptionViewDto>('inception:answer',projectId,[],'  Usa Python en lugar de Node  ')).toMatchObject({status:'WORKING',notes:['Usa Python en lugar de Node']});
+  const second=await settled();
+  expect(engine.calls.at(-1)).toMatchObject({kind:'propose',notes:['Usa Python en lugar de Node'],answers:[{questionId:'q1',answer:'Solo yo'},{questionId:'q2',answer:''},{questionId:'q3',answer:''}]});
+  expect(second).toMatchObject({stage:'PROPOSAL',status:'WAITING_USER',notes:['Usa Python en lugar de Node']});
+  expect(second.proposal!.changeSetId).not.toBe(first.proposal!.changeSetId);
+  expect((await call<Array<{id:string;status:string}>>('changeset:list',projectId)).find(item=>item.id===first.proposal!.changeSetId)!.status).toBe('REJECTED');
+  // Changing the answers (or retrying) keeps the notes; a new note is added after the earlier ones.
+  await call('inception:answer',projectId,[{questionId:'q2',answer:'Web'}]);await settled();
+  expect(engine.calls.at(-1)!.notes).toEqual(['Usa Python en lugar de Node']);
+  await call('inception:answer',projectId,[],'Sin base de datos');
+  expect((await settled()).notes).toEqual(['Usa Python en lugar de Node','Sin base de datos']);
+  expect(engine.calls.at(-1)!.notes).toEqual(['Usa Python en lugar de Node','Sin base de datos']);
+  expect(second.scaffoldTaskId).toBeNull();
+  await call('repository:initialize',projectId,join(root,'repo'));
+  const applied=await call<InceptionViewDto>('inception:approve',projectId);
+  const scaffold=query<{id:string}>(dbPath,`SELECT id FROM knowledge_entities WHERE entity_type='WORK_ITEM' AND title='Crear el scaffold'`)[0]!;
+  expect(applied).toMatchObject({stage:'APPLIED',scaffoldTaskId:scaffold.id});
+  expect((await call<InceptionViewDto>('inception:get',projectId)).scaffoldTaskId).toBe(scaffold.id);
+  expect(query<{scaffold_task_id:string}>(dbPath,'SELECT scaffold_task_id FROM project_inception')[0]!.scaffold_task_id).toBe(scaffold.id);
+ });
+
+ it('restart and close abort the running engine call; a voluntary cancellation is never saved as FAILED',async()=>{
+  const {core,engine,projectId,call,dbPath}=await setup();
+  await call('inception:start',projectId,{brief:'Algo'});await core.inceptionSettled(projectId);
+  engine.hang=true;
+  await call('inception:answer',projectId,[]);
+  expect(engine.signals).toHaveLength(1);expect(engine.signals[0]!.aborted).toBe(false);
+  expect(await call<InceptionViewDto>('inception:restart',projectId)).toMatchObject({stage:'NOT_STARTED',status:'IDLE'});
+  expect(engine.signals[0]!.aborted).toBe(true);
+  await core.inceptionSettled(projectId);
+  expect(await call<InceptionViewDto>('inception:get',projectId)).toMatchObject({stage:'NOT_STARTED',status:'IDLE',error:null});
+  await call('inception:start',projectId,{brief:'Otra vez'});
+  expect(engine.signals[1]!.aborted).toBe(false);
+  core.close();
+  expect(engine.signals[1]!.aborted).toBe(true);
+  expect(query<{status:string;error:string|null}>(dbPath,'SELECT status,error FROM project_inception')[0]).toEqual({status:'WORKING',error:null});
  });
 
  it('initializes a new repository only in a missing or empty folder, without hooks or remotes, and never deletes anything',async()=>{

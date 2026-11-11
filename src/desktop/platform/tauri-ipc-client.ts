@@ -51,7 +51,7 @@ export const workspaceIpc:WorkspaceIpcClient={
  inception:{
   get:projectId=>invokeCore('inception:get',[projectId]),
   start:(projectId,input)=>invokeCore('inception:start',[projectId,input]),
-  answer:(projectId,answers)=>invokeCore('inception:answer',[projectId,answers]),
+  answer:(projectId,answers,notes)=>invokeCore('inception:answer',notes===undefined?[projectId,answers]:[projectId,answers,notes]),
   approve:projectId=>invokeCore('inception:approve',[projectId]),
   restart:projectId=>invokeCore('inception:restart',[projectId]),
   initializeRepository:(projectId,absolutePath)=>invokeCore('repository:initialize',[projectId,absolutePath]),

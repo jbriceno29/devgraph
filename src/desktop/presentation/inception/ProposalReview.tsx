@@ -45,6 +45,7 @@ export function ProposalReview({view,applied=false}:{view:InceptionViewDto;appli
  const issues=[...proposal.issues,...(!applied&&view.error?[view.error]:[])];
  return <div className="space-y-4">
   {!applied&&issues.length>0&&<div role="alert" className="rounded-lg border border-warning/50 bg-warning-soft px-3 py-2 text-xs text-fg"><p className="font-semibold">Avisos de la propuesta</p><ul className="mt-1 list-disc space-y-0.5 pl-5">{issues.map(issue=><li key={issue}>{issue}</li>)}</ul></div>}
+  {view.notes?.length>0&&<div className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs text-fg"><p className="font-semibold">{applied?'Cambios que pediste':'Esta propuesta tiene en cuenta lo que pediste'}</p><ul className="mt-1 list-disc space-y-0.5 pl-5 text-fg-muted">{view.notes.map((note,index)=><li key={index} className="whitespace-pre-wrap break-words">{note}</li>)}</ul></div>}
   {!applied&&proposal.decisionReasons.length>0&&<div className="rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-xs text-fg"><p className="font-semibold">Por qué necesita tu aprobación</p><ul className="mt-1 list-disc space-y-0.5 pl-5">{proposal.decisionReasons.map(reason=><li key={reason}>{reason}</li>)}</ul></div>}
   <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
    <Section title="Resumen del proyecto" empty={!profile&&!proposal.rationale}>

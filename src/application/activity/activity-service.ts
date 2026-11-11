@@ -60,7 +60,8 @@ export class ActivityService {
     items.sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention) || (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     const running = data.tasks.filter(task => task.status === 'IN_PROGRESS').map(task => ({ workItemKey: task.displayKey, title: task.title }));
     const inceptionItem = items.some(item => item.changeSetId && item.changeSetId === inception?.changeSetId);
-    return { items: items.slice(0, max), running, attentionCount: items.filter(item => item.needsAttention).length + (inception?.needsAttention && !inceptionItem ? 1 : 0), ...(inception ? { inception } : {}) };
+    const integrations = (data.featureBranches ?? []).map(branch => ({ featureId: branch.featureId, branchName: branch.branchName, targetBranch: branch.sourceBranch && branch.sourceBranch !== 'HEAD' ? branch.sourceBranch : null, integratedAt: branch.integratedAt }));
+    return { items: items.slice(0, max), running, attentionCount: items.filter(item => item.needsAttention).length + (inception?.needsAttention && !inceptionItem ? 1 : 0), ...(inception ? { inception } : {}), ...(integrations.length ? { integrations } : {}) };
   }
 }
 

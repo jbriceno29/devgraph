@@ -4,6 +4,7 @@ import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import { statusLabel as workStatus } from '../labels.js';
 import { errorText } from '../errors.js';
 import { control, danger, focusRing, primary, secondary } from '../ui.js';
+import { FeatureIntegration } from './FeatureIntegration.js';
 
 const levels: Array<{ value: AutonomyLevelDto; label: string; help: string }> = [
   { value: 'MANUAL', label: 'Manual', help: 'Tú lanzas cada tarea y decides qué integrar.' },
@@ -42,6 +43,9 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
     setDraft({ level: saved.level, executionModel: saved.executionModel ?? '', escalationModel: saved.escalationModel ?? '', maxAttempts: String(saved.maxAttempts), threshold: String(Math.round(saved.usagePauseThreshold * 100)) });
   });
 
+  const integrateFeature = window.workspaceIpc.commands.integrateFeature;
+  const integrate = integrateFeature ? () => integrateFeature(projectId, featureId) : undefined;
+
   if (!features.length) return <p className="rounded-xl border border-dashed border-border-strong p-4 text-xs text-fg-muted">El piloto trabaja por features. Crea una en Planificar para poder usarlo.</p>;
   const run = state?.run ?? null;
   const active = run && ['RUNNING', 'PAUSED'].includes(run.status);
@@ -56,6 +60,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
 
     {state && draft && <>
       <p className="text-[11px] text-fg-muted">{state.tasks.length} tareas · {remaining.length} pendientes{remaining.length ? `: ${remaining.map(task => `${task.displayKey} (${workStatus(task.status).toLowerCase()})`).join(', ')}` : ''}</p>
+      <FeatureIntegration featureKey={features.find(feature => feature.id === featureId)?.key ?? 'La feature'} state={state.integration} onIntegrate={integrate} onDone={() => void load()} />
       <fieldset className="space-y-1.5"><legend className="mb-1 text-xs text-fg-muted">Nivel</legend>
         {levels.map(level => <label key={level.value} className="flex min-h-9 items-start gap-2 rounded-lg px-1 py-1 text-xs text-fg hover:bg-surface-sunken"><input type="radio" name="autonomy-level" value={level.value} checked={draft.level === level.value} onChange={() => setDraft({ ...draft, level: level.value })} className="mt-0.5 accent-[var(--accent)]" /><span><span className="font-semibold">{level.label}</span> · <span className="text-fg-muted">{level.help}</span></span></label>)}
       </fieldset>

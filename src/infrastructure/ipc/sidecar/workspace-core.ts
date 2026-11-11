@@ -88,7 +88,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   // Built per call, so `inception:get` works with any engine and auth changes apply to the next call.
   const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input)};
   const service=new ProjectInceptionService({projects:workspace.projects,graph:workspace.graph,store:new SqliteInceptionRepository(workspace.database),engine,
-   planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>getPlanning(projectId).apply(id),reject:id=>{getPlanning(projectId).reject(id);}},
+   planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>{const result=await getPlanning(projectId).apply(id);return {revision:result.revision,resolvedIds:result.resolvedIds};},reject:id=>{getPlanning(projectId).reject(id);}},
    repositoryPath:id=>workspace.repositories.findPrimaryForProject(id)?.localPath??null,
    models:id=>{const profile=providerConnection(id,workspace.database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};},
    emit:(channel,payload)=>emit(channel,payload)});
@@ -158,7 +158,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      // Resolve ownership from the workspace registry without exposing its database path to the renderer.
      for(const project of store.listProjects()) {
       const workspace=store.openProject(project.id);
-      if(workspace.graph.findEntityById(id)){const details=new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);if(details.entity.type!=='WORK_ITEM')return details;const outcome=getExecutionService(project.id).taskOutcome(id);return {...details,allowedStatusChanges:manualWorkItemTransitions(details.entity.status as WorkItemStatus),...(outcome?{outcome:{summary:outcome.summary,files:outcome.files,checks:outcome.checks,mergedCommit:outcome.mergedCommit,integrationBranch:outcome.integrationBranch,createdAt:outcome.createdAt}}:{})};}
+      if(workspace.graph.findEntityById(id)){const details=new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);if(details.entity.type==='FEATURE'){const integration=getExecutionService(project.id).featureIntegration(project.id,id);return integration?{...details,integration}:details;}if(details.entity.type!=='WORK_ITEM')return details;const outcome=getExecutionService(project.id).taskOutcome(id);return {...details,allowedStatusChanges:manualWorkItemTransitions(details.entity.status as WorkItemStatus),...(outcome?{outcome:{summary:outcome.summary,files:outcome.files,checks:outcome.checks,mergedCommit:outcome.mergedCommit,integrationBranch:outcome.integrationBranch,createdAt:outcome.createdAt}}:{})};}
      }
      throw new Error(`Entity not found: ${id}`);
     }
@@ -180,7 +180,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'inception:get': return getInception(String(args[0]??'')).get(String(args[0]??''));
     case 'inception:start': {const projectId=String(args[0]??'');return getInception(projectId).start(projectId,(args[1]??{}) as StartInceptionInput);}
-    case 'inception:answer': {const projectId=String(args[0]??'');return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[]);}
+    case 'inception:answer': {const projectId=String(args[0]??'');return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined);}
     case 'inception:approve': {const projectId=String(args[0]??'');return getInception(projectId).approve(projectId);}
     case 'inception:restart': {const projectId=String(args[0]??'');return getInception(projectId).restart(projectId);}
     case 'repository:get_path': {
@@ -242,7 +242,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(typeof policy?.maxTurns==='number'||policy?.maxTurns===null?{maxTurns:policy.maxTurns}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
-     return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};
+     return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[],integration:service.featureIntegration(projectId,featureId)};
     }
     case 'activity:list': {const projectId=String(args[0]??'');return new ActivityService(new SqliteActivityRepository(store.openProject(projectId).database),id=>getInception(id).activity(id)).list(projectId,typeof args[1]==='number'?args[1]:undefined);}
     case 'metrics:feature_report': {const projectId=String(args[0]??''),featureId=String(args[1]??'');return featureReport(projectId,featureId);}
@@ -264,7 +264,10 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'pilot:start': {const projectId=String(args[0]??'');return getPilot(projectId).start(projectId,String(args[1]??''),{acknowledgeCost:Boolean((args[2] as {acknowledgeCost?:boolean}|undefined)?.acknowledgeCost)});}
     case 'pilot:stop': {const projectId=String(args[0]??'');return getPilot(projectId).stop(projectId,String(args[1]??''));}
     case 'pilot:resume': {const projectId=String(args[0]??'');return getPilot(projectId).resume(projectId,String(args[1]??''));}
-    case 'feature:integrate': {const projectId=String(args[0]??'');return getExecutionService(projectId).integrateFeature(projectId,String(args[1]??''));}
+    case 'feature:integrate': {
+     // `pilot:updated` refreshes the feature panel and the activity (the shell's next step reads `integrations`).
+     const projectId=String(args[0]??''),featureId=String(args[1]??'');const result=await getExecutionService(projectId).integrateFeature(projectId,featureId);
+     emit('pilot:updated',{projectId,featureId,status:null});return result;}
     case 'provider:set_auth_mode': {const projectId=String(args[0]??'');return {authMode:getExecutionService(projectId).setAuthMode(projectId,args[1] as 'subscription'|'api_key')};}
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
@@ -272,7 +275,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   },
   /** Resolves when the project's background inception call (if any) has finished (tests and shutdown). */
   async inceptionSettled(projectId:string):Promise<void>{await inceptions.get(projectId)?.settled(projectId);},
-  close():void {for(const pilot of pilots.values())pilot.shutdown();for(const service of executionServices.values())service.shutdown();for(const watcher of watchers.values())watcher.stop();watchers.clear();store.closeAll();},
+  close():void {for(const inception of inceptions.values())inception.shutdown();for(const pilot of pilots.values())pilot.shutdown();for(const service of executionServices.values())service.shutdown();for(const watcher of watchers.values())watcher.stop();watchers.clear();store.closeAll();},
  };
  function getManagementForDocument(documentId:string):ArtifactManagementService {
   for(const project of store.listProjects()) {

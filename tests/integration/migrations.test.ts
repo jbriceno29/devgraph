@@ -16,7 +16,8 @@ describe('versioned schema migrations',()=>{
   const db=openDatabase({filename:':memory:'});
   expect(db.pragma('user_version',{simple:true})).toBe(latest);
   expect(columns(db,'agent_executions')).toContain('base_branch');
-  expect(columns(db,'feature_branches')).toEqual(['feature_id','project_id','repository_id','branch_name','source_branch','created_at']);
+  expect(columns(db,'feature_branches')).toEqual(['feature_id','project_id','repository_id','branch_name','source_branch','created_at','integrated_at']);
+  expect(columns(db,'project_inception')).toEqual(expect.arrayContaining(['notes_json','scaffold_task_id']));
   closeDatabase(db);
  });
 

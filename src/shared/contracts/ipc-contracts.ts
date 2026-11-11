@@ -3,14 +3,14 @@ import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusCh
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
 import type { ActivitySummaryDto } from './activity-view.js';
 import type { InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto,FeatureIntegrationStateDto } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
 export interface GraphFilterDto { entityTypes?:KnowledgeEntityType[]; edgeTypes?:GraphEdgeType[] }
 export interface GraphViewDto { projectId:string; revision:number; nodes:GraphNodeView[]; edges:GraphEdgeView[] }
 export interface RelationshipViewDto { id:string; sourceId:string; sourceLabel:string; targetId:string; targetLabel:string; type:GraphEdgeType; direction:'INCOMING'|'OUTGOING'; provenance:'USER'|'CHANGESET'|'EXECUTION' }
-export interface EntityInspectorDto { entity:GraphNodeView & {summary:string}; attributes:Record<string,unknown>; relationships:RelationshipViewDto[]; allowedStatusChanges?:string[]; outcome?:{summary:string;files:Array<{path:string;status:string}>;checks:Array<{command:string;passed:boolean}>;mergedCommit:string|null;integrationBranch:string|null;createdAt:string}; executionHistory:Array<{id:string;status:string;startedAt:string|null;completedAt:string|null;resultSummary:string|null}> }
+export interface EntityInspectorDto { entity:GraphNodeView & {summary:string}; attributes:Record<string,unknown>; relationships:RelationshipViewDto[]; allowedStatusChanges?:string[]; outcome?:{summary:string;files:Array<{path:string;status:string}>;checks:Array<{command:string;passed:boolean}>;mergedCommit:string|null;integrationBranch:string|null;createdAt:string}; /** FEATURE only, when it has an integration branch: what «Integrar» needs (no git calls). */ integration?:FeatureIntegrationStateDto; executionHistory:Array<{id:string;status:string;startedAt:string|null;completedAt:string|null;resultSummary:string|null}> }
 export interface WorkspaceLoadedStateDto { project:ProjectSummaryDto; graph:GraphViewDto; selectedEntityId:string }
 export interface ChangeSetDto { id:string;projectId:string;baseGraphRevision:number;appliedGraphRevision?:number;originType:'AI_CHAT'|'AGENT_EXECUTION'|'USER_BULK_ACTION';title:string;rationale:string;status:'PENDING_APPROVAL'|'VALIDATED'|'CONFLICTED'|'APPLIED'|'REJECTED';operations:Array<Record<string,unknown>>;validationIssues:Array<{operationIndex:number;severity:'ERROR'|'WARNING';code:string;message:string}>;createdAt:string;appliedAt?:string }
 export interface WorkspaceIpcCommands {
@@ -42,11 +42,11 @@ export interface WorkspaceIpcCommands {
   'repository:initialize': (projectId:string,absolutePath:string)=>Promise<InitializeRepositoryResultDto>;
   /** Starts the inception: returns at once with status WORKING; `inception:updated` tells when the questions are ready. */
   'inception:start': (projectId:string,input:StartInceptionInput)=>Promise<InceptionViewDto>;
-  /** Saves the answers and asks for the proposal (in PROPOSAL, regenerates it). Returns at once with status WORKING. */
-  'inception:answer': (projectId:string,answers:InceptionAnswerDto[])=>Promise<InceptionViewDto>;
+  /** Saves the answers and asks for the proposal (in PROPOSAL, regenerates it; optional `notes` ≤ 2000 chars say what to change and are kept for later regenerations). Returns at once with status WORKING. */
+  'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string)=>Promise<InceptionViewDto>;
   /** Applies the proposal's ChangeSet (needs a primary repository). */
   'inception:approve': (projectId:string)=>Promise<InceptionViewDto>;
-  /** Forgets questions, answers and the pending proposal; refused once applied. */
+  /** Forgets questions, answers and the pending proposal, and stops a running engine call; refused once applied. */
   'inception:restart': (projectId:string)=>Promise<InceptionViewDto>;
 }
 export interface WorkspaceIpcQueries {

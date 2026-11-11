@@ -137,9 +137,13 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     return null;
   }
 
-  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null {
-    const row=this.db.prepare('SELECT branch_name,source_branch FROM feature_branches WHERE feature_id=?').get(ownerId) as {branch_name:string;source_branch:string}|undefined;
-    return row?{branchName:row.branch_name,sourceBranch:row.source_branch}:null;
+  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string;integratedAt:string|null}|null {
+    const row=this.db.prepare('SELECT branch_name,source_branch,integrated_at FROM feature_branches WHERE feature_id=?').get(ownerId) as {branch_name:string;source_branch:string;integrated_at:string|null}|undefined;
+    return row?{branchName:row.branch_name,sourceBranch:row.source_branch,integratedAt:row.integrated_at??null}:null;
+  }
+
+  setFeatureIntegrated(projectId:string,branchName:string,at:string|null):void {
+    this.db.prepare('UPDATE feature_branches SET integrated_at=? WHERE project_id=? AND branch_name=?').run(at,projectId,branchName);
   }
 
   saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void {

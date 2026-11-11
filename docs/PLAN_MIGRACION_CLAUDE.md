@@ -1,5 +1,7 @@
 # Plan de implementación: migrar de Codex a Claude Code (CLI con suscripción)
 
+> **Plan histórico.** Desde el 2026-11-10 el plan vigente es `docs/PLAN_DE_TRABAJO.md`. Este documento se conserva como registro de las Fases 0 a 3 y de lo confirmado sobre el CLI de Claude Code (sección 2). Las fases 4 a 7 quedaron reorganizadas en las etapas del nuevo plan. Cambia en particular la decisión de eliminar el código de Codex: se mantiene y se vuelve a cablear (Etapa 4), porque la portabilidad entre motores es una de las hipótesis a demostrar.
+
 Fecha: 2026-11-10
 Relacionado: `docs/ANALISIS_PROYECTO.md` (defectos D1 a D8, huecos del MVP y Etapa 8)
 
@@ -74,7 +76,7 @@ Fixtures y detalle de cada captura en `tests/fixtures/claude/README.md`.
 
 1. **Sin aprobaciones interactivas en la primera versión.** La política de autonomía ya define qué se permite; se traduce a `--permission-mode dontAsk` + `--allowedTools` + `--permission-prompts none`. Lo no permitido se deniega y queda registrado. Es más simple y determinista. El puente de aprobaciones por MCP queda como mejora posterior.
 2. **`ExecutionValidator` sigue siendo la autoridad.** Las reglas del CLI son la primera barrera; la auditoría del diff contra `writablePaths` y `deniedPaths` es la que decide. No se relaja por tener reglas en el CLI.
-3. **Cambio de motor detrás de los puertos existentes** (`AgentAdapterPort`, `ChangeSetPlannerPort`). El código de Codex se conserva sin cablear hasta que Claude esté probado y luego se elimina.
+3. **Cambio de motor detrás de los puertos existentes** (`AgentAdapterPort`, `ChangeSetPlannerPort`). El código de Codex se conserva sin cablear hasta que Claude esté probado. *(Revisado: ya no se elimina; se vuelve a cablear en la Etapa 4 de `PLAN_DE_TRABAJO.md`.)*
 4. **Una ejecución a la vez.** Protege los límites de la suscripción y simplifica la depuración.
 5. **Costo medido en tokens y tiempo, no en USD.** El campo `total_cost_usd` del resultado es una estimación del cliente; se guarda, pero las métricas relevantes son tokens usados y límites alcanzados.
 

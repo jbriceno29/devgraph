@@ -15,10 +15,16 @@ export class SqliteActivityRepository implements ActivitySourcePort {
       ...this.db.prepare(`${taskSql} AND status='DONE' ORDER BY updated_at DESC, rowid DESC LIMIT ?`).all(projectId, limit),
     ] as Array<{ id: string; display_key: string; title: string; status: string; updated_at: string }>;
     const tasks: ActivityTaskRow[] = taskRows.map(row => ({ id: row.id, displayKey: row.display_key, title: row.title, status: row.status, updatedAt: row.updated_at, featureId: featureOf(row.id) }));
-    const latestExecutions = (this.db.prepare(`SELECT id,work_item_id,status,review_status,started_at,completed_at,result_summary FROM (
-        SELECT e.*, ROW_NUMBER() OVER (PARTITION BY work_item_id ORDER BY COALESCE(started_at,completed_at,'') DESC, rowid DESC) AS position FROM agent_executions e WHERE project_id=? AND work_item_id IS NOT NULL
-      ) WHERE position=1`).all(projectId) as Array<{ id: string; work_item_id: string; status: string; review_status: string | null; started_at: string | null; completed_at: string | null; result_summary: string | null }>)
-      .map((row): ActivityExecutionRow => ({ id: row.id, workItemId: row.work_item_id, status: row.status, reviewStatus: row.review_status, startedAt: row.started_at, completedAt: row.completed_at, resultSummary: row.result_summary }));
+    // Latest execution per task, counting grouped runs for every task they cover (execution_work_items).
+    const latestExecutions = (this.db.prepare(`SELECT id,work_item_id,leader_id,status,review_status,started_at,completed_at,result_summary,covered FROM (
+        SELECT e.id, c.work_item_id, e.work_item_id AS leader_id, e.status, e.review_status, e.started_at, e.completed_at, e.result_summary,
+          (SELECT group_concat(x.work_item_id) FROM (SELECT work_item_id FROM execution_work_items WHERE execution_id=e.id ORDER BY position) x) AS covered,
+          ROW_NUMBER() OVER (PARTITION BY c.work_item_id ORDER BY COALESCE(e.started_at,e.completed_at,'') DESC, e.rowid DESC) AS position
+        FROM agent_executions e
+        JOIN (SELECT id AS execution_id, work_item_id FROM agent_executions WHERE work_item_id IS NOT NULL UNION SELECT execution_id, work_item_id FROM execution_work_items) c ON c.execution_id=e.id
+        WHERE e.project_id=?
+      ) WHERE position=1`).all(projectId) as Array<{ id: string; work_item_id: string; leader_id: string | null; status: string; review_status: string | null; started_at: string | null; completed_at: string | null; result_summary: string | null; covered: string | null }>)
+      .map((row): ActivityExecutionRow => { const leader = row.leader_id ?? row.work_item_id; const covered = (row.covered ?? '').split(',').filter(id => id && id !== leader); return { id: row.id, workItemId: row.work_item_id, coveredWorkItemIds: [leader, ...covered], status: row.status, reviewStatus: row.review_status, startedAt: row.started_at, completedAt: row.completed_at, resultSummary: row.result_summary }; });
     const pilots = (this.db.prepare(`SELECT r.id,r.feature_id,r.status,r.reason,r.started_at,r.ended_at,f.display_key,f.title FROM (
         SELECT p.*, ROW_NUMBER() OVER (PARTITION BY feature_id ORDER BY started_at DESC, rowid DESC) AS position FROM pilot_runs p WHERE project_id=?
       ) r JOIN knowledge_entities f ON f.id=r.feature_id WHERE r.position=1`).all(projectId) as Array<{ id: string; feature_id: string; status: ActivityPilotRow['status']; reason: string | null; started_at: string; ended_at: string | null; display_key: string; title: string }>)

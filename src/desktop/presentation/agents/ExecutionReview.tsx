@@ -12,8 +12,10 @@ const reviewLabel: Record<string, string> = {
 };
 
 /** Review of a completed run: what changed, how it was verified, and accept / request changes. */
-export function ExecutionReview({ execution, models, defaultModel, onChanged }: {
+export function ExecutionReview({ execution, tasks = [], models, defaultModel, onChanged }: {
   execution: AgentExecutionDto;
+  /** The tasks the execution covers (several in a grouped run), for the heading. */
+  tasks?: Array<{ id: string; key: string; label: string }>;
   models: string[];
   defaultModel: string | null;
   onChanged(next: AgentExecutionDto): void;
@@ -64,6 +66,7 @@ export function ExecutionReview({ execution, models, defaultModel, onChanged }: 
       <h3 className="text-sm font-semibold text-fg">Revisión</h3>
       <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-medium text-fg-muted">{status}</span>
     </div>
+    {execution.coveredWorkItemIds.length > 1 && <p className="rounded-lg border border-pilot-border/60 bg-pilot-soft p-2 text-xs text-fg"><span className="font-semibold text-pilot">Ejecución agrupada:</span> cierra {execution.coveredWorkItemIds.length} tareas a la vez ({execution.coveredWorkItemIds.map(id => { const task = tasks.find(item => item.id === id); return task ? `${task.key} «${task.label}»` : id; }).join(', ')}). Aceptar las integra todas con un solo commit; pedir ajustes relanza el grupo entero.</p>}
     {execution.resultSummary && <p className="text-xs leading-relaxed text-fg">{execution.resultSummary}</p>}
     <p className="text-[11px] text-fg-muted">Se integrará en la rama <span className="font-mono text-fg">{execution.baseBranch ?? '—'}</span>{execution.mergedCommit && <> · commit integrado <span className="font-mono text-fg">{execution.mergedCommit.slice(0, 8)}</span></>}</p>
     {execution.reviewStatus === 'CHANGES_REQUESTED' && execution.reviewNote && <p className="rounded-lg border border-border bg-surface-raised p-2 text-xs text-fg-muted">Ajustes pedidos: {execution.reviewNote}</p>}

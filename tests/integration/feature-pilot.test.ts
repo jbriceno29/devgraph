@@ -169,7 +169,7 @@ describe('feature metrics (Stage 5)',()=>{
  });
 
  it('with grouping on, runs the first task of the project alone and then the rest of the feature in one grouped execution',async()=>{
-  const {pilot,until,git,adapter}=await setup('good',{tasks:[['t1','TASK-001','READY'],['t2','TASK-002','BLOCKED'],['t3','TASK-003','READY'],['t4','TASK-004','READY']],edges:[['t2','t1']]});
+  const {core,projectId,pilot,until,git,adapter}=await setup('good',{tasks:[['t1','TASK-001','READY'],['t2','TASK-002','BLOCKED'],['t3','TASK-003','READY'],['t4','TASK-004','READY']],edges:[['t2','t1']]});
   const saved=await pilot('set_autonomy',{level:'PILOT',groupTasks:true,maxGroupSize:3}) as {groupTasks:boolean;maxGroupSize:number};
   expect(saved).toMatchObject({groupTasks:true,maxGroupSize:3});
   expect((await pilot('get') as {autonomy:{groupTasks:boolean}}).autonomy.groupTasks).toBe(true);
@@ -182,6 +182,31 @@ describe('feature metrics (Stage 5)',()=>{
   expect(adapter.prompts).toHaveLength(2);
   expect(adapter.prompts[0]).toContain('# WorkItem\nTASK-001 work');
   expect(adapter.prompts[1]).toContain('## Parte 2 de 3: TASK-003 TASK-003 work');
+
+  // Metrics: the grouped execution counts for every task it covers, once in the totals.
+  const {report}=await core.handle({channel:'metrics:feature_report',args:[projectId,'feat']}) as {report:{totals:{executions:number;acceptedOnFirstAttempt:number};tasks:Array<{displayKey:string;executions:Array<{executionId:string}>}>}};
+  expect(report.totals.executions).toBe(2);
+  expect(report.totals.acceptedOnFirstAttempt).toBe(4);
+  const byKey=Object.fromEntries(report.tasks.map(task=>[task.displayKey,task.executions.map(item=>item.executionId)]));
+  expect(byKey['TASK-004']).toHaveLength(1);
+  expect(byKey['TASK-002']).toEqual(byKey['TASK-004']);
+  expect(byKey['TASK-001']).not.toEqual(byKey['TASK-002']);
+  // Inbox: the closed tasks still appear one by one (nothing runs any more).
+  const activity=await core.handle({channel:'activity:list',args:[projectId]}) as {items:Array<{kind:string;title:string}>};
+  expect(activity.items.filter(item=>item.kind==='TASK_DONE')).toHaveLength(4);
+ });
+
+ it('while a grouped run works or waits for review, the inbox shows one item naming every task of the group',async()=>{
+  const {core,projectId,pilot,until}=await setup('good',{checks:false,tasks:[['t0','TASK-000','DONE'],['t1','TASK-001','READY'],['t2','TASK-002','READY']],edges:[]});
+  await pilot('set_autonomy',{level:'PILOT',groupTasks:true,maxGroupSize:3});
+  await pilot('start',{acknowledgeCost:true});
+  // Without verification commands nothing is accepted on its own: the group stays in review and the pilot waits.
+  await until(value=>value.run?.status==='WAITING_USER');
+  const activity=await core.handle({channel:'activity:list',args:[projectId]}) as {items:Array<{kind:string;title:string;workItemId:string|null}>};
+  const inReview=activity.items.filter(item=>item.kind==='TASK_IN_REVIEW');
+  expect(inReview).toHaveLength(1);
+  expect(inReview[0]!.title).toBe('TASK-001, TASK-002 (2 tareas en una ejecución) lista para revisar');
+  expect(inReview[0]!.workItemId).toBe('t1');
  });
 
  it('retries a failed group as a whole, with the failure as context, and respects the group size and the off switch',async()=>{

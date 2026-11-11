@@ -1,4 +1,5 @@
 import type { AgentExecution } from '../../domain/agents/models.js';
+import { coveredWorkItems } from '../../domain/agents/models.js';
 import type { PilotRepositoryPort } from '../ports/pilot-port.js';
 import type { AgentOrchestrator } from './agent-orchestrator.js';
 
@@ -35,14 +36,15 @@ export class FeatureMetrics {
       }
     }
     const tasks = this.pilots.listFeatureTasks(projectId, featureId).map(task => {
-      const runs = executions.filter(execution => execution.workItemId === task.id).sort((a, b) => (a.startedAt ?? '').localeCompare(b.startedAt ?? ''));
+      const runs = executions.filter(execution => coveredWorkItems(execution).includes(task.id)).sort((a, b) => (a.startedAt ?? '').localeCompare(b.startedAt ?? ''));
       const metrics = runs.map(run => this.metrics(run));
       const first = metrics[0];
       const acceptedOnFirstAttempt = metrics.length === 1 && first?.reviewStatus === 'ACCEPTED';
       const manual = metrics.filter(item => item.reviewStatus === 'CHANGES_REQUESTED' || (item.reviewStatus === 'ACCEPTED' && !item.autoAccepted)).length;
       return { workItemId: task.id, displayKey: task.displayKey, title: task.title, status: task.status, executions: metrics, attempts: metrics.length, acceptedOnFirstAttempt, interventions: manual + (pilotWaitsByTask.get(task.id) ?? 0) };
     });
-    const all = tasks.flatMap(task => task.executions);
+    // A grouped execution appears under each task it covers; the totals count it once.
+    const all = [...new Map(tasks.flatMap(task => task.executions).map(item => [item.executionId, item])).values()];
     const sum = (pick: (item: ExecutionMetrics) => number) => all.reduce((total, item) => total + pick(item), 0);
     return {
       featureId, generatedAt: new Date().toISOString(), tasks,

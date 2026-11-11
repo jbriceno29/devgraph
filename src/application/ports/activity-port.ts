@@ -2,7 +2,7 @@ import type { AutonomyLevel, PilotStatus } from '../../domain/autonomy/models.js
 
 /** Raw facts the activity inbox derives its items from (read-only, existing tables). */
 export interface ActivityTaskRow { id: string; displayKey: string; title: string; status: string; updatedAt: string; featureId: string | null }
-export interface ActivityExecutionRow { id: string; workItemId: string | null; status: string; reviewStatus: string | null; startedAt: string | null; completedAt: string | null; resultSummary: string | null }
+export interface ActivityExecutionRow { id: string; /** The task this row answers for (one row per covered task). */ workItemId: string | null; /** Every task the execution covers, leader first; one entry unless the run was grouped. */ coveredWorkItemIds: string[]; status: string; reviewStatus: string | null; startedAt: string | null; completedAt: string | null; resultSummary: string | null }
 export interface ActivityPilotRow { id: string; featureId: string; featureKey: string; featureTitle: string; status: PilotStatus; reason: string | null; startedAt: string; endedAt: string | null }
 export interface ActivityChangeSetRow { id: string; title: string; status: string; executionId: string | null; workItemId: string | null; createdAt: string; appliedAt: string | null }
 export interface ActivityApprovalRow { id: string; executionId: string; workItemId: string | null; requestedAction: string; reason: string; requestedAt: string }

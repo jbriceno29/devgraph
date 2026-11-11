@@ -28,8 +28,8 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId,selectedExecut
  const latestRateLimit=[...events].reverse().find(record=>record.event.type==='RATE_LIMIT_UPDATED')?.event??null;
  const pendingApproval=selectedExecution?.status==='AWAITING_APPROVAL'?[...events].reverse().find(record=>record.event.type==='APPROVAL_REQUIRED'&&String(record.event.requestId??'')!==handledApprovalId)??null:null;
  const toReview=executions.filter(item=>item.status==='COMPLETED'&&!item.reviewStatus).length;
- const taskOf=(execution:AgentExecutionDto)=>nodes.find(node=>node.id===execution.workItemId);
- const describeRun=(execution:AgentExecutionDto)=>`${taskOf(execution)?.key??'Tarea'} · ${executionStatusLabel(execution.status)}${shortDate(execution.startedAt)?` · ${shortDate(execution.startedAt)}`:''}`;
+ const coveredOf=(execution:AgentExecutionDto)=>(execution.coveredWorkItemIds?.length?execution.coveredWorkItemIds:[execution.workItemId]).flatMap(id=>{const node=nodes.find(item=>item.id===id);return node?[node]:[];});
+ const describeRun=(execution:AgentExecutionDto)=>`${coveredOf(execution).map(node=>node.key).join(', ')||'Tarea'} · ${executionStatusLabel(execution.status)}${shortDate(execution.startedAt)?` · ${shortDate(execution.startedAt)}`:''}`;
  const load=async()=>{setLoading(true);setError(null);try{const [availableProfiles,runs]=await Promise.all([window.workspaceIpc.queries.listAgentProfiles(projectId),window.workspaceIpc.queries.listExecutions(projectId)]);setProfiles(availableProfiles);setExecutions(runs);setProfileId(current=>current||availableProfiles.find(item=>item.roleKey==='DEVELOPER')?.id||'');setSelectedExecutionId(current=>current||runs[0]?.id||'');}catch(reason){setError(reason);}finally{setLoading(false);}};
  useEffect(()=>{void load();},[projectId]);
  // La ejecución que llega de la bandeja o del inspector: se selecciona y se abre la pestaña que corresponde (revisión si terminó).
@@ -76,7 +76,7 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId,selectedExecut
    </div>}
    {tab==='review'&&<div className="space-y-3">
     {history}
-    {selectedExecution?.status==='COMPLETED'?<div className="rounded-xl border border-border bg-surface-sunken"><ExecutionReview execution={selectedExecution} models={availableModels} defaultModel={selectedProfile?.defaultModel??null} onChanged={next=>{setSelectedExecutionId(next.id);if(ACTIVE.includes(next.status))setTab('run');void window.workspaceIpc.queries.listExecutions(projectId).then(setExecutions).catch(setError);}}/></div>
+    {selectedExecution?.status==='COMPLETED'?<div className="rounded-xl border border-border bg-surface-sunken"><ExecutionReview execution={selectedExecution} tasks={coveredOf(selectedExecution).map(node=>({id:node.id,key:node.key,label:node.label}))} models={availableModels} defaultModel={selectedProfile?.defaultModel??null} onChanged={next=>{setSelectedExecutionId(next.id);if(ACTIVE.includes(next.status))setTab('run');void window.workspaceIpc.queries.listExecutions(projectId).then(setExecutions).catch(setError);}}/></div>
      :<p className="rounded-xl border border-dashed border-border-strong p-4 text-xs text-fg-muted">{selectedExecution?`Esta ejecución está «${executionStatusLabel(selectedExecution.status)}». Solo se revisan las terminadas.`:'Elige una ejecución terminada para revisar sus cambios.'}{toReview>0?` Hay ${toReview} por revisar.`:''}</p>}
    </div>}
    {tab==='pilot'&&<FeaturePilotPanel projectId={projectId} nodes={nodes}/>}

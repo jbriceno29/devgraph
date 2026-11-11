@@ -5,6 +5,7 @@ import { statusLabel as workStatus } from '../labels.js';
 import { errorText } from '../errors.js';
 import { control, danger, focusRing, primary, secondary } from '../ui.js';
 import { FeatureIntegration } from './FeatureIntegration.js';
+import { planTaskGroups } from '../../../shared/task-grouping.js';
 
 const levels: Array<{ value: AutonomyLevelDto; label: string; help: string }> = [
   { value: 'MANUAL', label: 'Manual', help: 'Tú lanzas cada tarea y decides qué integrar.' },
@@ -19,7 +20,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
   const features = nodes.filter(node => node.type === 'FEATURE');
   const [featureId, setFeatureId] = useState(features[0]?.id ?? '');
   const [state, setState] = useState<FeaturePilotDto | null>(null);
-  const [draft, setDraft] = useState<{ level: AutonomyLevelDto; executionModel: string; escalationModel: string; maxAttempts: string; threshold: string } | null>(null);
+  const [draft, setDraft] = useState<{ level: AutonomyLevelDto; executionModel: string; escalationModel: string; maxAttempts: string; threshold: string; groupTasks: boolean; maxGroupSize: string } | null>(null);
   const [confirming, setConfirming] = useState(false), [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<FeatureReportDto['report'] | null>(null), [exported, setExported] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
     try {
       const next = await window.workspaceIpc.queries.getFeaturePilot(projectId, featureId);
       setState(next);
-      setDraft(current => current && current.level === next.autonomy.level ? current : { level: next.autonomy.level, executionModel: next.autonomy.executionModel ?? '', escalationModel: next.autonomy.escalationModel ?? '', maxAttempts: String(next.autonomy.maxAttempts), threshold: String(Math.round(next.autonomy.usagePauseThreshold * 100)) });
+      setDraft(current => current && current.level === next.autonomy.level ? current : { level: next.autonomy.level, executionModel: next.autonomy.executionModel ?? '', escalationModel: next.autonomy.escalationModel ?? '', maxAttempts: String(next.autonomy.maxAttempts), threshold: String(Math.round(next.autonomy.usagePauseThreshold * 100)), groupTasks: next.autonomy.groupTasks, maxGroupSize: String(next.autonomy.maxGroupSize) });
     } catch (reason) { setError(text(reason)); }
   }, [projectId, featureId]);
   useEffect(() => { setDraft(null); setState(null); void load(); }, [load]);
@@ -39,8 +40,8 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
 
   const act = async (work: () => Promise<unknown>) => { setBusy(true); setError(null); try { await work(); await load(); } catch (reason) { setError(text(reason)); } finally { setBusy(false); } };
   const save = () => draft && act(async () => {
-    const saved = await window.workspaceIpc.commands.setFeatureAutonomy(projectId, featureId, { level: draft.level, executionModel: draft.executionModel || null, escalationModel: draft.escalationModel || null, maxAttempts: Number(draft.maxAttempts), usagePauseThreshold: Number(draft.threshold) / 100 });
-    setDraft({ level: saved.level, executionModel: saved.executionModel ?? '', escalationModel: saved.escalationModel ?? '', maxAttempts: String(saved.maxAttempts), threshold: String(Math.round(saved.usagePauseThreshold * 100)) });
+    const saved = await window.workspaceIpc.commands.setFeatureAutonomy(projectId, featureId, { level: draft.level, executionModel: draft.executionModel || null, escalationModel: draft.escalationModel || null, maxAttempts: Number(draft.maxAttempts), usagePauseThreshold: Number(draft.threshold) / 100, groupTasks: draft.groupTasks, maxGroupSize: Number(draft.maxGroupSize) });
+    setDraft({ level: saved.level, executionModel: saved.executionModel ?? '', escalationModel: saved.escalationModel ?? '', maxAttempts: String(saved.maxAttempts), threshold: String(Math.round(saved.usagePauseThreshold * 100)), groupTasks: saved.groupTasks, maxGroupSize: String(saved.maxGroupSize) });
   });
 
   const integrateFeature = window.workspaceIpc.commands.integrateFeature;
@@ -50,6 +51,9 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
   const run = state?.run ?? null;
   const active = run && ['RUNNING', 'PAUSED'].includes(run.status);
   const remaining = state?.tasks.filter(task => !['DONE', 'ARCHIVED'].includes(task.status)) ?? [];
+  // Etapa 0: with grouping on, the pilot closes the remaining tasks in fewer executions (same rules as the core).
+  const grouping = Boolean(state && state.autonomy.groupTasks && state.autonomy.maxGroupSize > 1);
+  const plannedRuns = state && grouping ? planTaskGroups(state.tasks, { maxGroupSize: state.autonomy.maxGroupSize, projectHasDoneTasks: nodes.some(node => node.type === 'WORK_ITEM' && node.status === 'DONE') }).length : remaining.length;
   const usage = state?.usage?.utilization != null ? `${Math.round(state.usage.utilization * 100)} % de la ventana ${state.usage.window === 'five_hour' ? 'de 5 h' : state.usage.window}` : 'sin datos todavía';
 
   const small = 'mb-1 block text-[11px] text-fg-muted';
@@ -74,13 +78,18 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
         <div><label htmlFor="pilot-threshold" className={small}>Pausar al llegar al (%)</label>
           <input id="pilot-threshold" type="number" min={50} max={99} value={draft.threshold} onChange={event => setDraft({ ...draft, threshold: event.target.value })} className={control} /></div>
       </div>}
+      {draft.level === 'PILOT' && <div className="space-y-1.5 rounded-lg border border-border bg-surface-sunken p-2">
+        <label className="flex min-h-9 items-start gap-2 text-xs text-fg"><input type="checkbox" checked={draft.groupTasks} onChange={event => setDraft({ ...draft, groupTasks: event.target.checked })} className="mt-0.5 accent-[var(--accent)]" /><span><span className="font-semibold">Agrupar tareas pequeñas</span> <span className="rounded bg-warning-soft px-1 text-[10px] font-medium uppercase text-warning">experimental</span> · <span className="text-fg-muted">Junta 2 o 3 tareas listas de la feature en una sola ejecución. En las mediciones bajó el costo un 42 % con la misma calidad; la tarea que fija una convención siempre va sola.</span></span></label>
+        {draft.groupTasks && <div><label htmlFor="pilot-group-size" className={small}>Tareas por ejecución (máximo)</label>
+          <input id="pilot-group-size" type="number" min={1} max={5} value={draft.maxGroupSize} onChange={event => setDraft({ ...draft, maxGroupSize: event.target.value })} className={control} /></div>}
+      </div>}
       <button type="button" onClick={() => void save()} disabled={busy} className={`min-h-9 w-full text-xs ${secondary}`}>Guardar autonomía</button>
 
       {state.autonomy.level === 'PILOT' && !active && !confirming && <button type="button" onClick={() => { setConfirming(true); setAcknowledged(false); }} disabled={busy || !remaining.length} className={`min-h-10 w-full text-sm ${primary}`}>{run && ['PAUSED', 'WAITING_USER'].includes(run.status) ? 'Iniciar un piloto nuevo' : 'Iniciar piloto'}</button>}
       {state.autonomy.level !== 'PILOT' && !active && <p className="text-[11px] text-fg-subtle">Para que el piloto recorra la feature solo, elige el nivel «Piloto» y guarda.</p>}
       {confirming && <div role="group" aria-label="Aviso de costo" className="space-y-2 rounded-lg border border-warning/50 bg-warning-soft p-3 text-xs text-fg">
         <p className="font-semibold text-warning">El piloto encadena ejecuciones y consume tu límite de uso.</p>
-        <p>Quedan {remaining.length} tareas en esta feature; cada una puede intentarse hasta {state.autonomy.maxAttempts} veces{state.autonomy.executionModel ? ` con ${state.autonomy.executionModel}` : ''}. Uso actual: {usage}. {state.authMode === 'subscription' ? `Con suscripción, el piloto se pausará al llegar al ${Math.round(state.autonomy.usagePauseThreshold * 100)} % y seguirá cuando se renueve la ventana. Para uso intensivo conviene una clave de API del proveedor (se cobra por uso).` : 'Con clave de API, cada ejecución se cobra por uso.'}</p>
+        <p>Quedan {remaining.length} tareas en esta feature{grouping ? `, en ~${plannedRuns} ${plannedRuns === 1 ? 'ejecución' : 'ejecuciones'} (agrupando hasta ${state.autonomy.maxGroupSize} tareas pequeñas por ejecución)` : ''}; cada {grouping ? 'ejecución' : 'una'} puede intentarse hasta {state.autonomy.maxAttempts} veces{state.autonomy.executionModel ? ` con ${state.autonomy.executionModel}` : ''}. Uso actual: {usage}. {state.authMode === 'subscription' ? `Con suscripción, el piloto se pausará al llegar al ${Math.round(state.autonomy.usagePauseThreshold * 100)} % y seguirá cuando se renueve la ventana. Para uso intensivo conviene una clave de API del proveedor (se cobra por uso).` : 'Con clave de API, cada ejecución se cobra por uso.'}</p>
         <label className="flex items-start gap-2"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-[var(--accent)]" /><span>Entiendo el costo y quiero que el piloto trabaje solo en esta feature.</span></label>
         <div className="flex gap-2"><button type="button" onClick={() => void act(async () => { await window.workspaceIpc.commands.startPilot(projectId, featureId, { acknowledgeCost: true }); setConfirming(false); })} disabled={!acknowledged || busy} className={`min-h-9 flex-1 text-xs ${primary}`}>Iniciar</button><button type="button" onClick={() => setConfirming(false)} className={`min-h-9 flex-1 text-xs ${secondary}`}>Cancelar</button></div>
       </div>}

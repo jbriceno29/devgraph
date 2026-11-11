@@ -21,7 +21,28 @@ describe('FeaturePilotPanel',()=>{
   fireEvent.change(screen.getByLabelText('Modelo de ejecución'),{target:{value:'haiku'}});
   fireEvent.change(screen.getByLabelText('Intentos por tarea'),{target:{value:'2'}});
   fireEvent.click(screen.getByRole('button',{name:'Guardar autonomía'}));
-  await waitFor(()=>expect(client.commands.setFeatureAutonomy).toHaveBeenCalledWith('p','feat',{level:'AUTO_ACCEPT',executionModel:'haiku',escalationModel:'sonnet',maxAttempts:2,usagePauseThreshold:0.85}));
+  await waitFor(()=>expect(client.commands.setFeatureAutonomy).toHaveBeenCalledWith('p','feat',{level:'AUTO_ACCEPT',executionModel:'haiku',escalationModel:'sonnet',maxAttempts:2,usagePauseThreshold:0.85,groupTasks:false,maxGroupSize:3}));
+ });
+
+ it('offers task grouping only for the pilot level, saves the switch and the size, and previews «~M ejecuciones» in the cost warning',async()=>{
+  const client=ipc();
+  render(<FeaturePilotPanel projectId="p" nodes={nodes}/>);
+  const grouping=await screen.findByLabelText(/Agrupar tareas pequeñas/);
+  fireEvent.click(grouping);
+  fireEvent.change(screen.getByLabelText('Tareas por ejecución (máximo)'),{target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button',{name:'Guardar autonomía'}));
+  await waitFor(()=>expect(client.commands.setFeatureAutonomy).toHaveBeenCalledWith('p','feat',expect.objectContaining({level:'PILOT',groupTasks:true,maxGroupSize:2})));
+  fireEvent.click(screen.getByLabelText(/Manual/));
+  expect(screen.queryByLabelText(/Agrupar tareas pequeñas/)).toBeNull();
+  cleanup();
+
+  // Three READY tasks, grouping on (size 3) and a DONE task elsewhere in the project: one grouped execution instead of three.
+  const tasks=[{id:'t1',displayKey:'TASK-001',title:'A',status:'READY',dependsOn:[],summary:'',criteriaCount:2},{id:'t2',displayKey:'TASK-002',title:'B',status:'READY',dependsOn:[],summary:'',criteriaCount:2},{id:'t3',displayKey:'TASK-003',title:'C',status:'READY',dependsOn:[],summary:'',criteriaCount:2}];
+  ipc({...base,autonomy:{...base.autonomy,groupTasks:true,maxGroupSize:3},tasks});
+  render(<FeaturePilotPanel projectId="p" nodes={[...nodes,{id:'t0',key:'TASK-000',type:'WORK_ITEM' as const,label:'Hecha',status:'DONE'}]}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Iniciar piloto'}));
+  const warning=screen.getByRole('group',{name:'Aviso de costo'});
+  expect(warning.textContent).toContain('Quedan 3 tareas en esta feature, en ~1 ejecución (agrupando hasta 3 tareas pequeñas por ejecución)');
  });
 
  it('shows the cost warning and starts only after it is acknowledged',async()=>{

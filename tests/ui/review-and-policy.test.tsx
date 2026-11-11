@@ -49,6 +49,19 @@ describe('ExecutionReview',()=>{
   await waitFor(()=>expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({id:'run-2'})));
  });
 
+ it('explains a grouped run: which tasks it covers and what accepting or requesting changes does to them',async()=>{
+  ipc();
+  render(<ExecutionReview execution={{...execution,coveredWorkItemIds:['t1','t2']}} tasks={[{id:'t1',key:'TASK-001',label:'Crear'},{id:'t2',key:'TASK-002',label:'Listar'}]} models={[]} defaultModel={null} onChanged={vi.fn()}/>);
+  const banner=(await screen.findByText(/Ejecución agrupada/)).closest('p')!;
+  expect(banner.textContent).toContain('cierra 2 tareas a la vez (TASK-001 «Crear», TASK-002 «Listar»)');
+  expect(banner.textContent).toContain('pedir ajustes relanza el grupo entero');
+  cleanup();
+  ipc();
+  render(<ExecutionReview execution={execution} models={[]} defaultModel={null} onChanged={vi.fn()}/>);
+  expect(await screen.findByText('src/tasks.js')).toBeTruthy();
+  expect(screen.queryByText(/Ejecución agrupada/)).toBeNull();
+ });
+
  it('offers no actions once the run was reviewed',async()=>{
   ipc({queries:{getExecutionDetail:vi.fn(async()=>({...detail,canAccept:false,canRequestChanges:false}))}});
   render(<ExecutionReview execution={{...execution,reviewStatus:'ACCEPTED',mergedCommit:'cccccccc3'}} models={[]} defaultModel={null} onChanged={vi.fn()}/>);

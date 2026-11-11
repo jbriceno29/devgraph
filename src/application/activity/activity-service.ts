@@ -22,7 +22,12 @@ export class ActivityService {
 
     // One entry per task, by its current state: a DONE task never shows up again as ready or running.
     for (const task of data.tasks) {
-      const execution = latest.get(task.id) ?? null, name = `${task.displayKey} ${task.title}`;
+      const execution = latest.get(task.id) ?? null;
+      // A grouped execution is one item, under its leader, naming every task it covers; the other members add nothing while it runs or waits.
+      const grouped = execution ? execution.coveredWorkItemIds.filter(id => keyOf.has(id)) : [];
+      const member = grouped.length > 1 && grouped[0] !== task.id;
+      if (member && (task.status === 'IN_PROGRESS' || task.status === 'IN_REVIEW' || (task.status === 'READY' && execution?.status === 'FAILED'))) continue;
+      const name = grouped.length > 1 ? `${grouped.map(id => keyOf.get(id)).join(', ')} (${grouped.length} tareas en una ejecución)` : `${task.displayKey} ${task.title}`;
       const base = { workItemId: task.id, featureId: task.featureId, executionId: execution?.id ?? null, target: 'agents' as const };
       if (task.status === 'IN_PROGRESS') push({ ...base, id: `TASK_RUNNING:${execution?.id ?? task.id}`, at: execution?.startedAt ?? task.updatedAt, kind: 'TASK_RUNNING', title: `${name} en curso`, detail: 'Un agente está trabajando en esta tarea.', needsAttention: false });
       else if (task.status === 'IN_REVIEW') items.push(review(task, execution, name, base, Boolean(task.featureId && (data.autonomy[task.featureId] === 'AUTO_ACCEPT' || activePilot.has(task.featureId)))));

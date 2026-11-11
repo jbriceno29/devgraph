@@ -49,7 +49,7 @@ export class ClaudeCodeAdapter implements AgentAdapterPort {
     try {
       const executable = await resolveCliExecutable(claudeCli, this.options.executable ?? 'claude');
       const authMode: AgentAuthMode = this.options.authMode ?? (input.providerConfig?.authMode === 'api_key' ? 'api_key' : 'subscription');
-      const env = buildChildEnvironment(process.env, { authMode });
+      const env = claudeAgentEnvironment(process.env, { authMode });
       if (authMode === 'subscription') {
         const auth = await checkClaudeLogin(executable, env, input.workingDirectory);
         if (!auth.loggedIn) {
@@ -118,8 +118,26 @@ export class ClaudeCodeAdapter implements AgentAdapterPort {
   }
 }
 
+/**
+ * Keeps the user's personal configuration out of a run: its context comes from the workspace and the branch only.
+ * HOME must stay (the subscription session lives there), so the CLI is told not to read the user layer instead:
+ * - `--setting-sources project,local`: no ~/.claude/settings.json (user hooks, enabled plugins, env, permissions) and,
+ *   in CLI 2.1.x, no ~/.claude/CLAUDE.md nor ~/.claude/rules (the user memory is gated by the userSettings source).
+ * - `--disable-slash-commands`: no skills or custom commands (user, plugin or project).
+ * Auto-memory is turned off through the environment (CLAUDE_CODE_DISABLE_AUTO_MEMORY, see claudeAgentEnvironment).
+ * Not used: `--bare` (ignores OAuth, breaks the subscription), `--safe-mode` (also drops the branch's own CLAUDE.md and
+ * hooks; meant for troubleshooting), `--no-session-persistence` (would break `--resume` within a feature).
+ * Admin-managed (policy) settings always apply.
+ */
+export const CLAUDE_ISOLATION_ARGS = ['--setting-sources', 'project,local', '--disable-slash-commands'] as const;
+
+/** Child environment for an agent run: the allowlist plus the switches that keep user-level state out. */
+export function claudeAgentEnvironment(source: NodeJS.ProcessEnv, options: { authMode: AgentAuthMode }): NodeJS.ProcessEnv {
+  return { ...buildChildEnvironment(source, options), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
+}
+
 export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId'>): string[] {
-  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config'];
+  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config', ...CLAUDE_ISOLATION_ARGS];
   if (input.model) {
     if (!MODEL_PATTERN.test(input.model)) throw new Error(`Nombre de modelo inválido: ${input.model}`);
     args.push('--model', input.model);

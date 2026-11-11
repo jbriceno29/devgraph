@@ -151,6 +151,8 @@ Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demues
 
 > **Decisiones del agente (2026-11-11):** al cerrar una tarea el agente puede proponer cambios al plan (bloque `propuestas` al final de su resumen, independiente del motor). Una política del proyecto (migración 006, editable en el formulario de política) clasifica cada operación en cinco categorías, automática o "preguntar", con un tope de tareas automáticas por feature (5 por defecto). Si todo es automático el cambio se aplica y el piloto sigue; si no, el piloto queda en espera con la razón y la propuesta pendiente en Planificación; una propuesta inválida no frena la ejecución. Verificado con haiku real: tras cerrar TASK-001 propuso la tarea `restar`, se aplicó sola y quedó lista. Pendiente: medir si las instrucciones extra del prompt cambian el costo ponderado con `scripts/benchmark/`.
 
+> **Independencia entre lanzamientos (2026-11-11):** el contexto de una ejecución ahora se lee del commit de partida de su rama (`git show` con git fijado, tope de 2 MiB), no de la copia de trabajo del usuario, y el snapshot registra ese commit. El CLI de Claude se lanza con `--setting-sources project,local --disable-slash-commands` y sin memoria automática, así que no carga la configuración, los skills ni los plugins personales (HOME se conserva para la suscripción). Límites conocidos: los plugins integrados del CLI y los ajustes administrados siguen aplicando; que `~/.claude/CLAUDE.md` quede excluido se deduce del código del CLI, no de una ejecución; el planificador de ChangeSets aún no usa estos flags. Verificado con haiku real.
+
 ## 6. Orden y dependencias
 
 Etapa 1 → Etapa 2 → Etapa 3 → Etapa 5 (medición con Claude) → Etapa 6 → Etapa 4 → Etapa 5 (medición con Codex).

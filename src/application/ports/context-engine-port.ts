@@ -20,4 +20,4 @@ export interface ContextRepositoryPort {
  persistSnapshot(snapshot:ContextSnapshot):void;
  findSnapshot(snapshotId:string):ContextSnapshot|null;
 }
-export interface ContextFilePort {getHeadCommit(repositoryRoot:string):Promise<string>;readRepositoryFile(repositoryRoot:string,relativePath:string):Promise<{content:string;contentHash:string}>;hashContent(content:string):string}
+export interface ContextFilePort {getHeadCommit(repositoryRoot:string):Promise<string>;readRepositoryFile(repositoryRoot:string,relativePath:string,commit?:string):Promise<{content:string;contentHash:string}>;hashContent(content:string):string}

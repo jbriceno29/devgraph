@@ -69,7 +69,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const getExecutionService=(projectId:string)=>{
   const cached=executionServices.get(projectId);if(cached)return cached;
   const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database,agentAdapter.providerId),contextEngine=getContextEngine(projectId);
-  const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,maxAllowedTokens:32_000,maxHops:2})};
+  const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string;sourceCommit:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,sourceCommit:input.sourceCommit,maxAllowedTokens:32_000,maxHops:2})};
   const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
   // Plan changes agents propose when closing a task: stored as AGENT_EXECUTION ChangeSets, applied only under the decision policy.
   const planProposals:PlanProposalPort={
@@ -177,7 +177,9 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'changeset:reject': return getPlanningForChangeSet(String(args[0]??'')).reject(String(args[0]??''));
     case 'changeset:list': return getPlanning(String(args[0]??'')).list(String(args[0]??''));
-    case 'context:preview_package': {const input=args[0] as PreviewContextInput;return getContextEngine(input.projectId).preview(input);}
+    case 'context:preview_package': {
+     // UI preview, outside any execution: it reflects the user's working copy and HEAD on purpose (no sourceCommit).
+     const {sourceCommit:_ignored,...input}=args[0] as PreviewContextInput&{sourceCommit?:unknown};return getContextEngine(input.projectId).preview(input);}
     case 'context:get_snapshot': {const snapshotId=String(args[0]??'');for(const project of store.listProjects()){const workspace=store.openProject(project.id),repository=new SqliteContextRepository(workspace.database);if(repository.findSnapshot(snapshotId))return new ContextEngine(repository,new RepositoryContextFileStore()).getSnapshot(snapshotId);}throw new Error('ContextSnapshot no encontrado.');}
     case 'agent:list_profiles': return getExecutionService(String(args[0]??'')).listProfiles(String(args[0]??''));
     case 'execution:list': return getExecutionService(String(args[0]??'')).listExecutions(String(args[0]??'')).map(toAgentExecutionDto);

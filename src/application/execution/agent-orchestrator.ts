@@ -64,7 +64,7 @@ export class AgentOrchestrator {
    isolated=await this.isolation.prepare({projectId:input.projectId,executionId:execution.id,workItemKey:workItem.displayKey,repositoryRoot,workspaceRoot:this.workspaceRoot,requireWorktree:policy.requireWorktreeIsolation,startPoint});
    const afterIsolation=this.repository.findExecution(execution.id);if(!afterIsolation||afterIsolation.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterIsolation??execution,repositoryRoot,isolated);
    execution={...execution,initialCommit:isolated.baseCommit,branchOrWorktree:isolated.workingDirectory,executionBranch:isolated.branchName,baseBranch:previous?previous.baseBranch:isolated.baseBranch};this.repository.updateExecution(execution);
-   const context=await this.contextBuilder.build({projectId:input.projectId,focusEntityId:workItem.id,repositoryRoot,executionId:execution.id});
+   const context=await this.contextBuilder.build({projectId:input.projectId,focusEntityId:workItem.id,repositoryRoot,executionId:execution.id,sourceCommit:isolated.baseCommit});
    const afterContext=this.repository.findExecution(execution.id);if(!afterContext||afterContext.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterContext??execution,repositoryRoot,isolated);
    if(!this.adapter.getCapabilities().supportsStreaming)throw new Error('El adaptador seleccionado no soporta eventos en streaming.');
    execution={...execution,contextSnapshotId:context.snapshot.id,startedAt:now};

@@ -75,7 +75,7 @@ export interface GitIsolationPort {
 export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }
 
 export interface AgentContextBuilderPort {
-  build(input: { projectId: string; focusEntityId: string; repositoryRoot: string; executionId: string }): Promise<{ snapshot: ContextSnapshot; packageText: string }>;
+  build(input: { projectId: string; focusEntityId: string; repositoryRoot: string; executionId: string; /** Commit the run starts from: the context is read from it. */ sourceCommit: string }): Promise<{ snapshot: ContextSnapshot; packageText: string }>;
 }
 
 export interface ExecutionEventLogPort {

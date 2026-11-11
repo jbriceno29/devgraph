@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildClaudeArgs, buildClaudePermissionArgs, createClaudeStreamState, normalizeClaudeEvent } from '../../src/infrastructure/ai/claude-code-adapter.js';
+import { buildClaudeArgs, buildClaudePermissionArgs, claudeAgentEnvironment, createClaudeStreamState, normalizeClaudeEvent } from '../../src/infrastructure/ai/claude-code-adapter.js';
 import { buildChildEnvironment } from '../../src/infrastructure/ai/child-environment.js';
 import type { AgentEvent } from '../../src/domain/agents/models.js';
 
@@ -74,11 +74,21 @@ describe('Claude CLI arguments',()=>{
 
  it('runs headless in dontAsk mode without MCP servers and passes the model alias',()=>{
   const args=buildClaudeArgs({model:'sonnet',policy:defaultPolicy});
-  expect(args.slice(0,10)).toEqual(['-p','--output-format','stream-json','--verbose','--permission-mode','dontAsk','--permission-prompts','none','--strict-mcp-config','--model']);
-  expect(args[10]).toBe('sonnet');
+  expect(args.slice(0,9)).toEqual(['-p','--output-format','stream-json','--verbose','--permission-mode','dontAsk','--permission-prompts','none','--strict-mcp-config']);
+  expect(args.slice(args.indexOf('--model'),args.indexOf('--model')+2)).toEqual(['--model','sonnet']);
   expect(()=>buildClaudeArgs({model:'sonnet --dangerously-skip-permissions'})).toThrow('Nombre de modelo inválido');
   expect(buildClaudeArgs({resumeSessionId:'11111111-1111-4111-8111-111111111111'})).toEqual(expect.arrayContaining(['--resume','11111111-1111-4111-8111-111111111111']));
   expect(()=>buildClaudeArgs({resumeSessionId:'x; rm -rf /'})).toThrow('Id de sesión inválido');
+ });
+
+ it('keeps the user configuration out of every run (settings, CLAUDE.md, skills) without touching HOME',()=>{
+  for(const args of [buildClaudeArgs({}),buildClaudeArgs({model:'haiku',resumeSessionId:'11111111-1111-4111-8111-111111111111',policy:defaultPolicy})]){
+   expect(args.slice(args.indexOf('--setting-sources'),args.indexOf('--setting-sources')+2)).toEqual(['--setting-sources','project,local']);
+   expect(args).toContain('--disable-slash-commands');
+   expect(args).not.toContain('--bare');expect(args).not.toContain('--no-session-persistence');
+  }
+  const env=claudeAgentEnvironment({HOME:'/home/u',PATH:'/bin',CLAUDE_CODE_DISABLE_AUTO_MEMORY:'0',CLAUDECODE:'1'},{authMode:'subscription'});
+  expect(env).toEqual({HOME:'/home/u',PATH:'/bin',CLAUDE_CODE_DISABLE_AUTO_MEMORY:'1'});
  });
 });
 

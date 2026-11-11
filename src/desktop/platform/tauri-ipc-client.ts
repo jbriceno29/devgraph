@@ -20,6 +20,11 @@ export const workspaceIpc:WorkspaceIpcClient={
   requestExecutionChanges:input=>invokeCore('execution:request_changes',[input]),
   setWorkItemStatus:(projectId,workItemId,status)=>invokeCore('workitem:set_status',[projectId,workItemId,status]),
   updateExecutionPolicy:(projectId,policy)=>invokeCore('policy:update',[projectId,policy]),
+  setFeatureAutonomy:(projectId,featureId,input)=>invokeCore('pilot:set_autonomy',[projectId,featureId,input]),
+  startPilot:(projectId,featureId,input)=>invokeCore('pilot:start',[projectId,featureId,input]),
+  stopPilot:(projectId,featureId)=>invokeCore('pilot:stop',[projectId,featureId]),
+  resumePilot:(projectId,featureId)=>invokeCore('pilot:resume',[projectId,featureId]),
+  setAuthMode:(projectId,mode)=>invokeCore('provider:set_auth_mode',[projectId,mode]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),
@@ -36,12 +41,14 @@ export const workspaceIpc:WorkspaceIpcClient={
   listExecutionEvents:executionId=>invokeCore('execution:list_events',[executionId]),
   getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
   getExecutionPolicy:projectId=>invokeCore('policy:get',[projectId]),
+  getFeaturePilot:(projectId,featureId)=>invokeCore('pilot:get',[projectId,featureId]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},
   onArtifactSyncStatusChanged(listener){return subscribe('artifact:sync_status_changed',listener);},
   onExecutionStatusChanged(listener){return subscribe('execution:status_changed',listener);},
   onExecutionEventReceived(listener){return subscribe('execution:event_received',listener);},
+  onPilotUpdated(listener){return subscribe('pilot:updated',listener);},
  },
 };
 function subscribe<K extends keyof WorkspaceIpcEvents>(channel:K,listener:(event:WorkspaceIpcEvents[K])=>void):()=>void {

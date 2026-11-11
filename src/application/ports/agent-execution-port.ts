@@ -22,6 +22,8 @@ export interface AgentExecutionRepositoryPort {
   updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'>):void;
   /** Closes approval requests left PENDING by an execution that will never resume. */
   rejectPendingApprovals(executionId:string,note:string):void;
+  /** Sets `authMode` in the wired provider's connection config. */
+  setProviderAuthMode(projectId:string,mode:'subscription'|'api_key'):void;
   createExecution(execution: AgentExecution): void;
   updateExecution(execution: AgentExecution): void;
   findExecution(executionId: string): AgentExecution | null;

@@ -11,6 +11,7 @@ export const SERIALIZED_CHANNELS: ReadonlySet<string> = new Set([
   'changeset:edit', 'changeset:apply', 'changeset:reject',
   'execution:start', 'execution:cancel', 'execution:resolve_approval', 'execution:accept', 'execution:request_changes',
   'workitem:set_status', 'policy:update',
+  'pilot:set_autonomy', 'pilot:start', 'pilot:stop', 'pilot:resume', 'provider:set_auth_mode',
 ]);
 
 interface SidecarRequest { id: string; request: WorkspaceRequest }

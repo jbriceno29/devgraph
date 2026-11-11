@@ -34,6 +34,8 @@ import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-
 import { GitIsolationService } from '../../git/git-isolation-service.js';
 import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
+import { FeaturePilot } from '../../../application/execution/feature-pilot.js';
+import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
 export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
@@ -44,6 +46,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  // Claude Code is the wired engine; CodexAgentAdapter stays in the codebase, unwired, until Claude is proven (migration plan, section 3).
  const agentAdapter=dependencies.agentAdapter??new ClaudeCodeAdapter();
  const executionServices=new Map<string,AgentOrchestrator>();
+ const pilots=new Map<string,FeaturePilot>();
  const getManagement=(projectId:string)=>{
   const workspace=store.openProject(projectId);
   return new ArtifactManagementService(workspace.projects,workspace.graph,workspace.artifacts,workspace.repositories,files,event=>emit('artifact:sync_status_changed',event as ArtifactSyncStatusChangedEvent),documentCommitter);
@@ -74,6 +77,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const known=new Map(management.list(projectId).map(document=>[document.relativePath,document.contentHash]));
   await new TransactionalMarkdownFileStore().recoverInterruptedWrites(root,known).catch(()=>undefined);
  };
+ // One autopilot service per project, sharing that project's orchestrator.
+ const getPilot=(projectId:string)=>{const cached=pilots.get(projectId);if(cached)return cached;const pilot=new FeaturePilot(getExecutionService(projectId),new SqlitePilotRepository(store.openProject(projectId).database),(channel,payload)=>emit(channel,payload));pilots.set(projectId,pilot);return pilot;};
  const startWatcher=async(projectId:string)=>{
   const management=getManagement(projectId),repositoryPath=management.repositoryPath(projectId);
   const previous=watchers.get(projectId);previous?.stop();watchers.delete(projectId);
@@ -95,6 +100,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      await recoverDocuments(id);
      await startWatcher(id);
      getExecutionService(id).reconcileInterrupted(id);
+     getPilot(id).reconcile(id);
      const graph=new GetGraphViewUseCase(workspace.projects,workspace.graph).execute(id);
      const selectedEntityId=graph.nodes.find(node=>node.type==='PROJECT_ROOT')?.id??graph.nodes[0]?.id??'';
      const loaded:WorkspaceLoadedStateDto={project:summarize(project),graph,selectedEntityId};return loaded;
@@ -174,11 +180,20 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'workitem:set_status': {const projectId=String(args[0]??'');return getExecutionService(projectId).setWorkItemStatus(projectId,String(args[1]??''),String(args[2]??'') as WorkItemStatus);}
     case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
     case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{})});}
+    case 'pilot:get': {
+     const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
+     return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};
+    }
+    case 'pilot:set_autonomy': {const projectId=String(args[0]??'');return getPilot(projectId).setAutonomy(projectId,String(args[1]??''),args[2] as import('../../../shared/contracts/agent-view.js').SetFeatureAutonomyInput);}
+    case 'pilot:start': {const projectId=String(args[0]??'');return getPilot(projectId).start(projectId,String(args[1]??''),{acknowledgeCost:Boolean((args[2] as {acknowledgeCost?:boolean}|undefined)?.acknowledgeCost)});}
+    case 'pilot:stop': {const projectId=String(args[0]??'');return getPilot(projectId).stop(projectId,String(args[1]??''));}
+    case 'pilot:resume': {const projectId=String(args[0]??'');return getPilot(projectId).resume(projectId,String(args[1]??''));}
+    case 'provider:set_auth_mode': {const projectId=String(args[0]??'');return {authMode:getExecutionService(projectId).setAuthMode(projectId,args[1] as 'subscription'|'api_key')};}
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }
   },
-  close():void {for(const service of executionServices.values())service.shutdown();for(const watcher of watchers.values())watcher.stop();watchers.clear();store.closeAll();},
+  close():void {for(const pilot of pilots.values())pilot.shutdown();for(const service of executionServices.values())service.shutdown();for(const watcher of watchers.values())watcher.stop();watchers.clear();store.closeAll();},
  };
  function getManagementForDocument(documentId:string):ArtifactManagementService {
   for(const project of store.listProjects()) {

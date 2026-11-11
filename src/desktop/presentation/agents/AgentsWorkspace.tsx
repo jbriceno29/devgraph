@@ -1,6 +1,7 @@
 import { useEffect,useMemo,useRef,useState } from 'react';
 import { ExecutionReview } from './ExecutionReview.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
+import { FeaturePilotPanel } from './FeaturePilotPanel.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import type { AgentEventRecordDto,AgentExecutionDto,AgentProfileDto } from '../../../shared/contracts/agent-view.js';
 
@@ -39,6 +40,7 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId}:{projectId:st
     <button type="button" onClick={()=>void start()} disabled={!workItemId||!profileId||starting||loading} className="min-h-11 w-full rounded-lg bg-cyan-500 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-45">{starting?'Preparando contexto…':`Iniciar ejecución${selectedProfile?` · ${selectedProfile.providerName}`:''}`}</button>
     <p className="text-[10px] leading-relaxed text-slate-600">La política se aplica dentro del motor y se vuelve a auditar al terminar: las rutas no autorizadas se revierten dentro del worktree.</p>
     <ExecutionPolicyForm projectId={projectId}/>
+    <FeaturePilotPanel projectId={projectId} nodes={nodes}/>
     {error&&<p role="alert" className="rounded-lg border border-rose-900/70 bg-rose-950/40 p-3 text-xs text-rose-300">{error}</p>}
    </div>
    <div className="flex min-h-[320px] min-w-0 flex-col rounded-xl border border-slate-800 bg-slate-900/30">

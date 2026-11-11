@@ -64,6 +64,14 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     if(result.changes!==1)throw new Error('La política de autonomía no existe.');
   }
 
+  setProviderAuthMode(projectId:string,mode:'subscription'|'api_key'):void {
+    this.ensureDefaults(projectId);
+    const providerId=(this.db.prepare('SELECT id FROM agent_providers WHERE provider_key=?').get(this.providerKey) as {id:string}).id;
+    const row=this.db.prepare('SELECT config_json FROM provider_connections WHERE id=?').get(`${providerId}:local`) as {config_json:string|null}|undefined;
+    const config={...parseConnectionConfig(row?.config_json??null),authMode:mode};
+    this.db.prepare('UPDATE provider_connections SET config_json=? WHERE id=?').run(JSON.stringify(config),`${providerId}:local`);
+  }
+
   rejectPendingApprovals(executionId:string,note:string):void {
     this.db.prepare(`UPDATE approval_requests SET status='REJECTED',resolved_by='SYSTEM',resolution_note=?,resolved_at=? WHERE execution_id=? AND status='PENDING'`).run(note,new Date().toISOString(),executionId);
   }

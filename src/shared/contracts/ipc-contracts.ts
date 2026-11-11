@@ -1,7 +1,7 @@
 import type { GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
@@ -28,6 +28,11 @@ export interface WorkspaceIpcCommands {
   'execution:request_changes': (input:RequestExecutionChangesInput)=>Promise<AgentExecutionDto>;
   'workitem:set_status': (projectId:string,workItemId:string,status:string)=>Promise<{status:string;revision:number}>;
   'policy:update': (projectId:string,policy:ExecutionPolicyDto)=>Promise<ExecutionPolicyDto>;
+  'pilot:set_autonomy': (projectId:string,featureId:string,input:SetFeatureAutonomyInput)=>Promise<FeatureAutonomyDto>;
+  'pilot:start': (projectId:string,featureId:string,input:{acknowledgeCost:boolean})=>Promise<PilotRunDto>;
+  'pilot:stop': (projectId:string,featureId:string)=>Promise<PilotRunDto|null>;
+  'pilot:resume': (projectId:string,featureId:string)=>Promise<PilotRunDto>;
+  'provider:set_auth_mode': (projectId:string,mode:'subscription'|'api_key')=>Promise<{authMode:'subscription'|'api_key'}>;
 }
 export interface WorkspaceIpcQueries {
   'project:list': ()=>Promise<ProjectSummaryDto[]>;
@@ -44,12 +49,14 @@ export interface WorkspaceIpcQueries {
   'execution:list_events': (executionId:string)=>Promise<AgentEventRecordDto[]>;
   'execution:get_detail': (executionId:string)=>Promise<ExecutionDetailDto>;
   'policy:get': (projectId:string)=>Promise<ExecutionPolicyDto>;
+  'pilot:get': (projectId:string,featureId:string)=>Promise<FeaturePilotDto>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};
   'artifact:sync_status_changed': ArtifactSyncStatusChangedDto;
   'execution:status_changed': {executionId:string;workItemId:string;status:AgentExecutionDto['status']};
   'execution:event_received': {executionId:string;event:AgentEventDto};
+  'pilot:updated': {projectId:string;featureId:string;status:string|null};
 }
 export type IpcCommandChannel=keyof WorkspaceIpcCommands;
 export type IpcQueryChannel=keyof WorkspaceIpcQueries;
@@ -73,6 +80,11 @@ export interface WorkspaceIpcClient {
     requestExecutionChanges(input:RequestExecutionChangesInput):Promise<AgentExecutionDto>;
     setWorkItemStatus(projectId:string,workItemId:string,status:string):Promise<{status:string;revision:number}>;
     updateExecutionPolicy(projectId:string,policy:ExecutionPolicyDto):Promise<ExecutionPolicyDto>;
+    setFeatureAutonomy(projectId:string,featureId:string,input:SetFeatureAutonomyInput):Promise<FeatureAutonomyDto>;
+    startPilot(projectId:string,featureId:string,input:{acknowledgeCost:boolean}):Promise<PilotRunDto>;
+    stopPilot(projectId:string,featureId:string):Promise<PilotRunDto|null>;
+    resumePilot(projectId:string,featureId:string):Promise<PilotRunDto>;
+    setAuthMode(projectId:string,mode:'subscription'|'api_key'):Promise<{authMode:'subscription'|'api_key'}>;
   };
   queries:{
     listProjects():Promise<ProjectSummaryDto[]>;
@@ -89,6 +101,7 @@ export interface WorkspaceIpcClient {
     listExecutionEvents(executionId:string):Promise<AgentEventRecordDto[]>;
     getExecutionDetail(executionId:string):Promise<ExecutionDetailDto>;
     getExecutionPolicy(projectId:string):Promise<ExecutionPolicyDto>;
+    getFeaturePilot(projectId:string,featureId:string):Promise<FeaturePilotDto>;
   };
-  events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void};
+  events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void;onPilotUpdated(listener:(event:WorkspaceIpcEvents['pilot:updated'])=>void):()=>void};
 }

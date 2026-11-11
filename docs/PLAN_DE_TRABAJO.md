@@ -88,6 +88,10 @@ Objetivo: H2. Lo que se aprende al cerrar una tarea llega a las siguientes sin h
 
 ### Etapa 3: Piloto automático (L)
 
+> **Estado (2026-11-10): hecha, salvo las decisiones automáticas sobre ChangeSets.** Robustez (`a95ec03`): tiempo máximo por ejecución configurable en la política, D7 (el motor se detiene si falla el consumo o al cerrar la app), aprobaciones pendientes cerradas al reconciliar, y el host reinicia el núcleo si muere. Autonomía por feature (manual, auto-aceptar, piloto) con aviso de costo obligatorio, autenticación por proveedor (suscripción primero, clave de API como segunda opción) y un piloto que recorre las tareas READY, acepta solo con auditoría y comprobaciones en verde, reintenta con el error como contexto (el último intento con el modelo de escalado), se pausa al acercarse al límite de uso y avisa con el motivo cuando necesita al usuario. **H4 probada en real** sobre el proyecto `todo-app` de la app (Claude `haiku`): el piloto cerró la feature FEAT-001 (TASK-001 y TASK-002, con dependencia) sin intervención en 41 s, con 13/13 pruebas en la rama de la feature.
+>
+> Pendiente: ChangeSets propuestos por el propio agente tras una ejecución y su clasificación según la política de decisiones del proyecto. Hoy ninguna ejecución propone cambios al plan, así que no hay decisiones que automatizar; se abordará cuando el agente pueda declararlos (por ejemplo, a partir del apartado "Pendiente" de su resumen de cierre).
+
 Objetivo: H4. El usuario deja de ser orquestador.
 
 - **Niveles de autonomía por feature:** `manual` (como hoy, valor por defecto), `auto-aceptar` (acepta solo si la auditoría y las pruebas pasan) y `piloto` (además elige y lanza la siguiente tarea). Se elige al iniciar el trabajo de cada feature, no para todo el proyecto.

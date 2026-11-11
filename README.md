@@ -78,6 +78,6 @@ Pendiente o con límites:
 
 - **Codex:** `CodexAgentAdapter` y `CodexChangeSetPlanner` siguen en el repositorio pero no están cableados; reconectarlos es la Etapa 4. Hoy solo funciona Claude Code.
 - **Avisos de escritorio:** usan la API web `Notification` (no hay plugin de Tauri); en un webview sin esa API o sin permiso no se muestra nada. La bandeja de actividad dentro de la app sí es fiable.
-- **Agrupación de tareas:** bajó el costo en una corrida de medición, pero no está en el piloto y hay una repetición en curso; no hay cifras finales.
+- **Agrupación de tareas:** el piloto puede agrupar 2–3 tareas pequeñas de una feature en una ejecución (opción «Agrupar tareas pequeñas» de la feature, desactivada por defecto). En el benchmark agrupado a mano bajó el costo ponderado un 42 % con igual calidad (séptima medición); la medición con el piloto agrupando solo (brazo `workspace-grouped` del harness) está pendiente de una ventana de uso libre, y hasta tenerla la opción sigue siendo experimental.
 - **Recorte del prompt de contexto** y **camino crítico en el grafo:** sin hacer.
 - **Inicio de proyecto:** solo con Claude Code; en un proyecto con plan ya creado no se usa; cancelar una llamada envía SIGINT y luego SIGTERM, y si el sidecar muere por SIGKILL el proceso del motor puede quedar huérfano (por verificar en detalle).

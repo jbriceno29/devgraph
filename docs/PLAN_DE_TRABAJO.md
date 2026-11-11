@@ -13,7 +13,7 @@ Actualizado: 2026-11-11 (rama `feat/claude-code`). Los commits son los de `git l
 | 1. Cerrar el ciclo (worktree por tarea, rama por feature, aceptar, pedir ajustes, D6) | Hecha (núcleo y UI) | `6d65cb4`, `2dda1c0`, `6298377`, `1aefc8f` (2026-11-10) |
 | 2. Memoria que fluye (`TaskOutcome`, evidencia en el grafo, contexto) | Hecha | `31eb39b` (2026-11-10); convenciones como reglas de nivel 1 en `da677b2` |
 | 3. Piloto automático (autonomía por feature, reintentos, pausa por uso, robustez) | Hecha, incluidas las decisiones automáticas del agente | `a95ec03`, `6b710c6` (2026-11-10); política de decisiones en `665cae5` (2026-11-11) |
-| 5. Demostración y medición (mediciones 1–6) | Hecha con Claude; decisión del usuario tomada (apostar por autonomía y trazabilidad). Repetición de la agrupación **en curso** | `5ecb8ee`, `5c97bc3`, `da677b2`, `2d3decc` (2026-11-10/11), `2c9c0fc` (2026-11-11) |
+| 5. Demostración y medición (mediciones 1–7) | Hecha con Claude; decisión del usuario tomada (apostar por autonomía y trazabilidad). Agrupación repetida (séptima medición, `a842629`) y llevada al piloto como opción (Etapa 0 del plan de exploración visual, `d728673`, `5c37886`); medición con el piloto agrupando solo **pendiente** | `5ecb8ee`, `5c97bc3`, `da677b2`, `2d3decc` (2026-11-10/11), `2c9c0fc` (2026-11-11) |
 | 6. Grafo vivo | Hecha, salvo el camino crítico | `ca96fca` (2026-11-10) |
 | Aislamiento entre lanzamientos (contexto leído del commit de partida, CLI sin configuración personal) | Hecha | `15f7831` (2026-11-11) |
 | Interfaz renovada (barra lateral, bandeja de actividad, siguiente paso, tema claro/oscuro en todos los paneles) | Hecha | `34aecf0`, `8be2e46` (2026-11-11) |
@@ -25,7 +25,7 @@ Actualizado: 2026-11-11 (rama `feat/claude-code`). Los commits son los de `git l
 **Pendiente, de forma explícita:**
 
 - Etapa 4: reconectar `CodexAgentAdapter` y `CodexChangeSetPlanner` con el contrato actual y medir H3 (necesita cuota de Codex).
-- Agrupar tareas pequeñas dentro del piloto (hoy solo existe como escenario de medición, `scripts/benchmark/todo-v2-agrupado`) y repetir la medición antes de citar cifras finales.
+- Medir la agrupación de tareas **con el piloto agrupando solo** (brazo `workspace-grouped` de `scripts/benchmark/run-benchmark.mjs`, Etapa 0 de `docs/PLAN_EXPLORACION_VISUAL_Y_OBJETIVO.md`); la opción ya está en el piloto, desactivada por defecto, y la primera corrida se cortó por el límite de uso de la suscripción (2026-11-11).
 - Recortar el prompt de contexto de la tarea (la sexta medición lo identifica como la mayor parte del costo evitable).
 - Notificaciones de escritorio fiables: hoy usan la API web `Notification`, sin plugin de Tauri.
 - Camino crítico de la feature en el grafo.

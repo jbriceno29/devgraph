@@ -35,7 +35,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
-| `execution:start` ⛓ | Inicia una ejecución de una tarea `READY` (o una revisión con ajustes). |
+| `execution:start` ⛓ | Inicia una ejecución de una tarea `READY` (o una revisión con ajustes). Con `workItemIds`, una sola ejecución cubre varias tareas de la misma feature (listas, o bloqueadas solo por tareas del grupo); todas cambian de estado juntas. |
 | `execution:cancel` ⛓ | Cancela una ejecución en curso. |
 | `execution:resolve_approval` ⛓ | Resuelve una aprobación pendiente (por ejemplo «Permitir y reintentar»). |
 | `execution:accept` ⛓ | Acepta una ejecución completada: squash a la rama de la feature, memoria y desbloqueo. |
@@ -45,7 +45,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
-| `pilot:set_autonomy` ⛓ | Fija el nivel de autonomía de una feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`) y sus modelos, intentos y umbral de pausa. |
+| `pilot:set_autonomy` ⛓ | Fija el nivel de autonomía de una feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`) y sus modelos, intentos, umbral de pausa, y si el piloto agrupa tareas pequeñas (`groupTasks`, `maxGroupSize` de 1 a 5). |
 | `pilot:start` ⛓ | Inicia el piloto de una feature (exige `acknowledgeCost: true`). |
 | `pilot:stop` ⛓ | Detiene el piloto. |
 | `pilot:resume` ⛓ | Reanuda un piloto pausado o en espera del usuario. |

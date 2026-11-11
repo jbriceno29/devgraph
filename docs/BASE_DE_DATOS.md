@@ -21,6 +21,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 | 007 | `007_max_turns.sql` | `autonomy_policies.max_turns` (nulo o 0 = sin límite). |
 | 008 | `008_project_inception.sql` | Tabla `project_inception` y `projects.out_of_scope_json`. |
 | 009 | `009_inception_notes_and_integration.sql` | `project_inception.notes_json` y `scaffold_task_id`; `feature_branches.integrated_at`. |
+| 010 | `010_execution_groups.sql` | Tabla `execution_work_items` (tareas que cubre una ejecución agrupada, con posición) y `feature_autonomy.group_tasks` (0 por defecto) y `max_group_size` (3). |
 
 ## Tablas principales
 
@@ -41,7 +42,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 
 - `agent_profiles` (roles `PLANNER`, `ARCHITECT`, `DEVELOPER`, `REVIEWER`, `KNOWLEDGE_MANAGER`), `agent_providers` (`codex`, `claude-code`, `opencode`), `provider_connections`, `agent_sessions`.
 - `context_snapshots`: qué fuentes entraron al contexto de una ejecución, con el commit de partida y la revisión del grafo.
-- `agent_executions`: estado (`QUEUED`, `PREPARING_CONTEXT`, `RUNNING`, `AWAITING_APPROVAL`, `VALIDATING`, `COMPLETED`, `FAILED`, `CANCELLED`), modelo usado, commits inicial y final, worktree; más `base_branch` (002) y los campos de revisión (003).
+- `agent_executions`: estado (`QUEUED`, `PREPARING_CONTEXT`, `RUNNING`, `AWAITING_APPROVAL`, `VALIDATING`, `COMPLETED`, `FAILED`, `CANCELLED`), modelo usado, commits inicial y final, worktree; más `base_branch` (002) y los campos de revisión (003). `work_item_id` es la tarea líder; una ejecución agrupada (Etapa 0) lista todas las tareas que cubre en `execution_work_items` (010), la líder en posición 0. Las ejecuciones sin filas ahí cubren solo su tarea.
 - `agent_events`: eventos del motor por ejecución, en orden.
 - `execution_file_diffs`: diff por archivo de cada ejecución.
 - `approval_requests`: acciones que el agente pidió y la política no permitía.
@@ -54,7 +55,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 ### Autonomía y piloto
 
 - `autonomy_policies`: rutas escribibles, solo lectura y denegadas, comandos permitidos, aislamiento por worktree, `max_execution_minutes` (005), `decision_policy_json` (006) y `max_turns` (007).
-- `feature_autonomy` (005): nivel por feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`), modelo de ejecución y de escalamiento, intentos máximos (3 por defecto) y umbral de pausa por uso (0,85 por defecto).
+- `feature_autonomy` (005, 010): nivel por feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`), modelo de ejecución y de escalamiento, intentos máximos (3 por defecto), umbral de pausa por uso (0,85 por defecto), y si el piloto agrupa tareas pequeñas (`group_tasks`, desactivado por defecto) con el tamaño máximo del grupo (`max_group_size`, 3).
 - `pilot_runs` (005): corridas del piloto (`RUNNING`, `PAUSED`, `WAITING_USER`, `COMPLETED`, `STOPPED`, `FAILED`) con su razón.
 - `pilot_events` (005): registro de cada decisión del piloto (inicio, tarea iniciada o aceptada, reintento, escalamiento, pausa, espera del usuario, cambios al plan…).
 

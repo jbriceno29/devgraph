@@ -57,6 +57,7 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 - **Modelos.** Para planificar y para el asistente de inicio, la aplicación usa `opus` por defecto; para ejecutar, `sonnet`. Están disponibles `haiku`, `sonnet` y `opus`. Puedes elegir otro por tarea o por feature, y un modelo de escalamiento para el último reintento. Las pruebas de medición del proyecto se hicieron con `haiku`.
 - **Orden de magnitud medido.** Con `haiku`, el workspace igualó la calidad del mejor chat con un costo ponderado de aproximadamente 1,5 veces el de un chat largo antes de agrupar tareas (~603 k frente a 414 k en la tercera medición), sin intervención humana; ver `docs/benchmarks/`. Una propuesta de inicio costó ~0,035 USD en una prueba real. Estas cifras son orientativas: agrupar tareas pequeñas bajó el costo en una corrida, pero esa medición se está repitiendo y no es una garantía.
 - El piloto avisa del costo antes de activarse y muestra el uso actual.
+- **Agrupar tareas pequeñas (experimental).** En la autonomía de una feature, con nivel «Piloto», puedes activar «Agrupar tareas pequeñas»: el piloto junta 2 o 3 tareas listas de la feature en una sola ejecución (como máximo las que indiques, hasta 5), y el aviso de costo te dice en cuántas ejecuciones cerraría lo que queda. La tarea que fija una convención y la primera tarea del proyecto siempre van solas. Un grupo se acepta con un solo commit que nombra todas sus tareas, cada tarea conserva su propio resumen de cierre, y si el grupo falla se reintenta entero. En las mediciones del proyecto bajó el costo un 42 % con la misma calidad; está desactivado por defecto hasta confirmarlo con el piloto en proyectos reales.
 
 ## Solución de problemas
 
@@ -77,5 +78,4 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 
 - Trabajar con Codex (el código existe pero está desconectado; solo funciona Claude Code).
 - Analizar un repositorio existente para proponer el plan (el asistente de inicio es para proyectos vacíos).
-- Agrupar tareas pequeñas en una sola ejecución desde el piloto.
 - Mostrar el camino crítico de una feature en el grafo.

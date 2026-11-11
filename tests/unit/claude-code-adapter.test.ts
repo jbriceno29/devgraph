@@ -24,7 +24,7 @@ describe('normalizeClaudeEvent against real CLI fixtures',()=>{
   expect(ofType(events,'RATE_LIMIT_UPDATED')[0]).toMatchObject({status:'allowed',window:'five_hour',utilization:0.1});
   const finished=events.at(-1)!;
   expect(finished.type).toBe('EXECUTION_FINISHED');
-  if(finished.type==='EXECUTION_FINISHED'){expect(finished.summary).toContain('hello.ts');expect(finished.usage!.outputTokens).toBeGreaterThan(0);expect(finished.usage!.inputTokens).toBeGreaterThan(1000);}
+  if(finished.type==='EXECUTION_FINISHED'){expect(finished.summary).toContain('hello.ts');expect(finished.usage!.outputTokens).toBeGreaterThan(0);expect(finished.usage!.inputTokens).toBeGreaterThan(1000);expect(finished.usage!.cacheReadTokens).toBe(50204);expect(finished.usage!.cacheCreationTokens).toBe(12278);}
   expect(events.some(event=>event.type==='TEXT_DELTA')).toBe(true);
  });
 

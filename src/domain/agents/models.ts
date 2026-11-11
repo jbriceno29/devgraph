@@ -16,7 +16,7 @@ export type AgentEvent =
  | { type:'FILE_TOUCHED'; timestamp:string; relativePath:string; operation:'CREATE'|'EDIT'|'DELETE' }
  | { type:'APPROVAL_REQUIRED'; timestamp:string; requestId:string; actionType:'COMMAND'|'FILE_WRITE'|'NETWORK'; target:string; justification?:string }
  | { type:'CHANGESET_PROPOSED'; timestamp:string; proposal:import('../knowledge/change-set.js').ChangeSet }
- | { type:'EXECUTION_FINISHED'; timestamp:string; summary:string; usage?:{inputTokens:number;outputTokens:number} }
+ | { type:'EXECUTION_FINISHED'; timestamp:string; summary:string; usage?:{inputTokens:number;outputTokens:number;cacheReadTokens?:number;cacheCreationTokens?:number} }
  | { type:'EXECUTION_FAILED'; timestamp:string; errorCode:string; errorMessage:string; isRecoverable:boolean }
  | { type:'ACTION_DENIED'; timestamp:string; toolName:string; target:string; reason:string }
  | { type:'RATE_LIMIT_UPDATED'; timestamp:string; status:string; window:string; utilization:number|null; resetsAt:string|null };

@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { createTaskList } from '../src/tasks.js'; import { toCsv, fromCsv } from '../src/csv.js';
+test('C3 fromCsv(toCsv(l)) keeps the tasks and the interface', async () => { const l = createTaskList(); const a = l.add('hola, "x"', { priority: 'alta', due: '2026-05-05' }); l.add('b'); l.tag(a.id, 'casa'); l.tag(a.id, 'ocio'); l.complete(a.id); const copy = await fromCsv(toCsv(l)); assert.deepEqual(copy.list(), l.list()); assert.ok(copy.add('c').id > a.id); });

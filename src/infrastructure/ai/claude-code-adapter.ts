@@ -233,6 +233,9 @@ export function normalizeClaudeEvent(record: Record<string, unknown>, state: Cla
     const tokens = Object.keys(usage).length ? {
       inputTokens: num(usage.input_tokens) + num(usage.cache_creation_input_tokens) + num(usage.cache_read_input_tokens),
       outputTokens: num(usage.output_tokens),
+      // inputTokens includes both: cache reads are cheap, fresh input (incl. cache creation) is what weighs in cost and limits.
+      cacheReadTokens: num(usage.cache_read_input_tokens),
+      cacheCreationTokens: num(usage.cache_creation_input_tokens),
     } : undefined;
     if (record.is_error === true || str(record.subtype) !== 'success') {
       const code = (str(record.terminal_reason) || str(record.subtype) || 'error').toUpperCase();

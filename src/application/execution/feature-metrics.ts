@@ -4,7 +4,7 @@ import type { AgentOrchestrator } from './agent-orchestrator.js';
 
 export interface ExecutionMetrics {
   executionId: string; status: string; reviewStatus: string | null; model: string | null;
-  inputTokens: number; outputTokens: number; durationMs: number | null;
+  inputTokens: number; outputTokens: number; cacheReadTokens: number; uncachedInputTokens: number; durationMs: number | null;
   filesChanged: number; additions: number; deletions: number;
   deniedActions: number; policyViolations: number; checksRun: number; checksPassed: boolean | null;
   revisionOf: string | null; autoAccepted: boolean;
@@ -67,6 +67,7 @@ export class FeatureMetrics {
     return {
       executionId: execution.id, status: execution.status, reviewStatus: execution.reviewStatus ?? null, model: execution.modelUsed,
       inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0,
+      cacheReadTokens: usage?.cacheReadTokens ?? 0, uncachedInputTokens: (usage?.inputTokens ?? 0) - (usage?.cacheReadTokens ?? 0),
       durationMs: execution.startedAt && execution.completedAt ? Date.parse(execution.completedAt) - Date.parse(execution.startedAt) : null,
       filesChanged: diffs.length, additions: diffs.reduce((total, diff) => total + diff.additions, 0), deletions: diffs.reduce((total, diff) => total + diff.deletions, 0),
       deniedActions: events.filter(record => record.event.type === 'ACTION_DENIED').length,

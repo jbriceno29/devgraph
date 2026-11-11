@@ -1,0 +1,3 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { createTaskList } from '../src/tasks.js';
+test('B3 overdue returns pending tasks due before today', () => { const l = createTaskList(); l.add('past', { due: '2026-01-01' }); const done = l.add('done', { due: '2026-01-01' }); l.add('future', { due: '2026-12-01' }); l.add('none'); l.complete(done.id); assert.deepEqual(l.overdue('2026-06-01').map(t => t.title), ['past']); });
+test('B3 invalid date throws RangeError', () => { const l = createTaskList(); assert.equal(typeof l.overdue, 'function'); assert.throws(() => l.overdue('ayer'), RangeError); });

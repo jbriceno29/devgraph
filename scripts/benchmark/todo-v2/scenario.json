@@ -1,0 +1,213 @@
+{
+  "name": "todo-v2",
+  "description": "13 tareas en 3 features. La primera tarea fija una convención (opciones como objeto final, validaciones con RangeError) y un vocabulario (prioridades baja/media/alta, fechas AAAA-MM-DD) que las tareas posteriores no repiten; las pruebas ocultas lo comprueban.",
+  "features": [
+    {
+      "key": "FEAT-201",
+      "title": "Modelo de tareas enriquecido",
+      "summary": "Prioridad, fecha límite, etiquetas, eliminar y renombrar."
+    },
+    {
+      "key": "FEAT-202",
+      "title": "Consultas sobre tareas",
+      "summary": "Filtros, orden, vencidas y resumen."
+    },
+    {
+      "key": "FEAT-203",
+      "title": "Persistencia e intercambio",
+      "summary": "JSON, CSV y validación de datos externos."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "A1",
+      "feature": "FEAT-201",
+      "key": "TASK-201",
+      "title": "Prioridad de tareas",
+      "summary": "add(title, opciones) acepta un segundo argumento opcional { priority } con los valores 'baja', 'media' o 'alta' (por defecto 'media'); cada tarea guarda su prioridad en el campo priority. Convención del proyecto a partir de esta tarea: las funciones nuevas reciben sus opciones como un objeto en el último argumento, y cualquier valor inválido que se valide lanza RangeError con un mensaje en español.",
+      "criteria": [
+        "Las tareas sin prioridad explícita tienen priority 'media'",
+        "add acepta { priority: 'alta' }",
+        "Una prioridad desconocida se rechaza"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "A2",
+      "feature": "FEAT-201",
+      "key": "TASK-202",
+      "title": "Fecha límite",
+      "summary": "Las tareas pueden tener fecha límite: add acepta la opción due con una fecha en formato AAAA-MM-DD, que se guarda tal cual en el campo due (sin fecha: null). Una fecha con otro formato o una fecha inexistente se rechaza.",
+      "criteria": [
+        "due se guarda tal cual",
+        "Sin fecha, due es null",
+        "Fechas mal formadas o inexistentes se rechazan"
+      ],
+      "dependsOn": [
+        "A1"
+      ]
+    },
+    {
+      "id": "A3",
+      "feature": "FEAT-201",
+      "key": "TASK-203",
+      "title": "Etiquetas",
+      "summary": "Añade a la lista los métodos tag(id, etiqueta) y untag(id, etiqueta). Las etiquetas se guardan en la tarea en el campo tags como arreglo (vacío por defecto), normalizadas en minúsculas y sin espacios en los extremos, sin duplicados. Una etiqueta vacía se rechaza, igual que un id inexistente.",
+      "criteria": [
+        "tags empieza vacío",
+        "tag normaliza y no duplica",
+        "untag quita la etiqueta",
+        "Etiquetas vacías e ids inexistentes se rechazan"
+      ],
+      "dependsOn": [
+        "A1"
+      ]
+    },
+    {
+      "id": "A4",
+      "feature": "FEAT-201",
+      "key": "TASK-204",
+      "title": "Eliminar tareas",
+      "summary": "Método remove(id) que elimina la tarea y devuelve una copia de ella; un id inexistente se rechaza sin modificar la lista.",
+      "criteria": [
+        "remove elimina y devuelve la tarea",
+        "Un id inexistente se rechaza"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "A5",
+      "feature": "FEAT-201",
+      "key": "TASK-205",
+      "title": "Renombrar tareas",
+      "summary": "Método rename(id, título) que cambia el título con la misma validación y normalización que add y devuelve una copia actualizada; un id inexistente se rechaza.",
+      "criteria": [
+        "rename normaliza el título",
+        "rename rechaza títulos vacíos",
+        "Un id inexistente se rechaza"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "B1",
+      "feature": "FEAT-202",
+      "key": "TASK-206",
+      "title": "Filtros combinables",
+      "summary": "list acepta un filtro opcional con cualquier combinación de completed, priority y tag, y devuelve las tareas que cumplen todas las condiciones (siempre copias).",
+      "criteria": [
+        "Sin filtro devuelve todas",
+        "Los filtros se combinan"
+      ],
+      "dependsOn": [
+        "A1",
+        "A3"
+      ]
+    },
+    {
+      "id": "B2",
+      "feature": "FEAT-202",
+      "key": "TASK-207",
+      "title": "Ordenar tareas",
+      "summary": "Método sortedBy(criterio) que devuelve copias ordenadas: 'priority' de mayor a menor prioridad (empates por id) y 'due' de la fecha más próxima a la más lejana, con las tareas sin fecha al final. Un criterio desconocido se rechaza.",
+      "criteria": [
+        "Orden por prioridad",
+        "Orden por fecha con las tareas sin fecha al final",
+        "Un criterio desconocido se rechaza"
+      ],
+      "dependsOn": [
+        "A1",
+        "A2"
+      ]
+    },
+    {
+      "id": "B3",
+      "feature": "FEAT-202",
+      "key": "TASK-208",
+      "title": "Tareas vencidas",
+      "summary": "Método overdue(hoy) que recibe una fecha en el mismo formato que la fecha límite y devuelve las tareas pendientes cuya fecha límite es anterior a ese día. Una fecha inválida se rechaza.",
+      "criteria": [
+        "Devuelve solo pendientes vencidas",
+        "Una fecha inválida se rechaza"
+      ],
+      "dependsOn": [
+        "A2"
+      ]
+    },
+    {
+      "id": "B4",
+      "feature": "FEAT-202",
+      "key": "TASK-209",
+      "title": "Resumen por prioridad",
+      "summary": "src/stats.js exporta summarize(lista), que recibe la lista creada con createTaskList() (no un arreglo) y devuelve { total, completed, pending, byPriority }, donde byPriority cuenta cuántas tareas hay de cada prioridad.",
+      "criteria": [
+        "Cuenta total, completadas y pendientes",
+        "byPriority incluye todas las prioridades"
+      ],
+      "dependsOn": [
+        "B1"
+      ]
+    },
+    {
+      "id": "C1",
+      "feature": "FEAT-203",
+      "key": "TASK-210",
+      "title": "Guardar y cargar",
+      "summary": "src/storage.js exporta saveTasks(lista, ruta) y loadTasks(ruta): guardan y cargan la lista completa en JSON sin perder información. La lista cargada conserva toda la interfaz, y el siguiente id continúa después del mayor cargado.",
+      "criteria": [
+        "No se pierde información al guardar y cargar",
+        "La lista cargada conserva toda la interfaz",
+        "Los ids continúan"
+      ],
+      "dependsOn": [
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ]
+    },
+    {
+      "id": "C2",
+      "feature": "FEAT-203",
+      "key": "TASK-211",
+      "title": "Exportar a CSV",
+      "summary": "src/csv.js exporta toCsv(lista), que devuelve un texto CSV con una fila de encabezado y una fila por tarea, con una columna por cada campo de la tarea (con el nombre del campo como encabezado). Las etiquetas van en una sola celda separadas por ';'. Los textos con comas, comillas o saltos de línea se escapan según CSV.",
+      "criteria": [
+        "Encabezado con todos los campos",
+        "Una fila por tarea",
+        "Escapado correcto"
+      ],
+      "dependsOn": [
+        "A2",
+        "A3"
+      ]
+    },
+    {
+      "id": "C3",
+      "feature": "FEAT-203",
+      "key": "TASK-212",
+      "title": "Importar desde CSV",
+      "summary": "fromCsv(texto) en src/csv.js devuelve una lista nueva a partir de un texto generado por toCsv, con las mismas tareas y toda la interfaz de la lista.",
+      "criteria": [
+        "toCsv y fromCsv conservan las tareas"
+      ],
+      "dependsOn": [
+        "C2"
+      ]
+    },
+    {
+      "id": "C4",
+      "feature": "FEAT-203",
+      "key": "TASK-213",
+      "title": "Validar datos externos",
+      "summary": "loadTasks y fromCsv deben rechazar datos inválidos (JSON mal formado, prioridades o fechas inválidas) siguiendo la convención de errores del proyecto, sin devolver una lista parcial.",
+      "criteria": [
+        "Se rechaza un JSON mal formado",
+        "Se rechazan prioridades y fechas inválidas"
+      ],
+      "dependsOn": [
+        "C1",
+        "C3"
+      ]
+    }
+  ]
+}

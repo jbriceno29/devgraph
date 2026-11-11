@@ -1,0 +1,4 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { createTaskList } from '../src/tasks.js';
+test('B2 sort by priority high to low, ties by id', () => { const l = createTaskList(); l.add('m1'); l.add('b', { priority: 'baja' }); l.add('a', { priority: 'alta' }); l.add('m2'); assert.deepEqual(l.sortedBy('priority').map(t => t.title), ['a', 'm1', 'm2', 'b']); });
+test('B2 sort by due with undated last', () => { const l = createTaskList(); l.add('none'); l.add('late', { due: '2026-12-31' }); l.add('soon', { due: '2026-01-05' }); assert.deepEqual(l.sortedBy('due').map(t => t.title), ['soon', 'late', 'none']); });
+test('B2 unknown criterion throws RangeError', () => { const l = createTaskList(); assert.equal(typeof l.sortedBy, 'function'); assert.throws(() => l.sortedBy('color'), RangeError); });

@@ -1,0 +1,3 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { createTaskList } from '../src/tasks.js'; import { summarize } from '../src/stats.js';
+test('B4 summarize counts by state and priority', () => { const l = createTaskList(); const a = l.add('a', { priority: 'alta' }); l.add('b'); l.add('c', { priority: 'baja' }); l.complete(a.id); const s = summarize(l); assert.equal(s.total, 3); assert.equal(s.completed, 1); assert.equal(s.pending, 2); assert.deepEqual({ ...s.byPriority }, { baja: 1, media: 1, alta: 1 }); });
+test('B4 empty list includes every priority', () => { assert.deepEqual({ ...summarize(createTaskList()).byPriority }, { baja: 0, media: 0, alta: 0 }); });

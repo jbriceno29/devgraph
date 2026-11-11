@@ -124,6 +124,8 @@ Objetivo: H3. El mismo workspace funciona con Claude Code y con Codex.
 
 > **Segunda medición (2026-11-11, 13 tareas en 3 features, decisiones encadenadas)** — `docs/benchmarks/2026-11-11-todo-v2-haiku.md`. Excluyendo una tarea con enunciado ambiguo que fallaron los tres brazos: chat largo 12/12, chat por feature 11/12, **workspace 10/12**; convención respetada 9/9, 8/9 y **7/9**; tokens sin caché 105 k, 120 k y **361 k**. El workspace pierde la convención porque el resumen de cierre no la conservó, porque las convenciones no se promueven a reglas del proyecto (nivel 1) y porque la búsqueda de texto mete en el contexto especificaciones de tareas pendientes de otras features. **H1 no pasa por segunda vez; H4 sí. Corresponde replantear** (ver propuestas en el informe y en la conversación del 2026-11-11).
 
+> **Tercera medición, con correcciones (2026-11-11)** — `docs/benchmarks/2026-11-11-todo-v2-haiku-correcciones.md`. Con convenciones promovidas a reglas de nivel 1 y sin tareas pendientes en la búsqueda, el workspace **empata con el mejor chat en calidad (12/12, convención 9/9) sin intervención humana**, pero sigue gastando ~3,8 veces más tokens sin caché por abrir una sesión por tarea. Siguiente experimento: reutilizar la sesión dentro de una feature como caché.
+
 Objetivo: decidir con datos, según el criterio de corte de la sección 2.
 
 - **Protocolo:** el mismo conjunto de tareas resuelto de tres formas: (a) Claude Code a mano en una conversación, (b) Graph Workspace con el contexto curado y (c) Graph Workspace en piloto automático. Primero en `todo-app`, después en `graphdev2` mismo.

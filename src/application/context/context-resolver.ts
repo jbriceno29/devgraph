@@ -1,3 +1,4 @@
+import { extractConventions } from '../../domain/work-management/task-outcome.js';
 import type { ContextRepositoryPort,ContextFilePort } from '../ports/context-engine-port.js';
 import type { ResolvedContext,ContextCandidate } from './context-types.js';
 
@@ -12,10 +13,19 @@ export class ContextResolver {
   while(parentId){if(visited.has(parentId))throw new Error('La jerarquía del grafo contiene un ciclo.');visited.add(parentId);const parent=records.get(parentId);if(!parent)throw new Error('La jerarquía del foco contiene una entidad padre inexistente.');ancestors.push(parent);parentId=parent.entity.parentId;}
   const candidates:ContextCandidate[]=[];
   for(const [index,rule] of project.rules.entries()){const content=rule.trim();if(!content)continue;candidates.push({sourceId:`policy:${project.id}:${index}`,entityKey:`POLICY-${index+1}`,sourceType:'POLICY',titleOrPath:`Regla del proyecto ${index+1}`,authorityTier:1,retrievalOrigin:'FOCUS_NODE',graphDistance:0,content,contentHash:this.files.hashContent(content),relevanceScore:Number.MAX_SAFE_INTEGER});}
+  // Conventions declared by accepted tasks are project rules from then on (tier 1, always included).
+  const conventions:string[]=[];
+  for(const outcome of this.repository.listTaskOutcomes(input.projectId)){
+   const key=entities.get(outcome.workItemId)?.displayKey??'una tarea';
+   for(const [index,rule] of extractConventions(outcome.summary).entries()){
+    if(conventions.includes(rule))continue;conventions.push(rule);
+    candidates.push({sourceId:`convention:${outcome.workItemId}:${index}`,entityKey:`CONV-${key}-${index+1}`,sourceType:'POLICY',titleOrPath:`Convención fijada por ${key}`,authorityTier:1,retrievalOrigin:'FOCUS_NODE',graphDistance:0,content:rule,contentHash:this.files.hashContent(rule),relevanceScore:Number.MAX_SAFE_INTEGER});
+   }
+  }
   for(const [index,note] of (input.recentNotes??[]).entries()){const content=note.trim();if(!content)continue;candidates.push({sourceId:`chat:${project.id}:${index}`,sourceType:'CHAT_NOTE',titleOrPath:`Nota conversacional ${index+1}`,authorityTier:6,retrievalOrigin:'FULL_TEXT_SEARCH',graphDistance:0,content,contentHash:this.files.hashContent(content),relevanceScore:0});}
   const hierarchy=[focus,...ancestors];for(let i=0;i<hierarchy.length;i++){const record=hierarchy[i]!;candidates.push(candidateForRecord(record,i===0?'FOCUS_NODE':'HIERARCHY_PARENT',i===0?0:i,3,record.entity.id===focus.entity.id?Number.MAX_SAFE_INTEGER:0));}
   const repositoryCommit=project.repositoryPath?await this.files.getHeadCommit(project.repositoryPath):'UNKNOWN';
-  return {project,focus,entities:records,relationships:this.repository.listRelationships(input.projectId),ancestors,constraints:[...project.rules],candidates,excluded:[],query:(input.query?.trim()||`${focus.entity.title} ${focus.entity.summary}`).trim(),maxHops:Math.max(0,Math.min(2,input.maxHops??1)),repositoryCommit,...(input.executionId?{executionId:input.executionId}:{})};
+  return {project,focus,entities:records,relationships:this.repository.listRelationships(input.projectId),ancestors,constraints:[...project.rules,...conventions],candidates,excluded:[],query:(input.query?.trim()||`${focus.entity.title} ${focus.entity.summary}`).trim(),maxHops:Math.max(0,Math.min(2,input.maxHops??1)),repositoryCommit,...(input.executionId?{executionId:input.executionId}:{})};
  }
 }
 export function candidateForRecord(record:import('../ports/context-engine-port.js').ContextEntityRecord,origin:ContextCandidate['retrievalOrigin'],distance:number,tier:ContextCandidate['authorityTier'],relevanceScore=0,viaEdgeType?:ContextCandidate['viaEdgeType']):ContextCandidate{

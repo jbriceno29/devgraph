@@ -25,7 +25,8 @@ class MemoryAdapter implements AgentAdapterPort {
   for(const match of workItem.matchAll(/WRITE (\S+) :: ([^\n]+)/g)){const target=join(input.workingDirectory,match[1]!);mkdirSync(dirname(target),{recursive:true});writeFileSync(target,`${match[2]}\n`);}
   for(const match of workItem.matchAll(/DELETE (\S+)/g))unlinkSync(join(input.workingDirectory,match[1]!));
   const title=/# WorkItem\n([^\n]+)/.exec(input.prompt)?.[1]??'';
-  yield {type:'EXECUTION_FINISHED',timestamp:new Date().toISOString(),summary:`**Hecho** ${title}.\n**Decisiones** Las tareas viven en src/tasks.ts como un arreglo exportado \`tasks\`.\n**Pendiente** Nada.`};
+  const convention=title.includes('Crear tareas')?'\n**Convenciones**\n- Toda validación lanza RangeError con mensaje en español.':'\n**Convenciones** Ninguna.';
+  yield {type:'EXECUTION_FINISHED',timestamp:new Date().toISOString(),summary:`**Hecho** ${title}.\n**Decisiones** Las tareas viven en src/tasks.ts como un arreglo exportado \`tasks\`.${convention}\n**Pendiente** Nada.`};
  }
  async cancel():Promise<void>{}
  async respondToApproval():Promise<void>{}
@@ -96,6 +97,12 @@ describe('memory that flows between tasks (Stage 2)',()=>{
   expect(preview.snapshot.includedSources.filter(source=>source.entityKey?.startsWith('TASK-')).map(source=>source.entityKey).sort()).toEqual(['TASK-001','TASK-002','TASK-003']);
   expect(preview.snapshot.includedSources.filter(source=>source.sourceType==='CODE_FILE').every(source=>source.authorityTier===4)).toBe(true);
   expect(preview.packageText).toContain('Archivo src/list.ts');
+
+  // A convention declared by TASK-001 is a tier-1 rule for every later task, even without any edge to it.
+  const convention=preview.snapshot.includedSources.find(source=>source.entityKey==='CONV-TASK-001-1') as {authorityTier:number}|undefined;
+  expect(convention?.authorityTier).toBe(1);
+  expect(preview.packageText).toMatch(/<Constraints>[\s\S]*Toda validación lanza RangeError[\s\S]*<\/Constraints>/);
+  expect(adapter.prompts.at(-1)).toContain('Toda validación lanza RangeError');
  });
 
  it('warns when the mandatory context alone exceeds the token budget',async()=>{
@@ -110,5 +117,14 @@ describe('planner prompt',()=>{
   const prompt=buildPlannerPrompt({prompt:'x',project:{name:'P',description:null,rules:[],revision:1},focusEntity:null,entities:[],relationships:[]});
   expect(prompt).toContain('put the ARTIFACT under PROJECT_ROOT and add CREATE_RELATIONSHIP DOCUMENTED_BY');
   expect(prompt).toContain('DEPENDS_ON between two WORK_ITEMs');
+ });
+});
+
+describe('context noise (third measurement)',()=>{
+ it('keeps pending tasks out of the text search: their specs are future work, not knowledge',async()=>{
+  const {core,projectId}=await setup();
+  // TASK-002 and TASK-003 are pending and share words with TASK-001's summary.
+  const preview=await core.handle({channel:'context:preview_package',args:[{projectId,focusEntityId:'t1',maxAllowedTokens:32_000,query:'tareas listar contar'}]}) as {snapshot:{includedSources:Array<{entityKey?:string;retrievalOrigin:string}>}};
+  expect(preview.snapshot.includedSources.filter(source=>source.retrievalOrigin==='FULL_TEXT_SEARCH'&&source.entityKey?.startsWith('TASK-'))).toEqual([]);
  });
 });

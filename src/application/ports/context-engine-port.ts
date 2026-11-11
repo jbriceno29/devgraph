@@ -13,6 +13,8 @@ export interface ContextRepositoryPort {
  findEntityRecord(entityId:string):ContextEntityRecord|null;
  search(projectId:string,query:string,limit:number):ContextSearchHit[];
  listExecutionSummaries(workItemId:string):ContextExecutionSummary[];
+ /** Every accepted task's outcome in the project, oldest first. */
+ listTaskOutcomes(projectId:string):import('../../domain/work-management/task-outcome.js').TaskOutcome[];
  findTaskOutcome(workItemId:string):import('../../domain/work-management/task-outcome.js').TaskOutcome|null;
  updateArtifactDrift(entityId:string,contentHash:string,bodyContent:string):void;
  persistSnapshot(snapshot:ContextSnapshot):void;

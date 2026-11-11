@@ -6,8 +6,9 @@ export class HybridRetrieval {
  constructor(private readonly repository:ContextRepositoryPort,private readonly files:ContextFilePort){}
  async enrich(context:ResolvedContext):Promise<ResolvedContext>{
   // Code references come through MODIFIES edges (graph traversal), not text search: a match by file name says nothing about relevance.
+  // Unfinished work items are future work, not knowledge: their specs only distract (seen in the second benchmark).
   for(const hit of this.repository.search(context.project.id,context.query,20)){
-   const record=hit.record;if(record.entity.entityType==='DECISION_RECORD'||record.entity.entityType==='CODE_REFERENCE'||context.candidates.some(candidate=>candidate.sourceId===record.entity.id))continue;
+   const record=hit.record;if(record.entity.entityType==='DECISION_RECORD'||record.entity.entityType==='CODE_REFERENCE'||(record.entity.entityType==='WORK_ITEM'&&record.entity.status!=='DONE')||context.candidates.some(candidate=>candidate.sourceId===record.entity.id))continue;
    const tier:ContextCandidate['authorityTier']=record.entity.entityType==='REQUIREMENT'?3:record.entity.entityType==='ARTIFACT'&&['SPEC','IMPLEMENTATION_PLAN'].includes(String(record.attributes.artifact_type))?3:5;
    context.candidates.push(candidateForRecord(record,'FULL_TEXT_SEARCH',3,tier,hit.relevanceScore));
   }

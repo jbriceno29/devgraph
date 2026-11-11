@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { manualWorkItemTransitions, type WorkItemStatus } from '../../../domain/work-management/entities.js';
 import { ProjectWorkspaceStore } from '../../persistence/sqlite/project-workspace-store.js';
 import { GetGraphViewUseCase } from '../../../application/graph/get-graph-view.js';
 import { GetEntityInspectorDetailsUseCase } from '../../../application/graph/get-entity-inspector-details.js';
@@ -98,7 +99,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      // Resolve ownership from the workspace registry without exposing its database path to the renderer.
      for(const project of store.listProjects()) {
       const workspace=store.openProject(project.id);
-      if(workspace.graph.findEntityById(id))return new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);
+      if(workspace.graph.findEntityById(id)){const details=new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);return details.entity.type==='WORK_ITEM'?{...details,allowedStatusChanges:manualWorkItemTransitions(details.entity.status as WorkItemStatus)}:details;}
      }
      throw new Error(`Entity not found: ${id}`);
     }
@@ -160,6 +161,9 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      const testLog=existsSync(logPath)?readFileSync(logPath,'utf8').slice(-200_000):null;
      return {...detail,execution:toAgentExecutionDto(detail.execution),testLog};
     }
+    case 'workitem:set_status': {const projectId=String(args[0]??'');return getExecutionService(projectId).setWorkItemStatus(projectId,String(args[1]??''),String(args[2]??'') as WorkItemStatus);}
+    case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
+    case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[]});}
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }

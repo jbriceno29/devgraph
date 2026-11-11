@@ -18,6 +18,8 @@ export const workspaceIpc:WorkspaceIpcClient={
   resolveExecutionApproval:input=>invokeCore('execution:resolve_approval',[input]),
   acceptExecution:executionId=>invokeCore('execution:accept',[executionId]),
   requestExecutionChanges:input=>invokeCore('execution:request_changes',[input]),
+  setWorkItemStatus:(projectId,workItemId,status)=>invokeCore('workitem:set_status',[projectId,workItemId,status]),
+  updateExecutionPolicy:(projectId,policy)=>invokeCore('policy:update',[projectId,policy]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),
@@ -33,6 +35,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   listExecutions:projectId=>invokeCore('execution:list',[projectId]),
   listExecutionEvents:executionId=>invokeCore('execution:list_events',[executionId]),
   getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
+  getExecutionPolicy:projectId=>invokeCore('policy:get',[projectId]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},

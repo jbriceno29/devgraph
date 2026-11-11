@@ -14,3 +14,10 @@ export function transitionWorkItem<T extends WorkItem>(item: T, to: WorkItemStat
   if (!canTransitionWorkItem(item.status as WorkItemStatus, to)) throw new Error(`Invalid WorkItem transition: ${item.status} -> ${to}`);
   return { ...item, status: to };
 }
+/** Statuses owned by the execution flow: a run sets IN_PROGRESS and IN_REVIEW, accepting it sets DONE. */
+const EXECUTION_OWNED: ReadonlySet<WorkItemStatus> = new Set(['IN_PROGRESS','IN_REVIEW','DONE']);
+/** Status changes a user may make by hand from `from`. */
+export function manualWorkItemTransitions(from: WorkItemStatus): WorkItemStatus[] {
+  if (from === 'IN_PROGRESS') return [];
+  return (transitions[from] ?? []).filter(to => !EXECUTION_OWNED.has(to));
+}

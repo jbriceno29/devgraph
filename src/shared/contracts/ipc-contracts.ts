@@ -1,14 +1,14 @@
 import type { GraphEdgeType, GraphNodeView, GraphEdgeView, KnowledgeEntityType } from './graph-view.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
 export interface GraphFilterDto { entityTypes?:KnowledgeEntityType[]; edgeTypes?:GraphEdgeType[] }
 export interface GraphViewDto { projectId:string; revision:number; nodes:GraphNodeView[]; edges:GraphEdgeView[] }
 export interface RelationshipViewDto { id:string; sourceId:string; sourceLabel:string; targetId:string; targetLabel:string; type:GraphEdgeType; direction:'INCOMING'|'OUTGOING'; provenance:'USER'|'CHANGESET'|'EXECUTION' }
-export interface EntityInspectorDto { entity:GraphNodeView & {summary:string}; attributes:Record<string,unknown>; relationships:RelationshipViewDto[]; executionHistory:Array<{id:string;status:string;startedAt:string|null;completedAt:string|null;resultSummary:string|null}> }
+export interface EntityInspectorDto { entity:GraphNodeView & {summary:string}; attributes:Record<string,unknown>; relationships:RelationshipViewDto[]; allowedStatusChanges?:string[]; executionHistory:Array<{id:string;status:string;startedAt:string|null;completedAt:string|null;resultSummary:string|null}> }
 export interface WorkspaceLoadedStateDto { project:ProjectSummaryDto; graph:GraphViewDto; selectedEntityId:string }
 export interface ChangeSetDto { id:string;projectId:string;baseGraphRevision:number;appliedGraphRevision?:number;originType:'AI_CHAT'|'AGENT_EXECUTION'|'USER_BULK_ACTION';title:string;rationale:string;status:'PENDING_APPROVAL'|'VALIDATED'|'CONFLICTED'|'APPLIED'|'REJECTED';operations:Array<Record<string,unknown>>;validationIssues:Array<{operationIndex:number;severity:'ERROR'|'WARNING';code:string;message:string}>;createdAt:string;appliedAt?:string }
 export interface WorkspaceIpcCommands {
@@ -26,6 +26,8 @@ export interface WorkspaceIpcCommands {
   'execution:resolve_approval': (input:ResolveExecutionApprovalInput)=>Promise<{resolved:true}>;
   'execution:accept': (executionId:string)=>Promise<AcceptExecutionResultDto>;
   'execution:request_changes': (input:RequestExecutionChangesInput)=>Promise<AgentExecutionDto>;
+  'workitem:set_status': (projectId:string,workItemId:string,status:string)=>Promise<{status:string;revision:number}>;
+  'policy:update': (projectId:string,policy:ExecutionPolicyDto)=>Promise<ExecutionPolicyDto>;
 }
 export interface WorkspaceIpcQueries {
   'project:list': ()=>Promise<ProjectSummaryDto[]>;
@@ -41,6 +43,7 @@ export interface WorkspaceIpcQueries {
   'execution:list': (projectId:string)=>Promise<AgentExecutionDto[]>;
   'execution:list_events': (executionId:string)=>Promise<AgentEventRecordDto[]>;
   'execution:get_detail': (executionId:string)=>Promise<ExecutionDetailDto>;
+  'policy:get': (projectId:string)=>Promise<ExecutionPolicyDto>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};
@@ -68,6 +71,8 @@ export interface WorkspaceIpcClient {
     resolveExecutionApproval(input:ResolveExecutionApprovalInput):Promise<{resolved:true}>;
     acceptExecution(executionId:string):Promise<AcceptExecutionResultDto>;
     requestExecutionChanges(input:RequestExecutionChangesInput):Promise<AgentExecutionDto>;
+    setWorkItemStatus(projectId:string,workItemId:string,status:string):Promise<{status:string;revision:number}>;
+    updateExecutionPolicy(projectId:string,policy:ExecutionPolicyDto):Promise<ExecutionPolicyDto>;
   };
   queries:{
     listProjects():Promise<ProjectSummaryDto[]>;
@@ -83,6 +88,7 @@ export interface WorkspaceIpcClient {
     listExecutions(projectId:string):Promise<AgentExecutionDto[]>;
     listExecutionEvents(executionId:string):Promise<AgentEventRecordDto[]>;
     getExecutionDetail(executionId:string):Promise<ExecutionDetailDto>;
+    getExecutionPolicy(projectId:string):Promise<ExecutionPolicyDto>;
   };
   events:{onGraphRevisionUpdated(listener:(event:WorkspaceIpcEvents['graph:revision_updated'])=>void):()=>void;onArtifactSyncStatusChanged(listener:(event:WorkspaceIpcEvents['artifact:sync_status_changed'])=>void):()=>void;onExecutionStatusChanged(listener:(event:WorkspaceIpcEvents['execution:status_changed'])=>void):()=>void;onExecutionEventReceived(listener:(event:WorkspaceIpcEvents['execution:event_received'])=>void):()=>void};
 }

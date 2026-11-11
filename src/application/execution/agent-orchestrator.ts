@@ -3,7 +3,7 @@ import type { AgentEvent, AgentExecution, ApprovalDecision, ExecutionStatus } fr
 import { transitionExecution } from '../../domain/agents/models.js';
 import { GovernanceInterceptor } from '../governance/governance-interceptor.js';
 import type { AutonomyPolicy } from '../../domain/governance/models.js';
-import type { WorkItemStatus } from '../../domain/work-management/entities.js';
+import { manualWorkItemTransitions, type WorkItemStatus } from '../../domain/work-management/entities.js';
 import type { AgentAdapterPort } from '../ports/agent-adapter-port.js';
 import type { AgentContextBuilderPort, AgentExecutionRepositoryPort, ExecutionEventLogPort, ExecutionEventSink, ExecutionValidatorPort, GitIsolationPort } from '../ports/agent-execution-port.js';
 
@@ -76,6 +76,41 @@ export class AgentOrchestrator {
    // The agent never ran, so the worktree holds nothing worth reviewing.
    return isolated?await this.discardIsolation(execution,repositoryRoot,isolated):execution;
   }finally{if(!handedToConsumer)this.active.delete(execution.id);}
+ }
+
+ /** Manual status change from the inspector. Execution-owned statuses are refused; READY requires its dependencies DONE. */
+ setWorkItemStatus(projectId:string,workItemId:string,to:WorkItemStatus):{status:WorkItemStatus;revision:number}{
+  const task=this.repository.findWorkItem(projectId,workItemId);
+  if(!task)throw new Error('La tarea no existe en este proyecto.');
+  const from=task.status as WorkItemStatus;
+  if(!manualWorkItemTransitions(from).includes(to))throw new Error(from==='IN_PROGRESS'?`La tarea ${task.displayKey} tiene una ejecución en curso; cancélala antes de cambiar su estado.`:`No se puede pasar ${task.displayKey} de ${from} a ${to} a mano.`);
+  if(this.repository.listExecutions(projectId).some(item=>item.workItemId===workItemId&&!terminalStatuses.has(item.status)))throw new Error(`La tarea ${task.displayKey} tiene una ejecución en curso.`);
+  if(to==='READY'){
+   const pending=this.repository.listDependencies(projectId,workItemId).filter(dependency=>dependency.status!=='DONE');
+   if(pending.length)throw new Error(`${task.displayKey} depende de tareas sin terminar: ${pending.map(dependency=>`${dependency.displayKey} (${dependency.status})`).join(', ')}. Márcala como BLOCKED; pasará sola a READY cuando terminen.`);
+  }
+  const revision=this.repository.transitionWorkItem(projectId,workItemId,to);
+  this.emit('graph:revision_updated',{projectId,revision});
+  return {status:to,revision};
+ }
+
+ /** Execution policy of the project's DEVELOPER profile (paths and verification commands). */
+ getPolicy(projectId:string):Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>{
+  const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
+  return {writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands};
+ }
+
+ updatePolicy(projectId:string,input:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>){
+  const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
+  const clean={writablePaths:cleanPatterns(input.writablePaths,'escribible'),readonlyPaths:cleanPatterns(input.readonlyPaths,'de solo lectura'),deniedPaths:cleanPatterns(input.deniedPaths,'prohibida'),allowedCommands:cleanCommands(input.allowedCommands)};
+  this.repository.updateAutonomyPolicy(policy.id,clean);
+  return clean;
+ }
+
+ private developerProfileId(projectId:string):string{
+  const profile=this.repository.listProfiles(projectId).find(item=>item.roleKey==='DEVELOPER');
+  if(!profile)throw new Error('El proyecto no tiene un perfil DEVELOPER.');
+  return profile.id;
  }
 
  /** Everything needed to review a run: diff per file, denied actions and what the reviewer can do next. */
@@ -277,4 +312,19 @@ function describeRevision(revision:{feedback:string;previousSummary:string|null;
 /** `feature/feat-001-crear-y-consultar-tareas`: ASCII, lowercase, safe for Git refs. */
 export function branchSlug(displayKey:string,title:string):string{
  return `${displayKey}-${title}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60).replace(/-+$/,'')||'feature';
+}
+
+/** Repository-relative glob patterns; a leading `/` anchors at the root (gitignore semantics). */
+function cleanPatterns(values:string[],label:string):string[]{
+ const cleaned=[...new Set(values.map(value=>value.trim()).filter(Boolean))];
+ for(const pattern of cleaned){
+  const escapes=pattern.split('/').includes('..')||pattern.startsWith('~')||pattern.startsWith('//')||/^[A-Za-z]:/.test(pattern)||pattern.includes('\\');
+  if(escapes)throw new Error(`Ruta ${label} no válida: ${pattern}. Usa rutas relativas al repositorio.`);
+ }
+ return cleaned;
+}
+function cleanCommands(values:string[]):string[]{
+ const cleaned=[...new Set(values.map(value=>value.trim()).filter(Boolean))];
+ for(const command of cleaned)if(/[;&|`$<>\n\r]/.test(command))throw new Error(`Comando no permitido: ${command}. No se admiten tuberías, redirecciones ni operadores de shell.`);
+ return cleaned;
 }

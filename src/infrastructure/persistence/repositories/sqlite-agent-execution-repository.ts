@@ -57,6 +57,12 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     return {id:row.id,projectId:row.project_id,name:row.name,writablePaths:parseArray(row.writable_paths_json),readonlyPaths:parseArray(row.readonly_paths_json),deniedPaths:parseArray(row.denied_paths_json),allowedCommands:parseArray(row.allowed_commands_json),autoApproveScopes:parseArray(row.auto_approve_scopes_json),requireWorktreeIsolation:Boolean(row.require_worktree_isolation)};
   }
 
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>):void {
+    const result=this.db.prepare('UPDATE autonomy_policies SET writable_paths_json=?,readonly_paths_json=?,denied_paths_json=?,allowed_commands_json=? WHERE id=?')
+      .run(JSON.stringify(fields.writablePaths),JSON.stringify(fields.readonlyPaths),JSON.stringify(fields.deniedPaths),JSON.stringify(fields.allowedCommands),policyId);
+    if(result.changes!==1)throw new Error('La política de autonomía no existe.');
+  }
+
   createApprovalRequest(request:ApprovalRequest):void {this.db.prepare(`INSERT INTO approval_requests(id,execution_id,scope,requested_action,reason,status,requested_at) VALUES(?,?,?,?,?,'PENDING',?)`).run(request.id,request.executionId,request.scope,request.requestedAction,request.reason,request.requestedAt);}
 
   resolveApprovalRequest(requestId:string,decision:{approved:boolean;resolvedBy:string;note:string}):void {

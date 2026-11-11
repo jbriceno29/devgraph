@@ -9,4 +9,5 @@ export interface StartAgentExecutionInput {projectId:string;workItemId:string;pr
 export interface RequestExecutionChangesInput {executionId:string;feedback:string;model?:string}
 export interface AcceptExecutionResultDto {execution:AgentExecutionDto;merged:boolean;conflict:{reason:string;detail:string;files:string[]}|null}
 export interface ExecutionDetailDto {execution:AgentExecutionDto;taskStatus:string|null;files:Array<{path:string;changeType:string;additions:number;deletions:number;patch:string|null}>;testLog:string|null;deniedActions:Array<{toolName:string;target:string;reason:string}>;canAccept:boolean;canRequestChanges:boolean}
+export interface ExecutionPolicyDto {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[]}
 export interface ResolveExecutionApprovalInput {executionId:string;requestId:string;decision:{approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string}}

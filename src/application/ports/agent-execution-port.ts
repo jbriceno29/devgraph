@@ -18,6 +18,7 @@ export interface AgentExecutionRepositoryPort {
   getRepositoryRoot(projectId: string): string | null;
   getRepositoryId(projectId:string):string|null;
   getAutonomyPolicy(projectId:string,profileId:string):AutonomyPolicy;
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>):void;
   createExecution(execution: AgentExecution): void;
   updateExecution(execution: AgentExecution): void;
   findExecution(executionId: string): AgentExecution | null;

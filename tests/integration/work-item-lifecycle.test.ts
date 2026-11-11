@@ -57,3 +57,38 @@ describe('work item lifecycle through the workspace core (Stage 1)',()=>{
   expect(revisions.length).toBe(2);expect(graph.revision).toBe(revisions.at(-1));
  });
 });
+
+describe('operating without touching the database (Stage 1.3)',()=>{
+ it('changes task status by hand within the rules, exposes the allowed changes and edits the execution policy',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'graphdev2-operate-'));roots.push(root);
+  const workspaceRoot=join(root,'workspace');
+  const core=createWorkspaceCore(workspaceRoot,()=>undefined,{agentAdapter:new WritingAdapter()});cores.push(core);
+  const project=await core.handle({channel:'project:create',args:[{name:'Operate',slug:'operate'}]}) as {id:string};
+  const opened=await core.handle({channel:'project:open',args:[project.id]}) as {selectedEntityId:string};
+  const db=openDatabase({filename:join(workspaceRoot,'projects',project.id,'workspace.sqlite'),initialize:false});
+  try{
+   for(const [id,key,status] of [['t1','TASK-001','DRAFT'],['t2','TASK-002','DRAFT']]){
+    db.prepare(`INSERT INTO knowledge_entities(id,project_id,entity_type,display_key,title,summary,status,parent_id,created_revision,updated_revision,created_at,updated_at) VALUES(?,?,'WORK_ITEM',?,'T','s',?,?,1,1,'now','now')`).run(id,project.id,key,status,opened.selectedEntityId);
+    db.prepare(`INSERT INTO work_items(entity_id,work_type,priority,acceptance_criteria_json,recommended_profile_role) VALUES(?,'TASK','HIGH','[]','DEVELOPER')`).run(id);
+   }
+   db.prepare(`INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES('e1',?,'t2','t1','DEPENDS_ON','USER',NULL,NULL,NULL,1,'now')`).run(project.id);
+  }finally{closeDatabase(db);}
+  const set=(id:string,status:string)=>core.handle({channel:'workitem:set_status',args:[project.id,id,status]});
+  const inspector=async(id:string)=>core.handle({channel:'entity:get_inspector_details',args:[id]}) as Promise<{entity:{status:string};allowedStatusChanges?:string[]}>;
+
+  expect((await inspector('t1')).allowedStatusChanges).toEqual(['READY','ARCHIVED']);
+  expect((await inspector(opened.selectedEntityId)).allowedStatusChanges).toBeUndefined();
+  await expect(set('t2','READY')).rejects.toThrow('TASK-001 (DRAFT)');
+  await expect(set('t1','DONE')).rejects.toThrow('a mano');
+  expect(await set('t1','READY')).toMatchObject({status:'READY'});
+  expect((await inspector('t1')).allowedStatusChanges).toEqual(['BLOCKED','ARCHIVED']);
+
+  const policy=await core.handle({channel:'policy:get',args:[project.id]}) as {writablePaths:string[];allowedCommands:string[]};
+  expect(policy.writablePaths).toContain('src/**');expect(policy.allowedCommands).toEqual([]);
+  const saved=await core.handle({channel:'policy:update',args:[project.id,{...policy,writablePaths:['src/**','  package.json ','src/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test']}]}) as {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[]};
+  expect(saved).toEqual({writablePaths:['src/**','package.json'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test']});
+  expect(await core.handle({channel:'policy:get',args:[project.id]})).toEqual(saved);
+  await expect(core.handle({channel:'policy:update',args:[project.id,{...saved,allowedCommands:['npm test | tail']}]})).rejects.toThrow('Comando no permitido');
+  await expect(core.handle({channel:'policy:update',args:[project.id,{...saved,writablePaths:['../outside/**']}]})).rejects.toThrow('Usa rutas relativas');
+ });
+});

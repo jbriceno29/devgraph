@@ -18,6 +18,8 @@ import type { ChangeSetPlannerPort } from '../../../application/ports/change-set
 import { SqliteChangeSetRepository } from '../../persistence/repositories/sqlite-change-set-repository.js';
 import { SqliteChangeSetApplier } from '../../persistence/sqlite/sqlite-change-set-applier.js';
 import { TransactionalMarkdownFileStore } from '../../filesystem/transactional-markdown-file-store.js';
+import { normalizeOperation } from '../../ai/change-set-planning-contract.js';
+import type { PlanProposalPort } from '../../../application/ports/plan-proposal-port.js';
 import type { ChangeOperation,ChangeSet } from '../../../domain/knowledge/change-set.js';
 import { ContextEngine } from '../../../application/context/context-engine.js';
 import { SqliteContextRepository } from '../../persistence/repositories/sqlite-context-repository.js';
@@ -69,7 +71,14 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database,agentAdapter.providerId),contextEngine=getContextEngine(projectId);
   const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;repositoryRoot:string;executionId:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,executionId:input.executionId,maxAllowedTokens:32_000,maxHops:2})};
   const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
-  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload));
+  // Plan changes agents propose when closing a task: stored as AGENT_EXECUTION ChangeSets, applied only under the decision policy.
+  const planProposals:PlanProposalPort={
+   normalize:operations=>operations.map(operation=>normalizeOperation(operation,'El agente')),
+   submit:async(id,proposal,originRefId)=>{const changeSet=getPlanning(id).submit(id,proposal,originRefId);return {changeSetId:changeSet.id,status:changeSet.status,issues:changeSet.validationIssues.filter(issue=>issue.severity==='ERROR').map(issue=>issue.message)};},
+   apply:async changeSetId=>{const result=await getPlanning(projectId).apply(changeSetId);emit('graph:revision_updated',{projectId:result.changeSet.projectId,revision:result.revision});return {revision:result.revision,resolvedIds:result.resolvedIds};},
+   appliedAgentOperations:id=>new SqliteChangeSetRepository(store.openProject(id).database).list(id).filter(changeSet=>changeSet.originType==='AGENT_EXECUTION'&&changeSet.status==='APPLIED').map(changeSet=>changeSet.operations),
+  };
+  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload),planProposals);
   executionServices.set(projectId,service);return service;
  };
  // Repairs leftovers of an interrupted ChangeSet apply before the watcher starts reporting on docs/.
@@ -185,7 +194,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'workitem:set_status': {const projectId=String(args[0]??'');return getExecutionService(projectId).setWorkItemStatus(projectId,String(args[1]??''),String(args[2]??'') as WorkItemStatus);}
     case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
-    case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{})});}
+    case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
      return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};

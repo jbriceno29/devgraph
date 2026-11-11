@@ -9,29 +9,55 @@ const fields: Array<{ key: Field; label: string; hint: string }> = [
   { key: 'allowedCommands', label: 'Comandos de verificación', hint: 'Uno por línea, sin tuberías, p. ej. npm test. Se ejecutan al validar.' },
 ];
 
+type DecisionPolicyDto = NonNullable<ExecutionPolicyDto['decisionPolicy']>;
+type DecisionCategory = keyof DecisionPolicyDto['rules'];
+// Mirrors DECISION_CATEGORIES / DEFAULT_DECISION_POLICY in src/domain/autonomy/decision-policy.ts (the UI does not import the domain).
+const decisionCategories: Array<{ category: DecisionCategory; label: string }> = [
+  { category: 'NEW_TASK', label: 'Agregar tareas dentro de la misma feature' },
+  { category: 'TASK_DEPENDENCY', label: 'Agregar dependencias entre tareas de la feature' },
+  { category: 'TASK_STATUS', label: 'Cambiar el estado de tareas de la feature (por ejemplo, archivar una que sobra)' },
+  { category: 'DECISION_RECORD', label: 'Registrar decisiones de arquitectura (ADR)' },
+  { category: 'SCOPE_CHANGE', label: 'Cambiar el alcance: features, módulos, requisitos, documentos o entidades de otras features' },
+];
+const defaultDecisionPolicy: DecisionPolicyDto = {
+  rules: { NEW_TASK: 'AUTO', TASK_DEPENDENCY: 'AUTO', TASK_STATUS: 'ASK', DECISION_RECORD: 'ASK', SCOPE_CHANGE: 'ASK' },
+  maxAutoTasksPerFeature: 5,
+};
+
 /** Edits the project's execution policy: what the agent may write and which checks validate its work. */
 export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
   const [values, setValues] = useState<Record<Field, string> | null>(null);
   const [busy, setBusy] = useState(false);
   const [minutes, setMinutes] = useState('30');
+  const [rules, setRules] = useState<DecisionPolicyDto['rules']>(defaultDecisionPolicy.rules);
+  const [maxAutoTasks, setMaxAutoTasks] = useState(String(defaultDecisionPolicy.maxAutoTasksPerFeature));
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     let current = true;
     void window.workspaceIpc.queries.getExecutionPolicy(projectId)
-      .then(policy => { if (current) { setValues(toText(policy)); setMinutes(String(policy.maxExecutionMinutes ?? 30)); } })
+      .then(policy => { if (current) { setValues(toText(policy)); setMinutes(String(policy.maxExecutionMinutes ?? 30)); loadDecisions(policy); } })
       .catch(reason => { if (current) setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); });
     return () => { current = false; };
   }, [projectId]);
 
+  const loadDecisions = (policy: ExecutionPolicyDto) => {
+    const decisions = policy.decisionPolicy ?? defaultDecisionPolicy;
+    setRules({ ...defaultDecisionPolicy.rules, ...decisions.rules });
+    setMaxAutoTasks(String(decisions.maxAutoTasksPerFeature));
+  };
+
   const save = async () => {
     if (!values) return;
+    const max = Number(maxAutoTasks);
+    if (maxAutoTasks.trim() === '' || !Number.isInteger(max) || max < 0 || max > 50) { setMessage({ tone: 'error', text: 'El máximo de tareas automáticas por feature debe ser un número entero entre 0 y 50.' }); return; }
     setBusy(true); setMessage(null);
     try {
       const saved = await window.workspaceIpc.commands.updateExecutionPolicy(projectId, {
         writablePaths: lines(values.writablePaths), readonlyPaths: lines(values.readonlyPaths), deniedPaths: lines(values.deniedPaths), allowedCommands: lines(values.allowedCommands), maxExecutionMinutes: Number(minutes),
+        decisionPolicy: { rules, maxAutoTasksPerFeature: max },
       });
-      setValues(toText(saved));
+      setValues(toText(saved)); loadDecisions(saved);
       setMessage({ tone: 'ok', text: saved.allowedCommands.length ? 'Política guardada.' : 'Política guardada. Sin comandos de verificación, las ejecuciones no se prueban automáticamente.' });
     } catch (reason) { setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); }
     finally { setBusy(false); }
@@ -49,6 +75,21 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
         <label htmlFor="policy-max-minutes" className="mb-1 block text-xs text-slate-400">Tiempo máximo por ejecución (minutos)</label>
         <input id="policy-max-minutes" type="number" min={1} max={240} value={minutes} onChange={event => setMinutes(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
       </div>}
+      {values && <fieldset className="space-y-2 rounded-lg border border-slate-800 p-3">
+        <legend className="px-1 text-xs font-semibold text-slate-300">Decisiones del agente</legend>
+        <p className="text-[10px] text-slate-500">Al cerrar una tarea el agente puede proponer cambios al plan. Elige cuáles se aplican solos y cuáles te pregunta.</p>
+        {decisionCategories.map(item => <div key={item.category} className="flex items-center justify-between gap-3">
+          <label htmlFor={`decision-${item.category}`} className="text-xs text-slate-400">{item.label}</label>
+          <select id={`decision-${item.category}`} value={rules[item.category]} onChange={event => setRules({ ...rules, [item.category]: event.target.value as 'AUTO' | 'ASK' })} className="min-h-9 shrink-0 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100">
+            <option value="AUTO">Automático</option>
+            <option value="ASK">Preguntar</option>
+          </select>
+        </div>)}
+        <div>
+          <label htmlFor="decision-max-auto-tasks" className="mb-1 block text-xs text-slate-400">Máximo de tareas automáticas por feature</label>
+          <input id="decision-max-auto-tasks" type="number" min={0} max={50} step={1} value={maxAutoTasks} onChange={event => setMaxAutoTasks(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
+        </div>
+      </fieldset>}
       <button type="button" onClick={() => void save()} disabled={busy || !values} className="min-h-9 w-full rounded-lg border border-slate-600 px-3 text-xs text-slate-200 hover:border-slate-400 disabled:opacity-50">Guardar política</button>
       {message && <p role={message.tone === 'error' ? 'alert' : 'status'} className={`text-xs ${message.tone === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}>{message.text}</p>}
     </div>

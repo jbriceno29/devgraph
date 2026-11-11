@@ -19,7 +19,7 @@ export interface AgentExecutionRepositoryPort {
   getRepositoryRoot(projectId: string): string | null;
   getRepositoryId(projectId:string):string|null;
   getAutonomyPolicy(projectId:string,profileId:string):AutonomyPolicy;
-  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'>):void;
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'decisionPolicy'>):void;
   /** Closes approval requests left PENDING by an execution that will never resume. */
   rejectPendingApprovals(executionId:string,note:string):void;
   /** Sets `authMode` in the wired provider's connection config. */
@@ -40,6 +40,8 @@ export interface AgentExecutionRepositoryPort {
   listDependents(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
   /** Nearest FEATURE ancestor of a work item (following parent links), or null. */
   findFeatureFor(projectId:string,workItemId:string):{id:string;displayKey:string;title:string}|null;
+  /** Work items under a feature (subtasks included), ordered by key. */
+  listFeatureTasks(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
   /** Integration branch owned by a feature (or by a work item without a feature). */
   getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null;
   saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void;

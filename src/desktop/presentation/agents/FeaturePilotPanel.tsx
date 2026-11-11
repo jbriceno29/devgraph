@@ -7,6 +7,7 @@ const levels: Array<{ value: AutonomyLevelDto; label: string; help: string }> = 
   { value: 'AUTO_ACCEPT', label: 'Auto-aceptar', help: 'Tú lanzas las tareas; las que pasan auditoría y pruebas se integran solas.' },
   { value: 'PILOT', label: 'Piloto', help: 'Recorre las tareas de la feature, las ejecuta, verifica e integra; te avisa solo cuando hace falta.' },
 ];
+const kindLabel: Record<string, string> = { PLAN_CHANGED: 'Plan modificado', PLAN_PROPOSAL: 'Propuesta de cambios' };
 const statusLabel: Record<string, string> = { RUNNING: 'En marcha', PAUSED: 'En pausa', WAITING_USER: 'Esperándote', COMPLETED: 'Feature terminada', STOPPED: 'Detenido', FAILED: 'Error' };
 
 /** Autonomy per feature and the autopilot's controls, status and decision log. */
@@ -83,7 +84,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
       {run && ['PAUSED', 'WAITING_USER'].includes(run.status) && <button type="button" onClick={() => void act(() => window.workspaceIpc.commands.resumePilot(projectId, featureId))} disabled={busy} className="min-h-9 w-full rounded-lg border border-violet-700 px-3 text-xs text-violet-200 hover:bg-violet-950 disabled:opacity-50">Reanudar piloto</button>}
 
       {run && <p role="status" className="rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-xs text-slate-300"><span className="font-semibold">{statusLabel[run.status] ?? run.status}</span>{run.reason ? ` · ${run.reason}` : ''}</p>}
-      {state.events.length > 0 && <ol aria-label="Decisiones del piloto" className="max-h-56 space-y-1 overflow-y-auto">{[...state.events].reverse().slice(0, 30).map(event => <li key={event.id} className="text-[10px] text-slate-400"><span className="font-mono text-slate-600">{new Date(event.createdAt).toLocaleTimeString()}</span> <span className="text-violet-300">{event.kind.replaceAll('_', ' ')}</span> {event.message}</li>)}</ol>}
+      {state.events.length > 0 && <ol aria-label="Decisiones del piloto" className="max-h-56 space-y-1 overflow-y-auto">{[...state.events].reverse().slice(0, 30).map(event => <li key={event.id} className="text-[10px] text-slate-400"><span className="font-mono text-slate-600">{new Date(event.createdAt).toLocaleTimeString()}</span> <span className="text-violet-300">{kindLabel[event.kind] ?? event.kind.replaceAll('_', ' ')}</span> {event.message}</li>)}</ol>}
     </>}
     {state && <details className="rounded-lg border border-slate-800 bg-slate-950/50" onToggle={event => { if ((event.target as HTMLDetailsElement).open) void act(async () => setReport((await window.workspaceIpc.queries.getFeatureReport(projectId, featureId)).report)); }}>
       <summary className="cursor-pointer px-3 py-2 text-xs text-slate-300">Métricas de la feature</summary>

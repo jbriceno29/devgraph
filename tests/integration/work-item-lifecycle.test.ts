@@ -87,7 +87,7 @@ describe('operating without touching the database (Stage 1.3)',()=>{
   const policy=await core.handle({channel:'policy:get',args:[project.id]}) as {writablePaths:string[];allowedCommands:string[]};
   expect(policy.writablePaths).toContain('src/**');expect(policy.allowedCommands).toEqual([]);
   const saved=await core.handle({channel:'policy:update',args:[project.id,{...policy,writablePaths:['src/**','  package.json ','src/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test']}]}) as {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[]};
-  expect(saved).toEqual({writablePaths:['src/**','package.json'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test'],maxExecutionMinutes:30});
+  expect(saved).toEqual({writablePaths:['src/**','package.json'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test'],maxExecutionMinutes:30,decisionPolicy:{rules:{NEW_TASK:'AUTO',TASK_DEPENDENCY:'AUTO',TASK_STATUS:'ASK',DECISION_RECORD:'ASK',SCOPE_CHANGE:'ASK'},maxAutoTasksPerFeature:5}});
   await expect(core.handle({channel:'policy:update',args:[project.id,{...saved,maxExecutionMinutes:0}]})).rejects.toThrow('entre 1 y 240');
   expect(await core.handle({channel:'policy:get',args:[project.id]})).toEqual(saved);
   await expect(core.handle({channel:'policy:update',args:[project.id,{...saved,allowedCommands:['npm test | tail']}]})).rejects.toThrow('Comando no permitido');

@@ -149,6 +149,8 @@ Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demues
 
 > **Hecho (2026-11-11):** cada tarea se colorea según su estado (la que está en curso pulsa, las cerradas y bloqueadas se atenúan); cada feature muestra "N/M tareas" y un distintivo "PILOTO" mientras el piloto trabaja; al seleccionar una tarea, el lienzo resalta las entidades que formaron el contexto de su última ejecución, con el color de su nivel de autoridad, y dibuja aristas punteadas hacia la tarea (consulta `graph:context_flow`, con leyenda y botón para ocultarlo). Verificado contra el workspace real de `todo-app`: TASK-002 recibió FEAT-001, los requisitos, el código de TASK-001 (nivel 4) y su resultado (nivel 5). Pendiente: camino crítico de la feature.
 
+> **Decisiones del agente (2026-11-11):** al cerrar una tarea el agente puede proponer cambios al plan (bloque `propuestas` al final de su resumen, independiente del motor). Una política del proyecto (migración 006, editable en el formulario de política) clasifica cada operación en cinco categorías, automática o "preguntar", con un tope de tareas automáticas por feature (5 por defecto). Si todo es automático el cambio se aplica y el piloto sigue; si no, el piloto queda en espera con la razón y la propuesta pendiente en Planificación; una propuesta inválida no frena la ejecución. Verificado con haiku real: tras cerrar TASK-001 propuso la tarea `restar`, se aplicó sola y quedó lista. Pendiente: medir si las instrucciones extra del prompt cambian el costo ponderado con `scripts/benchmark/`.
+
 ## 6. Orden y dependencias
 
 Etapa 1 → Etapa 2 → Etapa 3 → Etapa 5 (medición con Claude) → Etapa 6 → Etapa 4 → Etapa 5 (medición con Codex).

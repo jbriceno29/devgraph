@@ -1,3 +1,4 @@
+import { normalizeDecisionPolicy } from '../../../domain/autonomy/decision-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider, AgentProviderId, ExecutionStatus } from '../../../domain/agents/models.js';
 import type { AutonomyPolicy,ApprovalRequest } from '../../../domain/governance/models.js';
@@ -55,12 +56,12 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     this.ensureDefaults(projectId);
     const row=this.db.prepare(`SELECT a.* FROM autonomy_policies a JOIN agent_profiles p ON p.default_policy_id=a.id WHERE p.project_id=? AND p.id=?`).get(projectId,profileId) as PolicyRow|undefined;
     if(!row)throw new Error('No hay una política de autonomía asignada al perfil.');
-    return {id:row.id,projectId:row.project_id,name:row.name,writablePaths:parseArray(row.writable_paths_json),readonlyPaths:parseArray(row.readonly_paths_json),deniedPaths:parseArray(row.denied_paths_json),allowedCommands:parseArray(row.allowed_commands_json),autoApproveScopes:parseArray(row.auto_approve_scopes_json),requireWorktreeIsolation:Boolean(row.require_worktree_isolation),maxExecutionMinutes:row.max_execution_minutes??30};
+    return {id:row.id,projectId:row.project_id,name:row.name,writablePaths:parseArray(row.writable_paths_json),readonlyPaths:parseArray(row.readonly_paths_json),deniedPaths:parseArray(row.denied_paths_json),allowedCommands:parseArray(row.allowed_commands_json),autoApproveScopes:parseArray(row.auto_approve_scopes_json),requireWorktreeIsolation:Boolean(row.require_worktree_isolation),maxExecutionMinutes:row.max_execution_minutes??30,decisionPolicy:readDecisionPolicy(row.decision_policy_json)};
   }
 
-  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'>):void {
-    const result=this.db.prepare('UPDATE autonomy_policies SET writable_paths_json=?,readonly_paths_json=?,denied_paths_json=?,allowed_commands_json=?,max_execution_minutes=? WHERE id=?')
-      .run(JSON.stringify(fields.writablePaths),JSON.stringify(fields.readonlyPaths),JSON.stringify(fields.deniedPaths),JSON.stringify(fields.allowedCommands),fields.maxExecutionMinutes,policyId);
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'decisionPolicy'>):void {
+    const result=this.db.prepare('UPDATE autonomy_policies SET writable_paths_json=?,readonly_paths_json=?,denied_paths_json=?,allowed_commands_json=?,max_execution_minutes=?,decision_policy_json=? WHERE id=?')
+      .run(JSON.stringify(fields.writablePaths),JSON.stringify(fields.readonlyPaths),JSON.stringify(fields.deniedPaths),JSON.stringify(fields.allowedCommands),fields.maxExecutionMinutes,JSON.stringify(fields.decisionPolicy),policyId);
     if(result.changes!==1)throw new Error('La política de autonomía no existe.');
   }
 
@@ -104,6 +105,13 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
   listDependents(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}> {
     return (this.db.prepare(`SELECT k.id,k.display_key,k.title,k.status FROM graph_edges g JOIN knowledge_entities k ON k.id=g.source_id
       WHERE g.project_id=? AND g.target_id=? AND g.edge_type='DEPENDS_ON' AND k.entity_type='WORK_ITEM' ORDER BY k.display_key`).all(projectId,workItemId) as Array<{id:string;display_key:string;title:string;status:string}>)
+      .map(row=>({id:row.id,displayKey:row.display_key,title:row.title,status:row.status}));
+  }
+
+  listFeatureTasks(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string;status:string}> {
+    return (this.db.prepare(`WITH RECURSIVE tree(id) AS (SELECT id FROM knowledge_entities WHERE project_id=? AND parent_id=? AND entity_type='WORK_ITEM'
+      UNION SELECT k.id FROM knowledge_entities k JOIN tree t ON k.parent_id=t.id WHERE k.entity_type='WORK_ITEM')
+      SELECT k.id,k.display_key,k.title,k.status FROM knowledge_entities k JOIN tree t ON t.id=k.id ORDER BY k.display_key`).all(projectId,featureId) as Array<{id:string;display_key:string;title:string;status:string}>)
       .map(row=>({id:row.id,displayKey:row.display_key,title:row.title,status:row.status}));
   }
 
@@ -271,7 +279,7 @@ interface ProfileRow {id:string;project_id:string;role_key:AgentProfile['roleKey
 interface WorkItemRow {id:string;project_id:string;display_key:string;title:string;summary:string;status:string;parent_id:string|null;created_revision:number;updated_revision:number;created_at:string;updated_at:string;work_type:WorkItem['workType'];work_priority:WorkItem['priority'];scope_notes:string|null;acceptance_criteria_json:string;recommended_profile_role:WorkItem['recommendedProfileRole']}
 interface ExecutionRow {id:string;project_id:string;work_item_id:string|null;profile_id:string;provider_id:string;session_id:string|null;context_snapshot_id:string|null;status:ExecutionStatus;model_used:string|null;initial_commit:string;final_commit:string|null;branch_or_worktree:string|null;base_branch:string|null;execution_branch:string|null;revision_of:string|null;review_status:AgentExecution['reviewStatus'];review_note:string|null;merged_commit:string|null;reviewed_at:string|null;test_summary_json:string|null;result_summary:string|null;started_at:string|null;completed_at:string|null}
 interface EventRow {id:string;sequence_no:number;created_at:string;payload_json:string}
-interface PolicyRow {id:string;project_id:string;name:string;writable_paths_json:string;readonly_paths_json:string;denied_paths_json:string;allowed_commands_json:string;auto_approve_scopes_json:string;require_worktree_isolation:number;max_execution_minutes?:number}
+interface PolicyRow {id:string;project_id:string;name:string;writable_paths_json:string;readonly_paths_json:string;denied_paths_json:string;allowed_commands_json:string;auto_approve_scopes_json:string;require_worktree_isolation:number;max_execution_minutes?:number; decision_policy_json?:string|null }
 function mapProfile(row:ProfileRow):AgentProfile {return {id:row.id,projectId:row.project_id,roleKey:row.role_key,name:row.name,systemInstructions:row.system_instructions,defaultProviderId:row.default_provider_id,defaultPolicyId:row.default_policy_id};}
 function mapProvider(row:ProfileRow):AgentProvider {let capabilities:AgentProvider['capabilities']=providerDefaults(row.provider_key==='opencode'?'claude-code':row.provider_key).capabilities;try{capabilities=JSON.parse(row.capabilities_json) as AgentProvider['capabilities'];}catch{}return {id:row.default_provider_id??`provider:${row.provider_key}`,providerKey:row.provider_key,displayName:row.display_name,adapterVersion:row.adapter_version,capabilities};}
 function mapExecution(row:ExecutionRow):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,baseBranch:row.base_branch??null,executionBranch:row.execution_branch??null,revisionOf:row.revision_of??null,reviewStatus:row.review_status??null,reviewNote:row.review_note??null,mergedCommit:row.merged_commit??null,reviewedAt:row.reviewed_at??null,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
@@ -281,3 +289,6 @@ function toRow(execution:AgentExecution):Record<string,unknown> {
   return {...execution,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,testSummary:execution.testSummary===null?null:JSON.stringify(execution.testSummary)};
 }
 function parseJson<T>(json:string,fallback:T):T{try{return JSON.parse(json) as T;}catch{return fallback;}}
+
+/** A stored policy that no longer parses falls back to the defaults rather than blocking every run. */
+function readDecisionPolicy(json:string|null|undefined){try{return normalizeDecisionPolicy(json?JSON.parse(json):null);}catch{return normalizeDecisionPolicy(null);}}

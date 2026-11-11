@@ -65,8 +65,42 @@ describe('ExecutionPolicyForm',()=>{
   expect((screen.getByLabelText('Rutas escribibles') as HTMLTextAreaElement).value).toBe('src/**\ntests/**');
   fireEvent.change(commands,{target:{value:'node --test\n\n  npm run lint  '}});
   fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
-  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint'],maxExecutionMinutes:30}));
+  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint'],maxExecutionMinutes:30,decisionPolicy:{rules:{NEW_TASK:'AUTO',TASK_DEPENDENCY:'AUTO',TASK_STATUS:'ASK',DECISION_RECORD:'ASK',SCOPE_CHANGE:'ASK'},maxAutoTasksPerFeature:5}}));
   expect((await screen.findByRole('status')).textContent).toBe('Política guardada.');
+ });
+
+ it('uses the default decision policy when the project has none',async()=>{
+  ipc();
+  render(<ExecutionPolicyForm projectId="p"/>);
+  expect(await screen.findByRole('group',{name:'Decisiones del agente'})).toBeTruthy();
+  expect((screen.getByLabelText('Agregar tareas dentro de la misma feature') as HTMLSelectElement).value).toBe('AUTO');
+  expect((screen.getByLabelText('Registrar decisiones de arquitectura (ADR)') as HTMLSelectElement).value).toBe('ASK');
+  expect((screen.getByLabelText('Máximo de tareas automáticas por feature') as HTMLInputElement).value).toBe('5');
+ });
+
+ it('loads the received decision policy and saves the changed category and maximum',async()=>{
+  const decisionPolicy={rules:{NEW_TASK:'ASK',TASK_DEPENDENCY:'AUTO',TASK_STATUS:'AUTO',DECISION_RECORD:'ASK',SCOPE_CHANGE:'ASK'},maxAutoTasksPerFeature:12};
+  const client=ipc();
+  (client.queries as Record<string,unknown>).getExecutionPolicy=vi.fn(async()=>({writablePaths:['src/**'],readonlyPaths:[],deniedPaths:[],allowedCommands:['npm test'],decisionPolicy}));
+  render(<ExecutionPolicyForm projectId="p"/>);
+  const scope=await screen.findByLabelText(/Cambiar el alcance/) as HTMLSelectElement;
+  expect((screen.getByLabelText('Agregar tareas dentro de la misma feature') as HTMLSelectElement).value).toBe('ASK');
+  expect((screen.getByLabelText(/Cambiar el estado de tareas/) as HTMLSelectElement).value).toBe('AUTO');
+  const max=screen.getByLabelText('Máximo de tareas automáticas por feature') as HTMLInputElement;
+  expect(max.value).toBe('12');
+  fireEvent.change(scope,{target:{value:'AUTO'}});
+  fireEvent.change(max,{target:{value:'3'}});
+  fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
+  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',expect.objectContaining({decisionPolicy:{rules:{...decisionPolicy.rules,SCOPE_CHANGE:'AUTO'},maxAutoTasksPerFeature:3}})));
+ });
+
+ it('rejects a maximum of automatic tasks out of range without saving',async()=>{
+  const client=ipc();
+  render(<ExecutionPolicyForm projectId="p"/>);
+  fireEvent.change(await screen.findByLabelText('Máximo de tareas automáticas por feature'),{target:{value:'51'}});
+  fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('entre 0 y 50');
+  expect(client.commands.updateExecutionPolicy).not.toHaveBeenCalled();
  });
 
  it('shows the server error when a command is rejected',async()=>{

@@ -50,6 +50,14 @@ describe('FeaturePilotPanel',()=>{
   await waitFor(()=>expect(waiting.commands.resumePilot).toHaveBeenCalledWith('p','feat'));
  });
 
+ it('labels plan changes and proposals in the decision log',async()=>{
+  ipc({...base,run:{id:'run',featureId:'feat',status:'RUNNING',reason:null,startedAt:'now',endedAt:null},events:[{id:'e1',sequenceNo:1,kind:'PLAN_CHANGED',message:'Plan modificado al cerrar TASK-001: Validación.',workItemId:'t1',executionId:null,createdAt:'2026-11-10T10:00:00Z'},{id:'e2',sequenceNo:2,kind:'PLAN_PROPOSAL',message:'Propuesta de TASK-001 pendiente.',workItemId:'t1',executionId:null,createdAt:'2026-11-10T10:01:00Z'}]});
+  render(<FeaturePilotPanel projectId="p" nodes={nodes}/>);
+  const log=await screen.findByRole('list',{name:'Decisiones del piloto'});
+  expect(log.textContent).toContain('Plan modificado');expect(log.textContent).toContain('Propuesta de cambios');
+  expect(log.textContent).not.toContain('PLAN CHANGED');
+ });
+
  it('only offers the API key when the app was started with one',async()=>{
   ipc();
   render(<FeaturePilotPanel projectId="p" nodes={nodes}/>);

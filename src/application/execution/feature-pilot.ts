@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentExecution } from '../../domain/agents/models.js';
 import { ACTIVE_PILOT_STATUSES, type AutonomyLevel, type FeatureAutonomy, type PilotEventKind, type PilotRun, type PilotStatus } from '../../domain/autonomy/models.js';
 import type { PilotRepositoryPort } from '../ports/pilot-port.js';
-import type { AgentOrchestrator } from './agent-orchestrator.js';
+import type { AgentOrchestrator, PlanProposalOutcome } from './agent-orchestrator.js';
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 type Usage = { utilization: number | null; window: string; resetsAt: string | null; status: string };
@@ -185,7 +185,23 @@ export class FeaturePilot {
     const result = await this.orchestrator.accept(execution.id, { note: 'Aceptada por el piloto automático: auditoría y comprobaciones en verde.' });
     if (!result.merged) { this.waitUser(run, `No se pudo integrar ${key}: ${result.conflict?.detail ?? 'conflicto'}${result.conflict?.files.length ? ` (${result.conflict.files.join(', ')})` : ''}`, execution.workItemId, execution.id); return false; }
     this.log(run, 'TASK_ACCEPTED', `${key} aceptada e integrada en ${execution.baseBranch} (${result.execution.mergedCommit?.slice(0, 8)}).`, execution.workItemId, execution.id);
-    return true;
+    return this.handleProposal(run, result.proposal ?? null, key, execution);
+  }
+
+  /**
+   * The agent may propose plan changes when closing a task (the orchestrator already applied or stored them per the
+   * project's decision policy). APPLIED: the new tasks are in the graph and the loop picks them up on its next pass.
+   * PENDING: the user decides in Planning — the pilot waits; on resume it goes on with whatever the graph holds then,
+   * resolved or not. INVALID: logged only; a bad proposal never stops the execution.
+   */
+  private handleProposal(run: PilotRun, proposal: PlanProposalOutcome | null, key: string, execution: AgentExecution): boolean {
+    if (!proposal) return true;
+    const reasons = proposal.reasons.map(reason => reason.trim().replace(/\.+$/, '')).filter(Boolean).join('; ');
+    if (proposal.outcome === 'APPLIED') { this.log(run, 'PLAN_CHANGED', `Plan modificado al cerrar ${key}: ${proposal.title}.${reasons ? ` ${reasons}.` : ''} Las tareas nuevas entran en el recorrido.`, execution.workItemId, execution.id); return true; }
+    if (proposal.outcome === 'INVALID') { this.log(run, 'PLAN_PROPOSAL', `Propuesta de ${key} descartada (${proposal.title}): ${reasons || 'inválida'}. El piloto continúa.`, execution.workItemId, execution.id); return true; }
+    this.log(run, 'PLAN_PROPOSAL', `Propuesta de ${key} pendiente de tu decisión: ${proposal.title}.`, execution.workItemId, execution.id);
+    this.waitUser(run, `El agente propone cambios al plan que requieren tu decisión: ${proposal.title}.${reasons ? ` ${reasons}.` : ''} Revísalos en Planificación y reanuda el piloto.`, execution.workItemId, execution.id);
+    return false;
   }
 
   private async autoAccept(execution: AgentExecution): Promise<void> {
@@ -194,6 +210,8 @@ export class FeaturePilot {
       const featureId = this.repository.featureOf(execution.projectId, execution.workItemId);
       if (!featureId || this.repository.getAutonomy(execution.projectId, featureId).level !== 'AUTO_ACCEPT') return;
       if (!this.gate(execution).ok) return;
+      // A plan proposal was already applied or stored by the orchestrator per the project's policy; without a pilot run
+      // there is no log to write and nothing to stop: the notification refreshes the views (Planning shows pending ones).
       await this.orchestrator.accept(execution.id, { note: 'Aceptada automáticamente (nivel auto-aceptar): auditoría y comprobaciones en verde.' });
       this.notify(execution.projectId, featureId);
     } catch { /* stays IN_REVIEW for the user */ }

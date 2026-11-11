@@ -7,9 +7,9 @@ export interface AgentEventDto {type:string;timestamp:string;[key:string]:unknow
 export interface AgentEventRecordDto {id:string;sequenceNo:number;createdAt:string;event:AgentEventDto}
 export interface StartAgentExecutionInput {projectId:string;workItemId:string;profileId:string;model?:string}
 export interface RequestExecutionChangesInput {executionId:string;feedback:string;model?:string}
-export interface AcceptExecutionResultDto {execution:AgentExecutionDto;merged:boolean;conflict:{reason:string;detail:string;files:string[]}|null}
+export interface AcceptExecutionResultDto {execution:AgentExecutionDto;merged:boolean;conflict:{reason:string;detail:string;files:string[]}|null;proposal?:{changeSetId:string|null;outcome:'APPLIED'|'PENDING'|'INVALID';reasons:string[];title:string}|null}
 export interface ExecutionDetailDto {execution:AgentExecutionDto;taskStatus:string|null;files:Array<{path:string;changeType:string;additions:number;deletions:number;patch:string|null}>;testLog:string|null;deniedActions:Array<{toolName:string;target:string;reason:string}>;canAccept:boolean;canRequestChanges:boolean}
-export interface ExecutionPolicyDto {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[];maxExecutionMinutes?:number}
+export interface ExecutionPolicyDto {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[];maxExecutionMinutes?:number;decisionPolicy?:{rules:Record<'NEW_TASK'|'TASK_DEPENDENCY'|'TASK_STATUS'|'DECISION_RECORD'|'SCOPE_CHANGE','AUTO'|'ASK'>;maxAutoTasksPerFeature:number}}
 export type AutonomyLevelDto='MANUAL'|'AUTO_ACCEPT'|'PILOT';
 export interface FeatureAutonomyDto {featureId:string;level:AutonomyLevelDto;executionModel:string|null;escalationModel:string|null;maxAttempts:number;usagePauseThreshold:number}
 export interface SetFeatureAutonomyInput {level:AutonomyLevelDto;executionModel?:string|null;escalationModel?:string|null;maxAttempts?:number;usagePauseThreshold?:number}

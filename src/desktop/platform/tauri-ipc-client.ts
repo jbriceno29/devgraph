@@ -26,6 +26,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   resumePilot:(projectId,featureId)=>invokeCore('pilot:resume',[projectId,featureId]),
   setAuthMode:(projectId,mode)=>invokeCore('provider:set_auth_mode',[projectId,mode]),
   exportFeatureReport:(projectId,featureId)=>invokeCore('metrics:export_report',[projectId,featureId]),
+  integrateFeature:(projectId,featureId)=>invokeCore('feature:integrate',[projectId,featureId]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),

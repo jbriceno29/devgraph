@@ -7,6 +7,8 @@ export interface AgentEventDto {type:string;timestamp:string;[key:string]:unknow
 export interface AgentEventRecordDto {id:string;sequenceNo:number;createdAt:string;event:AgentEventDto}
 export interface StartAgentExecutionInput {projectId:string;workItemId:string;profileId:string;model?:string}
 export interface RequestExecutionChangesInput {executionId:string;feedback:string;model?:string}
+/** Result of `feature:integrate`: `alreadyIntegrated` when the base branch already contained the feature branch. */
+export interface FeatureIntegrationResultDto {featureId:string;branchName:string;targetBranch:string;merged:boolean;alreadyIntegrated:boolean;commit:string|null}
 export interface AcceptExecutionResultDto {execution:AgentExecutionDto;merged:boolean;conflict:{reason:string;detail:string;files:string[]}|null;proposal?:{changeSetId:string|null;outcome:'APPLIED'|'PENDING'|'INVALID';reasons:string[];title:string}|null}
 export interface ExecutionDetailDto {execution:AgentExecutionDto;taskStatus:string|null;files:Array<{path:string;changeType:string;additions:number;deletions:number;patch:string|null}>;testLog:string|null;deniedActions:Array<{toolName:string;target:string;reason:string}>;canAccept:boolean;canRequestChanges:boolean}
 export interface ExecutionPolicyDto {writablePaths:string[];readonlyPaths:string[];deniedPaths:string[];allowedCommands:string[];maxExecutionMinutes?:number;maxTurns?:number|null;decisionPolicy?:{rules:Record<'NEW_TASK'|'TASK_DEPENDENCY'|'TASK_STATUS'|'DECISION_RECORD'|'SCOPE_CHANGE','AUTO'|'ASK'>;maxAutoTasksPerFeature:number}}

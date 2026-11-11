@@ -27,6 +27,7 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   listFileDiffs:()=>[],
   listEvents:()=>[],
   listDocumentPaths:()=>options.documents??[],
+  listFeatureDependencies:()=>[],
   rejectPendingApprovals:vi.fn(),
   recordTaskOutcome:vi.fn(()=>{revision+=1;return revision;}),
   findTaskOutcome:()=>null,
@@ -40,7 +41,7 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   findExecution:(id:string)=>executions.has(id)?{...executions.get(id)!}:null,
   appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});if(event.type==='SESSION_INITIALIZED'&&executions.has(executionId))executions.set(executionId,{...executions.get(executionId)!,sessionId:`row-${event.externalSessionId}`});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
  } as unknown as AgentExecutionRepositoryPort;
- const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true}))),mergeInto:vi.fn(async()=>({ok:true as const,commit:'synced',changed:true})),commitFiles:vi.fn(async()=>[{path:'src/a.ts',status:'ADDED' as const}]),pathsDiffer:vi.fn(async()=>[] as string[]),uncommittedPaths:vi.fn(async()=>[] as string[])} satisfies GitIsolationPort;
+ const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true}))),mergeInto:vi.fn(async()=>({ok:true as const,commit:'synced',changed:true})),commitFiles:vi.fn(async()=>[{path:'src/a.ts',status:'ADDED' as const}]),pathsDiffer:vi.fn(async()=>[] as string[]),uncommittedPaths:vi.fn(async()=>[] as string[]),isAncestor:vi.fn(async()=>false),deleteIntegrationBranch:vi.fn(async()=>undefined),mergeIntoBase:vi.fn(async()=>({ok:true as const,commit:'base-merge',changed:true}))} satisfies GitIsolationPort;
  const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>({...capabilities,...options.capabilities}),async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
  const validator:ExecutionValidatorPort={validate:options.validate??(async()=>({passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null}))};
  const contextBuilder={build:vi.fn(async()=>{await options.build?.();return {snapshot:{id:'snapshot'},packageText:''};})};

@@ -264,6 +264,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'pilot:start': {const projectId=String(args[0]??'');return getPilot(projectId).start(projectId,String(args[1]??''),{acknowledgeCost:Boolean((args[2] as {acknowledgeCost?:boolean}|undefined)?.acknowledgeCost)});}
     case 'pilot:stop': {const projectId=String(args[0]??'');return getPilot(projectId).stop(projectId,String(args[1]??''));}
     case 'pilot:resume': {const projectId=String(args[0]??'');return getPilot(projectId).resume(projectId,String(args[1]??''));}
+    case 'feature:integrate': {const projectId=String(args[0]??'');return getExecutionService(projectId).integrateFeature(projectId,String(args[1]??''));}
     case 'provider:set_auth_mode': {const projectId=String(args[0]??'');return {authMode:getExecutionService(projectId).setAuthMode(projectId,args[1] as 'subscription'|'api_key')};}
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);

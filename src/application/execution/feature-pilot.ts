@@ -136,6 +136,9 @@ export class FeaturePilot {
           state.currentExecution = null;
           continue;
         }
+        // A feature that depends on another one with open tasks cannot run yet (its branch would miss that work).
+        const blocker = this.orchestrator.featureBlocker(run.projectId, run.featureId);
+        if (blocker) return this.waitUser(run, `${blocker} Termínalas (o integra esa feature) y reanuda el piloto.`, null);
         const next = open.find(task => task.status === 'READY');
         if (!next) return this.waitUser(run, `No hay tareas listas: ${open.map(task => `${task.displayKey} (${task.status})`).join(', ')}. Pasa a READY las que estén en DRAFT; las BLOCKED esperan dependencias.`, null);
 

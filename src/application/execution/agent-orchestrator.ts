@@ -10,6 +10,7 @@ import { manualWorkItemTransitions, type WorkItemStatus } from '../../domain/wor
 import type { AgentAdapterPort } from '../ports/agent-adapter-port.js';
 import type { AgentContextBuilderPort, AgentExecutionRepositoryPort, ExecutionEventLogPort, ExecutionEventSink, ExecutionValidatorPort, GitIsolationPort } from '../ports/agent-execution-port.js';
 
+const closedStatuses=new Set(['DONE','ARCHIVED']);
 const terminalStatuses=new Set<ExecutionStatus>(['COMPLETED','FAILED','CANCELLED']);
 
 export class AgentOrchestrator {
@@ -316,16 +317,78 @@ export class AgentOrchestrator {
   return this.repository.externalSessionId(candidate.sessionId)??undefined;
  }
 
- /** The integration branch of the task's feature (or of the task itself when it has no feature), created on first use. */
+ /**
+  * The integration branch of the task's feature (or of the task itself when it has no feature), created on first use.
+  * A feature branch starts from the user's HEAD plus the branches of the features it depends on (merged in a throwaway
+  * worktree), so a dependent feature sees their code; a branch already started is brought up to date the same way.
+  * Refused while a feature it depends on has open tasks. A failed creation leaves no branch behind.
+  */
  private async integrationBranchFor(projectId:string,workItem:{id:string;displayKey:string;title:string},repositoryRoot:string,repositoryId:string):Promise<string>{
   const feature=this.repository.findFeatureFor(projectId,workItem.id);
   const owner=feature??workItem;
+  const blocker=feature?this.featureBlocker(projectId,feature.id):null;
+  if(blocker)throw new Error(blocker);
+  const dependencies=feature?this.repository.listFeatureDependencies(projectId,feature.id):[];
   const existing=this.repository.getIntegrationBranch(owner.id);
-  if(existing&&await this.isolation.branchExists(repositoryRoot,existing.branchName))return existing.branchName;
+  if(existing&&await this.isolation.branchExists(repositoryRoot,existing.branchName)){await this.mergeDependencies(projectId,repositoryRoot,existing.branchName,dependencies);return existing.branchName;}
   const sourceBranch=await this.isolation.currentBranch(repositoryRoot);
   const branchName=await this.isolation.createIntegrationBranch({repositoryRoot,preferredName:`feature/${branchSlug(owner.displayKey,owner.title)}`,sourceRef:'HEAD'});
+  try{await this.mergeDependencies(projectId,repositoryRoot,branchName,dependencies);}
+  catch(error){await this.isolation.deleteIntegrationBranch(repositoryRoot,branchName).catch(()=>undefined);throw error;}
   this.repository.saveIntegrationBranch({ownerId:owner.id,projectId,repositoryId,branchName,sourceBranch:sourceBranch??'HEAD'});
   return branchName;
+ }
+
+ /** Merges into `target` the branch of each dependency it does not contain yet (one already in the base is skipped). */
+ private async mergeDependencies(projectId:string,repositoryRoot:string,target:string,dependencies:Array<{id:string;displayKey:string;title:string}>):Promise<void>{
+  for(const dependency of dependencies){
+   const branch=this.repository.getIntegrationBranch(dependency.id)?.branchName;
+   if(!branch||!await this.isolation.branchExists(repositoryRoot,branch)||await this.isolation.isAncestor(repositoryRoot,branch,target))continue;
+   const result=await this.isolation.mergeInto({repositoryRoot,workspaceRoot:this.workspaceRoot,projectId,targetBranch:target,sourceRef:branch,message:`Incorpora ${branch} (${dependency.displayKey}: ${dependency.title}) en ${target}`});
+   if(!result.ok)throw new Error(`No se pudo incorporar el trabajo de ${dependency.displayKey} (${dependency.title}) en ${target}: ${result.detail}${result.conflicts.length?` Archivos en conflicto: ${result.conflicts.join(', ')}.`:''} Resuélvelo a mano en ${target} o integra antes las features en la rama base.`);
+  }
+ }
+
+ /**
+  * Why a feature cannot run yet: a feature it depends on (DEPENDS_ON between features, or a task of it that another
+  * task of this feature depends on) still has open tasks. Null when it can run.
+  */
+ featureBlocker(projectId:string,featureId:string):string|null{
+  const feature=this.repository.findFeatureFor(projectId,featureId);if(!feature)return null;
+  const reasons=this.repository.listFeatureDependencies(projectId,feature.id).flatMap(dependency=>{
+   const pending=this.repository.listFeatureTasks(projectId,dependency.id).filter(task=>!closedStatuses.has(task.status));
+   return pending.length?[`${feature.displayKey} depende de ${dependency.title}, que aún tiene tareas pendientes: ${pending.map(task=>task.displayKey).join(', ')}.`]:[];
+  });
+  return reasons.length?reasons.join(' '):null;
+ }
+
+ /**
+  * Integrates a finished feature into the project's base branch (the branch its integration branch was created from)
+  * with a merge commit, so the features that depend on it simply start from the updated base. Refused with open tasks,
+  * with uncommitted changes in the user's checkout of that branch, or on conflict. The feature branch is kept.
+  */
+ async integrateFeature(projectId:string,featureId:string):Promise<{featureId:string;branchName:string;targetBranch:string;merged:boolean;alreadyIntegrated:boolean;commit:string|null}>{
+  const feature=this.repository.findFeatureFor(projectId,featureId);
+  if(!feature||feature.id!==featureId)throw new Error('La entidad seleccionada no es una feature de este proyecto.');
+  const repositoryRoot=this.repository.getRepositoryRoot(projectId);
+  if(!repositoryRoot)throw new Error('Configura primero un repositorio Git para este proyecto.');
+  const tasks=this.repository.listFeatureTasks(projectId,feature.id);
+  if(!tasks.length)throw new Error(`${feature.displayKey} no tiene tareas que integrar.`);
+  const pending=tasks.filter(task=>!closedStatuses.has(task.status));
+  if(pending.length)throw new Error(`${feature.displayKey} aún tiene tareas pendientes: ${pending.map(task=>task.displayKey).join(', ')}.`);
+  const branch=this.repository.getIntegrationBranch(feature.id);
+  if(!branch||!await this.isolation.branchExists(repositoryRoot,branch.branchName))throw new Error(`${feature.displayKey} no tiene rama de integración: ninguna de sus tareas se ejecutó con Graph Workspace.`);
+  const targetBranch=branch.sourceBranch;
+  if(!targetBranch||targetBranch==='HEAD'||!await this.isolation.branchExists(repositoryRoot,targetBranch))throw new Error(`No se sabe en qué rama integrar ${feature.displayKey}: su rama ${branch.branchName} salió de ${targetBranch==='HEAD'?'un HEAD sin rama':`la rama ${targetBranch}, que ya no existe`}.`);
+  const base={featureId:feature.id,branchName:branch.branchName,targetBranch};
+  if(this.accepting.has(`feature:${feature.id}`))throw new Error(`${feature.displayKey} ya se está integrando.`);
+  this.accepting.add(`feature:${feature.id}`);
+  try{
+   if(await this.isolation.isAncestor(repositoryRoot,branch.branchName,targetBranch))return {...base,merged:false,alreadyIntegrated:true,commit:null};
+   const result=await this.isolation.mergeIntoBase({repositoryRoot,workspaceRoot:this.workspaceRoot,projectId,targetBranch,sourceRef:branch.branchName,message:`Integra ${branch.branchName} (${feature.displayKey}: ${feature.title}) en ${targetBranch}`});
+   if(!result.ok)throw new Error(`No se pudo integrar ${feature.displayKey} en ${targetBranch}: ${result.detail}${result.conflicts.length?` (${result.conflicts.join(', ')})`:''}`);
+   return {...base,merged:result.changed,alreadyIntegrated:!result.changed,commit:result.commit};
+  }finally{this.accepting.delete(`feature:${feature.id}`);}
  }
 
  /**

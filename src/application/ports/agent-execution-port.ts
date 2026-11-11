@@ -40,6 +40,8 @@ export interface AgentExecutionRepositoryPort {
   listDependents(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
   /** Nearest FEATURE ancestor of a work item (following parent links), or null. */
   findFeatureFor(projectId:string,workItemId:string):{id:string;displayKey:string;title:string}|null;
+  /** Features this one depends on: DEPENDS_ON between FEATUREs, plus the features of tasks its tasks depend on. */
+  listFeatureDependencies(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string}>;
   /** Work items under a feature (subtasks included), ordered by key. */
   listFeatureTasks(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
   /** Integration branch owned by a feature (or by a work item without a feature). */
@@ -70,6 +72,15 @@ export interface GitIsolationPort {
   uncommittedPaths(repositoryRoot:string,paths:string[]):Promise<string[]>;
   commitFiles(repositoryRoot:string,commit:string):Promise<Array<{path:string;status:'ADDED'|'MODIFIED'|'DELETED'|'RENAMED'}>>;
   pathsDiffer(repositoryRoot:string,leftRef:string,rightRef:string,paths:string[]):Promise<string[]>;
+  /** Whether `ancestor` is already contained in `descendant`. */
+  isAncestor(repositoryRoot:string,ancestor:string,descendant:string):Promise<boolean>;
+  /** Deletes an integration branch Graph Workspace just created (used to roll back a failed creation). */
+  deleteIntegrationBranch(repositoryRoot:string,branchName:string):Promise<void>;
+  /**
+   * Merges `sourceRef` into `targetBranch` with a merge commit, built in a throwaway worktree. When the target is checked
+   * out in the user's repository it must be clean and is fast-forwarded there; checked out elsewhere, it is refused.
+   */
+  mergeIntoBase(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT'|'DIRTY';detail:string;conflicts:string[]}>;
   squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
 }
 export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }

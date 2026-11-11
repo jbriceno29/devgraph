@@ -3,7 +3,7 @@ import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusCh
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
 import type { ActivitySummaryDto } from './activity-view.js';
 import type { InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto } from './agent-view.js';
 
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
@@ -35,6 +35,8 @@ export interface WorkspaceIpcCommands {
   'pilot:stop': (projectId:string,featureId:string)=>Promise<PilotRunDto|null>;
   'pilot:resume': (projectId:string,featureId:string)=>Promise<PilotRunDto>;
   'metrics:export_report': (projectId:string,featureId:string)=>Promise<{path:string}>;
+  /** Merges a feature whose tasks are all DONE into the project's base branch (merge commit, temporary worktree; refuses a dirty checkout). */
+  'feature:integrate': (projectId:string,featureId:string)=>Promise<FeatureIntegrationResultDto>;
   'provider:set_auth_mode': (projectId:string,mode:'subscription'|'api_key')=>Promise<{authMode:'subscription'|'api_key'}>;
   /** Creates a new Git repository (folder missing or empty, absolute path without ..) and makes it the project's primary one. */
   'repository:initialize': (projectId:string,absolutePath:string)=>Promise<InitializeRepositoryResultDto>;
@@ -104,6 +106,8 @@ export interface WorkspaceIpcClient {
     resumePilot(projectId:string,featureId:string):Promise<PilotRunDto>;
     setAuthMode(projectId:string,mode:'subscription'|'api_key'):Promise<{authMode:'subscription'|'api_key'}>;
     exportFeatureReport(projectId:string,featureId:string):Promise<{path:string}>;
+    /** Optional so existing fakes stay valid; the Tauri client implements it. */
+    integrateFeature?(projectId:string,featureId:string):Promise<FeatureIntegrationResultDto>;
   };
   queries:{
     listProjects():Promise<ProjectSummaryDto[]>;

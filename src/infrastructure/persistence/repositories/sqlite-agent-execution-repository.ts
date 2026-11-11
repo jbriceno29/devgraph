@@ -115,6 +115,18 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       .map(row=>({id:row.id,displayKey:row.display_key,title:row.title,status:row.status}));
   }
 
+  listFeatureDependencies(projectId:string,featureId:string):Array<{id:string;displayKey:string;title:string}> {
+    const found=new Map<string,{id:string;displayKey:string;title:string}>();
+    for(const row of this.db.prepare(`SELECT k.id,k.display_key,k.title FROM graph_edges g JOIN knowledge_entities k ON k.id=g.target_id
+      WHERE g.project_id=? AND g.source_id=? AND g.edge_type='DEPENDS_ON' AND k.entity_type='FEATURE'`).all(projectId,featureId) as Array<{id:string;display_key:string;title:string}>)found.set(row.id,{id:row.id,displayKey:row.display_key,title:row.title});
+    // Implicit: a task of this feature that depends on a task of another feature.
+    for(const task of this.listFeatureTasks(projectId,featureId))for(const dependency of this.listDependencies(projectId,task.id)){
+      const other=this.findFeatureFor(projectId,dependency.id);
+      if(other&&other.id!==featureId&&!found.has(other.id))found.set(other.id,other);
+    }
+    return [...found.values()].sort((a,b)=>a.displayKey.localeCompare(b.displayKey));
+  }
+
   findFeatureFor(projectId:string,workItemId:string):{id:string;displayKey:string;title:string}|null {
     const lookup=this.db.prepare('SELECT id,entity_type,display_key,title,parent_id FROM knowledge_entities WHERE project_id=? AND id=?');
     let current=lookup.get(projectId,workItemId) as {id:string;entity_type:string;display_key:string;title:string;parent_id:string|null}|undefined;

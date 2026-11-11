@@ -12,6 +12,8 @@ export interface AgentRunInput {
   providerConfig?: Record<string, unknown>;
   /** Engine session to continue (a cache of earlier work in the same feature); the workspace stays the source of truth. */
   resumeSessionId?: string;
+  /** Tope de turnos del motor (exploración, herramientas); ausente o 0 = sin límite. */
+  maxTurns?: number;
 }
 
 export interface AgentRunPolicy {

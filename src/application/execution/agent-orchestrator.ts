@@ -73,7 +73,7 @@ export class AgentOrchestrator {
    if(previous)await this.supersede(previous,input.feedback!.trim(),repositoryRoot);
    const prompt=buildTaskPrompt(profile.systemInstructions,workItem.title,workItem.summary,workItem.acceptanceCriteria.map(item=>item.description),context.packageText,policy,previous?{feedback:input.feedback!.trim(),previousSummary:previous.resultSummary,previousCommit:startPoint}:undefined,input.retryContext,this.featurePlan(input.projectId,workItem.id));
    const resumeSessionId=this.sessionToResume(input.projectId,workItem.id,profile,previous);
-   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt:resumeSessionId?`${prompt}\n\n# Sesión reanudada\nEsta sesión continúa el trabajo previo de la misma feature, que se hizo en otros directorios. Trabaja solo en el directorio actual: las rutas absolutas de mensajes anteriores ya no son válidas. Si algo de lo anterior contradice el ContextSnapshot de arriba, manda el ContextSnapshot.`:prompt,...(resumeSessionId?{resumeSessionId}:{}),...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
+   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt:resumeSessionId?`${prompt}\n\n# Sesión reanudada\nEsta sesión continúa el trabajo previo de la misma feature, que se hizo en otros directorios. Trabaja solo en el directorio actual: las rutas absolutas de mensajes anteriores ya no son válidas. Si algo de lo anterior contradice el ContextSnapshot de arriba, manda el ContextSnapshot.`:prompt,...(resumeSessionId?{resumeSessionId}:{}),...(requestedModel?{model:requestedModel}:{}),...(policy.maxTurns>0?{maxTurns:policy.maxTurns}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
    handedToConsumer=true;
    // A run may not exceed the policy's time limit: past it, the engine is stopped and the task made available again.
    const minutes=Number.isFinite(policy.maxExecutionMinutes)&&policy.maxExecutionMinutes>0?policy.maxExecutionMinutes:30;
@@ -136,16 +136,18 @@ export class AgentOrchestrator {
  taskOutcome(workItemId:string){return this.repository.findTaskOutcome(workItemId);}
 
  /** Execution policy of the project's DEVELOPER profile (paths and verification commands). */
- getPolicy(projectId:string):Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'decisionPolicy'>{
+ getPolicy(projectId:string):Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'maxTurns'|'decisionPolicy'>{
   const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
-  return {writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands,maxExecutionMinutes:policy.maxExecutionMinutes,decisionPolicy:policy.decisionPolicy};
+  return {writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands,maxExecutionMinutes:policy.maxExecutionMinutes,maxTurns:policy.maxTurns,decisionPolicy:policy.decisionPolicy};
  }
 
- updatePolicy(projectId:string,input:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>&{maxExecutionMinutes?:number;decisionPolicy?:unknown}){
+ updatePolicy(projectId:string,input:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>&{maxExecutionMinutes?:number;maxTurns?:number|null;decisionPolicy?:unknown}){
   const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
   const minutes=input.maxExecutionMinutes??policy.maxExecutionMinutes;
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw new Error('El tiempo máximo por ejecución debe ser un número entero de minutos entre 1 y 240.');
-  const clean={writablePaths:cleanPatterns(input.writablePaths,'escribible'),readonlyPaths:cleanPatterns(input.readonlyPaths,'de solo lectura'),deniedPaths:cleanPatterns(input.deniedPaths,'prohibida'),allowedCommands:cleanCommands(input.allowedCommands),maxExecutionMinutes:minutes,decisionPolicy:input.decisionPolicy===undefined?policy.decisionPolicy:normalizeDecisionPolicy(input.decisionPolicy)};
+  const turns=input.maxTurns===undefined?policy.maxTurns:input.maxTurns??0;
+  if(!Number.isInteger(turns)||turns<0||turns>1000)throw new Error('El tope de turnos por ejecución debe ser un número entero entre 0 (sin límite) y 1000.');
+  const clean={writablePaths:cleanPatterns(input.writablePaths,'escribible'),readonlyPaths:cleanPatterns(input.readonlyPaths,'de solo lectura'),deniedPaths:cleanPatterns(input.deniedPaths,'prohibida'),allowedCommands:cleanCommands(input.allowedCommands),maxExecutionMinutes:minutes,maxTurns:turns,decisionPolicy:input.decisionPolicy===undefined?policy.decisionPolicy:normalizeDecisionPolicy(input.decisionPolicy)};
   this.repository.updateAutonomyPolicy(policy.id,clean);
   return clean;
  }

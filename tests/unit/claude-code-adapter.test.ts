@@ -6,8 +6,8 @@ import { buildChildEnvironment } from '../../src/infrastructure/ai/child-environ
 import type { AgentEvent } from '../../src/domain/agents/models.js';
 
 const fixtures=join(__dirname,'..','fixtures','claude');
-function replay(name:string):AgentEvent[]{
- const state=createClaudeStreamState('/workspace/repo');
+function replay(name:string,maxTurns?:number):AgentEvent[]{
+ const state=createClaudeStreamState('/workspace/repo',maxTurns);
  return readFileSync(join(fixtures,name),'utf8').split('\n').filter(Boolean).flatMap(line=>normalizeClaudeEvent(JSON.parse(line) as Record<string,unknown>,state));
 }
 const ofType=<T extends AgentEvent['type']>(events:AgentEvent[],type:T)=>events.filter((event):event is Extract<AgentEvent,{type:T}>=>event.type===type);
@@ -41,6 +41,15 @@ describe('normalizeClaudeEvent against real CLI fixtures',()=>{
  it('turns the SIGINT result into a failed execution with the CLI reason',()=>{
   const events=replay('cancel-sigint.stream.jsonl');
   expect(events.at(-1)).toMatchObject({type:'EXECUTION_FAILED',errorCode:'CLAUDE_ABORTED_STREAMING'});
+ });
+
+ it('maps the turn limit to CLAUDE_MAX_TURNS with a clear reason and keeps the usage',()=>{
+  const events=replay('max-turns.stream.jsonl',1);
+  const failed=events.at(-1)!;
+  expect(failed).toMatchObject({type:'EXECUTION_FAILED',errorCode:'CLAUDE_MAX_TURNS',isRecoverable:true});
+  if(failed.type==='EXECUTION_FAILED'){expect(failed.errorMessage).toContain('tope de 1 turnos');expect(failed.usage).toMatchObject({outputTokens:124,cacheReadTokens:4085});}
+  // Without the limit in the state, the number comes from the CLI message.
+  expect(replay('max-turns.stream.jsonl').at(-1)).toMatchObject({errorCode:'CLAUDE_MAX_TURNS',errorMessage:expect.stringContaining('tope de 1 turnos')});
  });
 
  it('emits nothing terminal for a SIGTERM stream (the adapter decides from the exit code)',()=>{
@@ -79,6 +88,9 @@ describe('Claude CLI arguments',()=>{
   expect(()=>buildClaudeArgs({model:'sonnet --dangerously-skip-permissions'})).toThrow('Nombre de modelo inválido');
   expect(buildClaudeArgs({resumeSessionId:'11111111-1111-4111-8111-111111111111'})).toEqual(expect.arrayContaining(['--resume','11111111-1111-4111-8111-111111111111']));
   expect(()=>buildClaudeArgs({resumeSessionId:'x; rm -rf /'})).toThrow('Id de sesión inválido');
+  expect(buildClaudeArgs({maxTurns:40})).toEqual(expect.arrayContaining(['--max-turns','40']));
+  for(const maxTurns of [undefined,0])expect(buildClaudeArgs(maxTurns===undefined?{}:{maxTurns})).not.toContain('--max-turns');
+  expect(()=>buildClaudeArgs({maxTurns:1.5})).toThrow('Tope de turnos inválido');
  });
 
  it('keeps the user configuration out of every run (settings, CLAUDE.md, skills) without touching HOME',()=>{

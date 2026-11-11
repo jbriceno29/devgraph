@@ -45,7 +45,7 @@ export class ClaudeCodeAdapter implements AgentAdapterPort {
     let child: ChildProcessWithoutNullStreams | undefined;
     let stderr = '';
     let terminalEventSeen = false;
-    const state = createClaudeStreamState(input.workingDirectory);
+    const state = createClaudeStreamState(input.workingDirectory, input.maxTurns);
     try {
       const executable = await resolveCliExecutable(claudeCli, this.options.executable ?? 'claude');
       const authMode: AgentAuthMode = this.options.authMode ?? (input.providerConfig?.authMode === 'api_key' ? 'api_key' : 'subscription');
@@ -136,7 +136,7 @@ export function claudeAgentEnvironment(source: NodeJS.ProcessEnv, options: { aut
   return { ...buildChildEnvironment(source, options), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
 }
 
-export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId'>): string[] {
+export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId' | 'maxTurns'>): string[] {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config', ...CLAUDE_ISOLATION_ARGS];
   if (input.model) {
     if (!MODEL_PATTERN.test(input.model)) throw new Error(`Nombre de modelo inválido: ${input.model}`);
@@ -145,6 +145,11 @@ export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 
   if (input.resumeSessionId) {
     if (!/^[0-9a-f-]{36}$/i.test(input.resumeSessionId)) throw new Error(`Id de sesión inválido: ${input.resumeSessionId}`);
     args.push('--resume', input.resumeSessionId);
+  }
+  // Hidden flag in CLI 2.1.x (not in --help): past the limit the run ends with subtype `error_max_turns` and exit 1.
+  if (input.maxTurns !== undefined && input.maxTurns > 0) {
+    if (!Number.isInteger(input.maxTurns)) throw new Error(`Tope de turnos inválido: ${input.maxTurns}`);
+    args.push('--max-turns', String(input.maxTurns));
   }
   args.push(...buildClaudePermissionArgs(input.policy ?? { writablePaths: [], readonlyPaths: [], deniedPaths: [], allowedCommands: [] }));
   return args;
@@ -186,10 +191,11 @@ export interface ClaudeStreamState {
   workingDirectory: string;
   toolCalls: Map<string, { name: string; input: Record<string, unknown> }>;
   lastText: string;
+  maxTurns?: number;
 }
 
-export function createClaudeStreamState(workingDirectory: string): ClaudeStreamState {
-  return { workingDirectory, toolCalls: new Map(), lastText: '' };
+export function createClaudeStreamState(workingDirectory: string, maxTurns?: number): ClaudeStreamState {
+  return { workingDirectory, toolCalls: new Map(), lastText: '', ...(maxTurns ? { maxTurns } : {}) };
 }
 
 /** Maps one `stream-json` record from the Claude Code CLI to domain events. */
@@ -260,10 +266,17 @@ export function normalizeClaudeEvent(record: Record<string, unknown>, state: Cla
       cacheCreationTokens: num(usage.cache_creation_input_tokens),
     } : undefined;
     if (record.is_error === true || str(record.subtype) !== 'success') {
+      const usageField = tokens ? { usage: tokens } : {};
+      const errors = Array.isArray(record.errors) ? record.errors.filter((item): item is string => typeof item === 'string') : [];
+      if (str(record.subtype) === 'error_max_turns' || str(record.terminal_reason) === 'max_turns') {
+        const limit = state.maxTurns ?? /\((\d+)\)/.exec(errors.join(' '))?.[1];
+        const message = `Se alcanzó el tope de ${limit ?? '?'} turnos por ejecución (política del proyecto) antes de terminar la tarea. En el próximo intento ve directo: lee solo los archivos que vayas a modificar o que cite el contexto, y verifica una sola vez al final.`;
+        return [{ type: 'EXECUTION_FAILED', timestamp, errorCode: 'CLAUDE_MAX_TURNS', errorMessage: message, isRecoverable: true, ...usageField }];
+      }
       const code = (str(record.terminal_reason) || str(record.subtype) || 'error').toUpperCase();
       const apiStatus = record.api_error_status;
-      const message = str(record.result) || (apiStatus !== null && apiStatus !== undefined ? `Claude Code recibió un error de la API (${String(apiStatus)}).` : `Claude Code terminó con error (${code.toLowerCase()}).`);
-      return [{ type: 'EXECUTION_FAILED', timestamp, errorCode: `CLAUDE_${code}`, errorMessage: message, isRecoverable: true }];
+      const message = str(record.result) || errors.join('\n') || (apiStatus !== null && apiStatus !== undefined ? `Claude Code recibió un error de la API (${String(apiStatus)}).` : `Claude Code terminó con error (${code.toLowerCase()}).`);
+      return [{ type: 'EXECUTION_FAILED', timestamp, errorCode: `CLAUDE_${code}`, errorMessage: message, isRecoverable: true, ...usageField }];
     }
     return [{ type: 'EXECUTION_FINISHED', timestamp, summary: str(record.result) || state.lastText || 'Claude Code completó la tarea.', ...(tokens ? { usage: tokens } : {}) }];
   }

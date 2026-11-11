@@ -11,9 +11,13 @@
  * The judge is the scenario's hidden tests; tests whose name mentions RangeError check the project convention set in the
  * first task and never repeated afterwards.
  *
+ * A scenario may reuse another scenario's judge ("hidden": "<scenario>") and group several original tasks into one
+ * ("covers": ["A1", "A2"]): the report then grades every original task covered, so a grouped variant is scored on the
+ * same hidden tests as the original.
+ *
  * Usage (npm run build:core first):
  *   node scripts/benchmark/run-benchmark.mjs --scenario todo-v2 --base <repo> --ref <commit> --workspace <app data dir>
- *     --project <id> [--model haiku] [--arms chat-long,chat-days,workspace] [--out <dir>] [--report <file.md>]
+ *     --project <id> [--model haiku] [--max-turns <n>] [--arms chat-long,chat-days,workspace] [--out <dir>] [--report <file.md>]
  */
 import { spawnSync, execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -26,6 +30,9 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, inde
 for (const required of ['scenario', 'base', 'ref', 'workspace', 'project']) if (!args[required]) { console.error(`Missing --${required}`); process.exit(2); }
 const SCENARIO = join(ROOT, 'scripts', 'benchmark', args.scenario);
 const spec = JSON.parse(readFileSync(join(SCENARIO, 'scenario.json'), 'utf8'));
+const HIDDEN = join(ROOT, 'scripts', 'benchmark', spec.hidden ?? args.scenario, 'hidden');
+/** Original tasks graded by the judge, with their titles when the scenario groups them. */
+const judged = spec.hidden ? JSON.parse(readFileSync(join(ROOT, 'scripts', 'benchmark', spec.hidden, 'scenario.json'), 'utf8')).tasks : spec.tasks;
 const model = args.model ?? 'haiku';
 const arms = (args.arms ?? 'chat-long,chat-days,workspace').split(',');
 const out = resolve(args.out ?? mkdtempSync(join(tmpdir(), `graphdev2-${spec.name}-`)));
@@ -48,7 +55,7 @@ const taskPrompt = task => `Tarea ${task.key}: ${task.title}\n\n${task.summary}\
 function judge(repo, ref) {
   const dir = mkdtempSync(join(out, 'judge-'));
   git(repo, 'worktree', 'add', '--quiet', '--detach', dir, ref);
-  cpSync(join(SCENARIO, 'hidden'), join(dir, '.bench-hidden'), { recursive: true });
+  cpSync(HIDDEN, join(dir, '.bench-hidden'), { recursive: true });
   const results = {};
   for (const file of readdirSync(join(dir, '.bench-hidden')).sort()) {
     const run = spawnSync('node', ['--test', '--test-reporter=tap', join('.bench-hidden', file)], { cwd: dir, encoding: 'utf8', timeout: 60_000 });
@@ -95,7 +102,7 @@ async function workspaceArm() {
   const h = (channel, ...rest) => core.handle({ channel, args: rest });
   const opened = await h('project:open', P);
   await h('repository:configure', P, repo);
-  await h('policy:update', P, { ...policy, maxExecutionMinutes: 15 });
+  await h('policy:update', P, { ...policy, maxExecutionMinutes: 15, ...(args['max-turns'] ? { maxTurns: Number(args['max-turns']) } : {}) });
   const moduleId = opened.graph.nodes.find(node => node.type === 'MODULE')?.id;
   const featureIds = Object.fromEntries(spec.features.map(feature => [feature.key, `bench-${feature.key.toLowerCase()}`]));
   const taskIds = Object.fromEntries(spec.tasks.map(task => [task.id, `bench-${task.id.toLowerCase()}`]));
@@ -151,7 +158,7 @@ const row = (title, cell) => `| ${title} | ${arms.map(arm => cell(results[arm]))
 const lines = [
   `# Benchmark Etapa 5: ${spec.name}`, '', `Fecha: ${new Date().toISOString().slice(0, 10)} · Modelo: ${model} · Base: \`${args.ref}\``, '', spec.description, '',
   `| | ${arms.map(arm => label[arm]).join(' | ')} |`, `| :--- | ${arms.map(() => '---:').join(' | ')} |`,
-  row('Tareas que pasan todas sus pruebas ocultas', r => `${full(r.hidden)} de ${spec.tasks.length}`),
+  row('Tareas que pasan todas sus pruebas ocultas', r => `${full(r.hidden)} de ${judged.length}`),
   row('Pruebas ocultas (pasan / total)', r => { const s = hiddenSum(r.hidden, item => item); return `${s.pass} / ${s.pass + s.fail}`; }),
   row('Pruebas de la convención (RangeError)', r => { const s = hiddenSum(r.hidden, item => item.convention); return `${s.pass} / ${s.pass + s.fail}`; }),
   row('Tokens de entrada sin caché', r => k(sum(r.rows, 'uncachedInput'))),
@@ -159,10 +166,11 @@ const lines = [
   row('Tokens de salida', r => k(sum(r.rows, 'output'))),
   row('Tiempo del motor', r => min(sum(r.rows, 'durationMs'))),
   row('Ejecuciones', r => String(sum(r.rows, 'executions'))),
+  ...(judged !== spec.tasks ? [row('Tareas del escenario (agrupadas)', () => String(spec.tasks.length))] : []),
   row('Acciones denegadas', r => String(sum(r.rows, 'denied'))),
   row('Intervenciones humanas', r => r.pilots ? `${r.humanMessages} (esperas del piloto)` : `${r.humanMessages} mensajes`),
   '', `| Tarea | ${arms.map(arm => `${label[arm]}: ocultas`).join(' | ')} |`, `| :--- | ${arms.map(() => '---:').join(' | ')} |`,
-  ...spec.tasks.map(task => `| ${task.key} ${task.title} | ${arms.map(arm => { const item = results[arm].hidden[task.id]; return item ? `${item.pass}/${item.pass + item.fail}` : '—'; }).join(' | ')} |`),
+  ...judged.map(task => `| ${task.key} ${task.title} | ${arms.map(arm => { const item = results[arm].hidden[task.id]; return item ? `${item.pass}/${item.pass + item.fail}` : '—'; }).join(' | ')} |`),
   ...(results.workspace?.pilots ? ['', `Piloto: ${results.workspace.pilots.map(pilot => `${pilot.feature} ${pilot.status}${pilot.reason ? ` (${pilot.reason})` : ''}`).join(' · ')}`] : []),
   '', 'Notas: "sin caché" incluye la creación de caché; la lectura de caché es mucho más barata. Los brazos chat no tienen reintentos; el piloto tiene hasta 2 intentos por tarea y solo acepta con `node --test` en verde.',
 ];

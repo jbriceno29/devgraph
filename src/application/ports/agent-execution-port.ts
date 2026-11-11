@@ -19,7 +19,7 @@ export interface AgentExecutionRepositoryPort {
   getRepositoryRoot(projectId: string): string | null;
   getRepositoryId(projectId:string):string|null;
   getAutonomyPolicy(projectId:string,profileId:string):AutonomyPolicy;
-  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'decisionPolicy'>):void;
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'|'maxTurns'|'decisionPolicy'>):void;
   /** Closes approval requests left PENDING by an execution that will never resume. */
   rejectPendingApprovals(executionId:string,note:string):void;
   /** Sets `authMode` in the wired provider's connection config. */

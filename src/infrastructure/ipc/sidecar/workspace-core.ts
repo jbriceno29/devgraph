@@ -39,6 +39,8 @@ import { ExecutionValidator } from '../../execution/execution-validator.js';
 import { FeaturePilot } from '../../../application/execution/feature-pilot.js';
 import { FeatureMetrics, renderFeatureReport } from '../../../application/execution/feature-metrics.js';
 import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
+import { SqliteActivityRepository } from '../../persistence/repositories/sqlite-activity-repository.js';
+import { ActivityService } from '../../../application/activity/activity-service.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
 export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
@@ -196,11 +198,12 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'workitem:set_status': {const projectId=String(args[0]??'');return getExecutionService(projectId).setWorkItemStatus(projectId,String(args[1]??''),String(args[2]??'') as WorkItemStatus);}
     case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
-    case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
+    case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(typeof policy?.maxTurns==='number'||policy?.maxTurns===null?{maxTurns:policy.maxTurns}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
      return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};
     }
+    case 'activity:list': {const projectId=String(args[0]??'');return new ActivityService(new SqliteActivityRepository(store.openProject(projectId).database)).list(projectId,typeof args[1]==='number'?args[1]:undefined);}
     case 'metrics:feature_report': {const projectId=String(args[0]??''),featureId=String(args[1]??'');return featureReport(projectId,featureId);}
     case 'metrics:export_report': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const {markdown}=featureReport(projectId,featureId);

@@ -45,6 +45,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   getFeaturePilot:(projectId,featureId)=>invokeCore('pilot:get',[projectId,featureId]),
   getContextFlow:(projectId,workItemId)=>invokeCore('graph:context_flow',[projectId,workItemId]),
   getFeatureReport:(projectId,featureId)=>invokeCore('metrics:feature_report',[projectId,featureId]),
+  getActivity:(projectId,limit)=>invokeCore('activity:list',[projectId,limit]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},

@@ -60,8 +60,9 @@ export class FeatureMetrics {
 
   private metrics(execution: AgentExecution): ExecutionMetrics {
     const events = this.orchestrator.listEvents(execution.id);
-    const finished = [...events].reverse().find(record => record.event.type === 'EXECUTION_FINISHED')?.event;
-    const usage = finished?.type === 'EXECUTION_FINISHED' ? finished.usage : undefined;
+    // A failed run (e.g. the turn limit) also spent tokens: take the usage of the last terminal event that reports it.
+    const terminal = [...events].reverse().find(record => (record.event.type === 'EXECUTION_FINISHED' || record.event.type === 'EXECUTION_FAILED') && record.event.usage)?.event;
+    const usage = terminal?.type === 'EXECUTION_FINISHED' || terminal?.type === 'EXECUTION_FAILED' ? terminal.usage : undefined;
     const summary = execution.testSummary as { commands?: Array<{ exitCode: number }>; violations?: string[] } | null;
     const diffs = this.orchestrator.detail(execution.id).files;
     return {

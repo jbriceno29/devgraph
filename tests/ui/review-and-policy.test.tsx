@@ -65,8 +65,19 @@ describe('ExecutionPolicyForm',()=>{
   expect((screen.getByLabelText('Rutas escribibles') as HTMLTextAreaElement).value).toBe('src/**\ntests/**');
   fireEvent.change(commands,{target:{value:'node --test\n\n  npm run lint  '}});
   fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
-  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint'],maxExecutionMinutes:30,decisionPolicy:{rules:{NEW_TASK:'AUTO',TASK_DEPENDENCY:'AUTO',TASK_STATUS:'ASK',DECISION_RECORD:'ASK',SCOPE_CHANGE:'ASK'},maxAutoTasksPerFeature:5}}));
+  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint'],maxExecutionMinutes:30,maxTurns:0,decisionPolicy:{rules:{NEW_TASK:'AUTO',TASK_DEPENDENCY:'AUTO',TASK_STATUS:'ASK',DECISION_RECORD:'ASK',SCOPE_CHANGE:'ASK'},maxAutoTasksPerFeature:5}}));
   expect((await screen.findByRole('status')).textContent).toBe('Política guardada.');
+ });
+
+ it('saves the turn limit and rejects an invalid one',async()=>{
+  const client=ipc();
+  render(<ExecutionPolicyForm projectId="p"/>);
+  const turns=await screen.findByLabelText('Tope de turnos por ejecución') as HTMLInputElement;
+  expect(turns.value).toBe('0');
+  fireEvent.change(turns,{target:{value:'-3'}});fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('0 (sin límite) y 1000');
+  fireEvent.change(turns,{target:{value:'40'}});fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
+  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',expect.objectContaining({maxTurns:40})));
  });
 
  it('uses the default decision policy when the project has none',async()=>{

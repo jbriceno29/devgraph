@@ -17,7 +17,7 @@ export type AgentEvent =
  | { type:'APPROVAL_REQUIRED'; timestamp:string; requestId:string; actionType:'COMMAND'|'FILE_WRITE'|'NETWORK'; target:string; justification?:string }
  | { type:'CHANGESET_PROPOSED'; timestamp:string; proposal:import('../knowledge/change-set.js').ChangeSet }
  | { type:'EXECUTION_FINISHED'; timestamp:string; summary:string; usage?:{inputTokens:number;outputTokens:number;cacheReadTokens?:number;cacheCreationTokens?:number} }
- | { type:'EXECUTION_FAILED'; timestamp:string; errorCode:string; errorMessage:string; isRecoverable:boolean }
+ | { type:'EXECUTION_FAILED'; timestamp:string; errorCode:string; errorMessage:string; isRecoverable:boolean; usage?:{inputTokens:number;outputTokens:number;cacheReadTokens?:number;cacheCreationTokens?:number} }
  | { type:'ACTION_DENIED'; timestamp:string; toolName:string; target:string; reason:string }
  | { type:'RATE_LIMIT_UPDATED'; timestamp:string; status:string; window:string; utilization:number|null; resetsAt:string|null };
 export type ApprovalDecision = {approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string};

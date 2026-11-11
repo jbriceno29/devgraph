@@ -11,7 +11,7 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[];maxMinutes?:number;connectionConfig?:Record<string,unknown>;capabilities?:Partial<AgentCapabilities>}={}){
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[];maxMinutes?:number;maxTurns?:number;connectionConfig?:Record<string,unknown>;capabilities?:Partial<AgentCapabilities>}={}){
  const workItems=new Map<string,WorkItemStatus>([['task',options.taskStatus??'READY'],...(options.dependents??[]).map(item=>[item.id,item.status as WorkItemStatus] as [string,WorkItemStatus])]);
  const task={get status(){return workItems.get('task')!;},set status(value:WorkItemStatus){workItems.set('task',value);}};const prompts:string[]=[];let revision=1;const branches=new Map<string,{branchName:string;sourceBranch:string}>();const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
@@ -33,7 +33,7 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'},connectionConfig:options.connectionConfig??{}}),
   externalSessionId:(sessionId:string)=>sessionId.replace('row-',''),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
-  getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true,maxExecutionMinutes:options.maxMinutes??30}),
+  getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true,maxExecutionMinutes:options.maxMinutes??30,maxTurns:options.maxTurns??0}),
   listExecutions:()=>[...executions.values()].map(item=>({...item})),
   createExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
   updateExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
@@ -136,6 +136,13 @@ describe('AgentOrchestrator task prompt',()=>{
   expect(received!.prompt).toContain('# Política de ejecución');
   expect(received!.prompt).toContain('No tienes permitido ejecutar comandos');
   expect(received!.policy).toEqual({writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[]});
+ });
+
+ it('passes the policy turn limit to the adapter only when there is one',async()=>{
+  const inputs:Array<{maxTurns?:number}>=[];
+  const adapter={async *run(input:{maxTurns?:number}){inputs.push(input);yield {type:'EXECUTION_FINISHED' as const,timestamp:now(),summary:'done'};}};
+  await start(harness({adapter,maxTurns:40}).orchestrator);await start(harness({adapter}).orchestrator);await flush();
+  expect(inputs.map(input=>input.maxTurns)).toEqual([40,undefined]);
  });
 
  it('lists allowed commands verbatim and forbids pipes, and lists denied paths',()=>{

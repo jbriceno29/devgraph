@@ -1,0 +1,5 @@
+/** Activity inbox of a project: what is ready, running, in review, done or waiting on the user. Derived, no AI involved. */
+export type ActivityKind = 'TASK_READY'|'TASK_RUNNING'|'TASK_IN_REVIEW'|'TASK_DONE'|'TASK_FAILED'|'PILOT_WAITING'|'PILOT_PAUSED'|'PILOT_COMPLETED'|'PLAN_PROPOSAL'|'PLAN_CHANGED'|'APPROVAL_PENDING';
+export type ActivityTarget = 'agents'|'planning'|'graph';
+export interface ActivityItemDto { id:string; at:string; kind:ActivityKind; title:string; detail:string|null; needsAttention:boolean; workItemId:string|null; executionId:string|null; featureId:string|null; changeSetId:string|null; target:ActivityTarget }
+export interface ActivitySummaryDto { items:ActivityItemDto[]; running:Array<{workItemKey:string;title:string}>; attentionCount:number }

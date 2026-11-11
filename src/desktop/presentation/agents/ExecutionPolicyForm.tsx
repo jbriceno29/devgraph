@@ -29,6 +29,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
   const [values, setValues] = useState<Record<Field, string> | null>(null);
   const [busy, setBusy] = useState(false);
   const [minutes, setMinutes] = useState('30');
+  const [turns, setTurns] = useState('0');
   const [rules, setRules] = useState<DecisionPolicyDto['rules']>(defaultDecisionPolicy.rules);
   const [maxAutoTasks, setMaxAutoTasks] = useState(String(defaultDecisionPolicy.maxAutoTasksPerFeature));
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -36,7 +37,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
   useEffect(() => {
     let current = true;
     void window.workspaceIpc.queries.getExecutionPolicy(projectId)
-      .then(policy => { if (current) { setValues(toText(policy)); setMinutes(String(policy.maxExecutionMinutes ?? 30)); loadDecisions(policy); } })
+      .then(policy => { if (current) { setValues(toText(policy)); setMinutes(String(policy.maxExecutionMinutes ?? 30)); setTurns(String(policy.maxTurns ?? 0)); loadDecisions(policy); } })
       .catch(reason => { if (current) setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); });
     return () => { current = false; };
   }, [projectId]);
@@ -51,13 +52,15 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
     if (!values) return;
     const max = Number(maxAutoTasks);
     if (maxAutoTasks.trim() === '' || !Number.isInteger(max) || max < 0 || max > 50) { setMessage({ tone: 'error', text: 'El máximo de tareas automáticas por feature debe ser un número entero entre 0 y 50.' }); return; }
+    const maxTurns = Number(turns.trim() || '0');
+    if (!Number.isInteger(maxTurns) || maxTurns < 0 || maxTurns > 1000) { setMessage({ tone: 'error', text: 'El tope de turnos por ejecución debe ser un número entero entre 0 (sin límite) y 1000.' }); return; }
     setBusy(true); setMessage(null);
     try {
       const saved = await window.workspaceIpc.commands.updateExecutionPolicy(projectId, {
-        writablePaths: lines(values.writablePaths), readonlyPaths: lines(values.readonlyPaths), deniedPaths: lines(values.deniedPaths), allowedCommands: lines(values.allowedCommands), maxExecutionMinutes: Number(minutes),
+        writablePaths: lines(values.writablePaths), readonlyPaths: lines(values.readonlyPaths), deniedPaths: lines(values.deniedPaths), allowedCommands: lines(values.allowedCommands), maxExecutionMinutes: Number(minutes), maxTurns,
         decisionPolicy: { rules, maxAutoTasksPerFeature: max },
       });
-      setValues(toText(saved)); loadDecisions(saved);
+      setValues(toText(saved)); setTurns(String(saved.maxTurns ?? 0)); loadDecisions(saved);
       setMessage({ tone: 'ok', text: saved.allowedCommands.length ? 'Política guardada.' : 'Política guardada. Sin comandos de verificación, las ejecuciones no se prueban automáticamente.' });
     } catch (reason) { setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); }
     finally { setBusy(false); }
@@ -74,6 +77,11 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
       {values && <div>
         <label htmlFor="policy-max-minutes" className="mb-1 block text-xs text-slate-400">Tiempo máximo por ejecución (minutos)</label>
         <input id="policy-max-minutes" type="number" min={1} max={240} value={minutes} onChange={event => setMinutes(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
+      </div>}
+      {values && <div>
+        <label htmlFor="policy-max-turns" className="mb-1 block text-xs text-slate-400">Tope de turnos por ejecución</label>
+        <input id="policy-max-turns" type="number" min={0} max={1000} step={1} value={turns} onChange={event => setTurns(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
+        <p className="mt-0.5 text-[10px] text-slate-600">Limita la exploración del agente (lecturas, búsquedas, comandos). 0 = sin límite. Al alcanzarlo la ejecución falla y el piloto reintenta con ese motivo.</p>
       </div>}
       {values && <fieldset className="space-y-2 rounded-lg border border-slate-800 p-3">
         <legend className="px-1 text-xs font-semibold text-slate-300">Decisiones del agente</legend>

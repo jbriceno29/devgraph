@@ -23,6 +23,7 @@ local setup lists in `system/init` (`mcp_servers`, `plugins`, `skills`, `slash_c
 | `structured-output.json` | `--output-format json --tools "" --json-schema '<schema>'` | A plain JSON schema (optional properties, no "all required + nullable" trick) works; the object is in `structured_output`. |
 | `cancel-sigint.stream.jsonl` | `--tools "" --include-partial-messages`, SIGINT after 7 s | Exit code **0**; ends with `result` `subtype: "error_during_execution"`, `is_error: true`, `terminal_reason: "aborted_streaming"`. |
 | `cancel-sigterm.stream.jsonl` | same, SIGTERM after 7 s (first 12 lines only) | Exit code **143**; **no** `result` message is emitted. |
+| `max-turns.stream.jsonl` | captured 2026-11-11: `--permission-mode dontAsk --setting-sources project,local --tools Read --max-turns 1` (prompt needing two sequential reads) | Exit code **1**; `result` with `subtype: "error_max_turns"`, `is_error: true`, `terminal_reason: "max_turns"`, `result` absent and `errors: ["Reached maximum number of turns (1)"]`; `usage` is still reported. `--max-turns` is not listed in `claude --help`. |
 
 Not captured: a usage-limit error (it cannot be provoked on demand). Every run emits a
 `rate_limit_event` with `rate_limit_info.status`, `rateLimitType` and per-window `utilization`/`resetsAt`,

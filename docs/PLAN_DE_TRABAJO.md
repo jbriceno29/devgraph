@@ -153,6 +153,10 @@ Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demues
 
 > **Independencia entre lanzamientos (2026-11-11):** el contexto de una ejecución ahora se lee del commit de partida de su rama (`git show` con git fijado, tope de 2 MiB), no de la copia de trabajo del usuario, y el snapshot registra ese commit. El CLI de Claude se lanza con `--setting-sources project,local --disable-slash-commands` y sin memoria automática, así que no carga la configuración, los skills ni los plugins personales (HOME se conserva para la suscripción). Límites conocidos: los plugins integrados del CLI y los ajustes administrados siguen aplicando; que `~/.claude/CLAUDE.md` quede excluido se deduce del código del CLI, no de una ejecución; el planificador de ChangeSets aún no usa estos flags. Verificado con haiku real.
 
+> **Mediciones 5 y 6 (2026-11-11):** el tope de turnos (`--max-turns`, columna `max_turns`, desactivado por defecto) no ahorra: nunca se alcanza. El arranque del CLI cuesta solo ~4 % del total; el 40 % es el prompt de la tarea, que crece con cada tarea cerrada, y el 51 % el trabajo. Agrupar tareas pequeñas (6 ejecuciones en vez de 13) bajó el costo ponderado de 591 k a 334 k (−43 %, por debajo del chat largo con 414 k) con 32/33 pruebas y convención 8/9, en una sola corrida. Informes en `docs/benchmarks/`. Siguiente en costo: agrupación en el piloto (opción) y recortar el prompt de contexto.
+
+> **Interfaz y orquestador (2026-11-11):** bandeja de actividad (`activity:list`), tema claro/oscuro (tokens con contraste AA verificado) y shell con barra lateral, árbol, atajos y "siguiente paso". Falta migrar los demás paneles al tema (lotes C a G, ver `src/desktop/theme/MIGRACION.md`). El usuario aceptó las 8 decisiones de `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md` (asistente de inicio de proyecto con 2 aprobaciones, estado en tabla propia, `PROJECT_FOUNDATION` siempre pregunta, scaffold por el agente, sin `npm install`, opus en objetivo y stack, reiniciar `todo-app`, antes de Codex).
+
 ## 6. Orden y dependencias
 
 Etapa 1 → Etapa 2 → Etapa 3 → Etapa 5 (medición con Claude) → Etapa 6 → Etapa 4 → Etapa 5 (medición con Codex).

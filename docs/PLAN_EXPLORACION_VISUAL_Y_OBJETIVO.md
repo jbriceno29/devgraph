@@ -188,6 +188,8 @@ Va antes que la Mitad A porque afecta a **todo** usuario del piloto hoy, mientra
 ---
 
 ### Etapa V0: Ajustes base y optimización de contexto previos (Tamaño: S — 2 a 3 horas)
+
+**Estado (2026-11-11): hecha.** (1) El texto de contexto ya no repite reglas y convenciones (solo aparecen en `<Constraints>`; sus fuentes de nivel 1 siguen en el snapshot guardado) y cada `<Source>` se nombra por su clave legible, sin hash: −16 % de caracteres en un proyecto pequeño (unos 370 tokens por ejecución con 4 reglas; el ahorro crece con las reglas, así que la estimación de ~20 % del plan era optimista para proyectos chicos). (2) `operationLabel` cubre `UPDATE_ENTITY_STATUS`, `SET_PROJECT_PROFILE` y `DELETE_RELATIONSHIP`, con una prueba que fija los diez textos. (3) El planificador de ChangeSets recibe los flags de aislamiento del CLI, con una aserción en su prueba. (4) La autenticación del motor tiene su propia consulta (`provider:get_auth`) y el formulario funciona en un proyecto sin features; los clientes antiguos caen al estado del piloto de la primera feature. Humo real con haiku (copia de `todo-app`, TASK-201 sola y 202+204 agrupadas): 9/9 pruebas ocultas.
 Antes de expandir el asistente de inicio, cerrar los 4 ajustes técnicos detectados en la auditoría del código actual:
 
 1. **Eliminar duplicación de convenciones y ruido en el prompt de contexto:**

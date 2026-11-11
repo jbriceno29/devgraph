@@ -53,6 +53,9 @@ describe('ClaudeChangeSetPlanner',()=>{
   expect(JSON.parse(args[args.indexOf('--json-schema')+1]!)).toEqual(plainSchema);
   expect(args[args.indexOf('--tools')+1]).toBe('');
   expect(args[args.indexOf('--model')+1]).toBe('opus');
+  // Isolated like the agent runs and the inception: the user's personal CLI settings, skills and plugins do not reach the planner.
+  expect(args[args.indexOf('--setting-sources')+1]).toBe('project,local');
+  expect(args).toContain('--disable-slash-commands');
   expect(fake.prompt()).toContain('Add authentication');
  });
 

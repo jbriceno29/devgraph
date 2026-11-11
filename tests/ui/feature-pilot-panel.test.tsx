@@ -91,4 +91,17 @@ describe('FeaturePilotPanel',()=>{
   fireEvent.change(screen.getByLabelText('Autenticación del motor'),{target:{value:'api_key'}});
   await waitFor(()=>expect(client.commands.setAuthMode).toHaveBeenCalledWith('p','api_key'));
  });
+
+ it('lets the user see and change the engine authentication in a project with no features yet',async()=>{
+  const client=ipc();
+  const getProviderAuth=vi.fn(async()=>({authMode:'subscription' as const,apiKeyAvailable:true}));
+  (client.queries as Record<string,unknown>).getProviderAuth=getProviderAuth;
+  render(<EngineAuthForm projectId="p" nodes={[]}/>);
+  const select=await screen.findByLabelText('Autenticación del motor') as HTMLSelectElement;
+  expect(getProviderAuth).toHaveBeenCalledWith('p');
+  expect(client.queries.getFeaturePilot).not.toHaveBeenCalled();
+  expect(select.value).toBe('subscription');
+  fireEvent.change(select,{target:{value:'api_key'}});
+  await waitFor(()=>expect(client.commands.setAuthMode).toHaveBeenCalledWith('p','api_key'));
+ });
 });

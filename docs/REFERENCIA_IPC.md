@@ -45,6 +45,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
+| `provider:get_auth` | Cómo se autentica el motor en el proyecto (suscripción o clave de API) y si hay `ANTHROPIC_API_KEY` disponible; funciona aunque el proyecto no tenga features. |
 | `pilot:set_autonomy` ⛓ | Fija el nivel de autonomía de una feature (`MANUAL`, `AUTO_ACCEPT`, `PILOT`) y sus modelos, intentos, umbral de pausa, y si el piloto agrupa tareas pequeñas (`groupTasks`, `maxGroupSize` de 1 a 5). |
 | `pilot:start` ⛓ | Inicia el piloto de una feature (exige `acknowledgeCost: true`). |
 | `pilot:stop` ⛓ | Detiene el piloto. |

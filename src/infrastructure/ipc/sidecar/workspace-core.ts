@@ -269,6 +269,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      // `pilot:updated` refreshes the feature panel and the activity (the shell's next step reads `integrations`).
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const result=await getExecutionService(projectId).integrateFeature(projectId,featureId);
      emit('pilot:updated',{projectId,featureId,status:null});return result;}
+    case 'provider:get_auth': {const projectId=String(args[0]??'');return {authMode:getExecutionService(projectId).authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY)};}
     case 'provider:set_auth_mode': {const projectId=String(args[0]??'');return {authMode:getExecutionService(projectId).setAuthMode(projectId,args[1] as 'subscription'|'api_key')};}
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);

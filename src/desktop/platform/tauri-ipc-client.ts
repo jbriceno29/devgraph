@@ -44,6 +44,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
   getExecutionPolicy:projectId=>invokeCore('policy:get',[projectId]),
   getFeaturePilot:(projectId,featureId)=>invokeCore('pilot:get',[projectId,featureId]),
+  getProviderAuth:projectId=>invokeCore('provider:get_auth',[projectId]),
   getContextFlow:(projectId,workItemId)=>invokeCore('graph:context_flow',[projectId,workItemId]),
   getFeatureReport:(projectId,featureId)=>invokeCore('metrics:feature_report',[projectId,featureId]),
   getActivity:(projectId,limit)=>invokeCore('activity:list',[projectId,limit]),

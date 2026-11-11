@@ -14,5 +14,11 @@ export class ContextPackager {
   return {snapshot,packageText:renderContextSnapshot(snapshot),warnings};
  }
 }
-export function renderContextSnapshot(snapshot:ContextSnapshot):string{return [`<ContextSnapshot id="${escapeXml(snapshot.id)}" project="${escapeXml(snapshot.projectId)}" graphRevision="${snapshot.graphRevision}" repositoryCommit="${escapeXml(snapshot.repositoryCommit)}">`,`<Constraints>\n${snapshot.constraints.map(rule=>`- ${escapeXml(rule)}`).join('\n')}\n</Constraints>`,...snapshot.includedSources.map(source=>`<Source id="${escapeXml(source.sourceId)}" tier="${source.authorityTier}" type="${source.sourceType}" hash="${escapeXml(source.contentHash)}" origin="${source.retrievalOrigin}">\n${escapeXml(source.extractedContent)}\n</Source>`),'</ContextSnapshot>'].join('\n\n');}
+/**
+ * Text sent to the model. The snapshot keeps everything (ids, hashes, every source) in SQLite for audit; the text drops what
+ * the model cannot use: project rules and learned conventions already appear in <Constraints>, so their tier-1 sources are not
+ * repeated, and each <Source> is named by its readable key (TASK-002, ADR-001) instead of a UUID, without the content hash.
+ */
+export function renderContextSnapshot(snapshot:ContextSnapshot):string{return [`<ContextSnapshot id="${escapeXml(snapshot.id)}" project="${escapeXml(snapshot.projectId)}" graphRevision="${snapshot.graphRevision}" repositoryCommit="${escapeXml(snapshot.repositoryCommit)}">`,`<Constraints>\n${snapshot.constraints.map(rule=>`- ${escapeXml(rule)}`).join('\n')}\n</Constraints>`,...snapshot.includedSources.filter(source=>!isRepeatedRule(source)).map(source=>`<Source id="${escapeXml(source.entityKey??source.titleOrPath)}" tier="${source.authorityTier}" type="${source.sourceType}" origin="${source.retrievalOrigin}">\n${escapeXml(source.extractedContent)}\n</Source>`),'</ContextSnapshot>'].join('\n\n');}
+function isRepeatedRule(source:{sourceType:string;sourceId:string}):boolean{return source.sourceType==='POLICY'&&(source.sourceId.startsWith('policy:')||source.sourceId.startsWith('convention:'));}
 function escapeXml(value:string):string{return value.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;');}

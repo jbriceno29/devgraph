@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import type { ChangeSetDraft, ChangeSetPlannerPort } from '../../application/ports/change-set-planning-port.js';
 import { type PlannerInput, buildPlannerPrompt, parsePlannerDraft, plainSchema } from './change-set-planning-contract.js';
 import { buildChildEnvironment, type AgentAuthMode } from './child-environment.js';
-import { checkClaudeLogin } from './claude-code-adapter.js';
+import { CLAUDE_ISOLATION_ARGS, checkClaudeLogin } from './claude-code-adapter.js';
 import { claudeCli, resolveCliExecutable } from './cli-path.js';
 
 export interface ClaudeChangeSetPlannerOptions {
@@ -31,7 +31,8 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
   constructor(private readonly cwd: string, private readonly options: ClaudeChangeSetPlannerOptions = {}) {}
 
   async propose(input: PlannerInput): Promise<ChangeSetDraft> {
-    const { output } = await this.structured(buildPlannerPrompt(input), plainSchema, input.model);
+    // Same isolation as the agent runs and the inception: no personal CLI settings, skills or plugins reach the planner.
+    const { output } = await this.structured(buildPlannerPrompt(input), plainSchema, input.model, CLAUDE_ISOLATION_ARGS);
     return parsePlannerDraft(output, 'Claude Code');
   }
 

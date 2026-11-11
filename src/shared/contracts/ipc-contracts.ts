@@ -65,6 +65,7 @@ export interface WorkspaceIpcQueries {
   'execution:get_detail': (executionId:string)=>Promise<ExecutionDetailDto>;
   'policy:get': (projectId:string)=>Promise<ExecutionPolicyDto>;
   'pilot:get': (projectId:string,featureId:string)=>Promise<FeaturePilotDto>;
+  'provider:get_auth': (projectId:string)=>Promise<{authMode:'subscription'|'api_key';apiKeyAvailable:boolean}>;
   'graph:context_flow': (projectId:string,workItemId:string)=>Promise<ContextFlowDto>;
   'metrics:feature_report': (projectId:string,featureId:string)=>Promise<FeatureReportDto>;
   'activity:list': (projectId:string,limit?:number)=>Promise<ActivitySummaryDto>;
@@ -125,6 +126,8 @@ export interface WorkspaceIpcClient {
     getExecutionDetail(executionId:string):Promise<ExecutionDetailDto>;
     getExecutionPolicy(projectId:string):Promise<ExecutionPolicyDto>;
     getFeaturePilot(projectId:string,featureId:string):Promise<FeaturePilotDto>;
+    /** How the engine authenticates for the project (works without features, unlike getFeaturePilot). Optional so older client fakes stay valid. */
+    getProviderAuth?(projectId:string):Promise<{authMode:'subscription'|'api_key';apiKeyAvailable:boolean}>;
     getContextFlow(projectId:string,workItemId:string):Promise<ContextFlowDto>;
     getFeatureReport(projectId:string,featureId:string):Promise<FeatureReportDto>;
     getActivity(projectId:string,limit?:number):Promise<ActivitySummaryDto>;

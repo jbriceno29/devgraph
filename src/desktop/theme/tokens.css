@@ -1,0 +1,73 @@
+/* Tokens semánticos del tema. Claro en :root; oscuro con data-theme=dark o, en modo sistema, con prefers-color-scheme: dark.
+   Los dos bloques oscuros deben ser idénticos (lo comprueba tests/unit/theme-contrast.test.ts, que también mide el contraste AA). */
+:root{
+  color-scheme:light;
+  --surface:#f6f7f9;--surface-raised:#ffffff;--surface-sunken:#eef1f5;--border:#dde2ea;--border-strong:#c2c9d4;
+  --fg:#0f172a;--fg-muted:#475569;--fg-subtle:#5b6678;
+  --accent:#0e7490;--accent-fg:#ffffff;--accent-soft:#ecfeff;
+  --success:#047857;--success-soft:#ecfdf5;--warning:#a14b06;--warning-soft:#fffbeb;--danger:#be123c;--danger-soft:#fff1f2;--info:#0369a1;--info-soft:#f0f9ff;
+  --node-fg:#0f172a;--node-selected:#0f172a;--node-ghost-fill:#ecfeff;--node-ghost-stroke:#0e7490;
+  --node-project-root-fill:#f1f5f9;--node-project-root-stroke:#475569;
+  --node-module-fill:#e0f2fe;--node-module-stroke:#0369a1;
+  --node-feature-fill:#e0e7ff;--node-feature-stroke:#4338ca;
+  --node-requirement-fill:#fef3c7;--node-requirement-stroke:#92400e;
+  --node-work-item-fill:#ecfdf5;--node-work-item-stroke:#047857;
+  --node-milestone-fill:#fae8ff;--node-milestone-stroke:#a21caf;
+  --node-decision-record-fill:#ffe4e6;--node-decision-record-stroke:#be123c;
+  --node-artifact-fill:#eef2f7;--node-artifact-stroke:#334155;
+  --node-code-reference-fill:#ccfbf1;--node-code-reference-stroke:#0f766e;
+  --edge:#cbd5e1;--edge-cross:#64748b;--edge-label:#475569;--grid-dot:#cbd5e1;
+  --tier-1:#be185d;--tier-2:#be123c;--tier-3:#b45309;--tier-4:#0f766e;--tier-5:#5b6678;
+  --status-ready:#0e7490;--status-in-progress:#a14b06;--status-in-review:#6d28d9;--status-done:#047857;--status-blocked:#475569;--status-draft:#5b6678;--status-archived:#5b6678;
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --surface:#090d18;--surface-raised:#0f172a;--surface-sunken:#080d17;--border:#1e293b;--border-strong:#334155;
+  --fg:#f1f5f9;--fg-muted:#94a3b8;--fg-subtle:#8391a7;
+  --accent:#22d3ee;--accent-fg:#020617;--accent-soft:#083344;
+  --success:#34d399;--success-soft:#0b2a22;--warning:#fbbf24;--warning-soft:#2a1f0a;--danger:#fb7185;--danger-soft:#2c1219;--info:#38bdf8;--info-soft:#0b2233;
+  --node-fg:#f1f5f9;--node-selected:#f8fafc;--node-ghost-fill:#083344;--node-ghost-stroke:#22d3ee;
+  --node-project-root-fill:#1e293b;--node-project-root-stroke:#94a3b8;
+  --node-module-fill:#102a43;--node-module-stroke:#38bdf8;
+  --node-feature-fill:#1d2448;--node-feature-stroke:#818cf8;
+  --node-requirement-fill:#3b2a18;--node-requirement-stroke:#fbbf24;
+  --node-work-item-fill:#12372a;--node-work-item-stroke:#34d399;
+  --node-milestone-fill:#3a1d39;--node-milestone-stroke:#e879f9;
+  --node-decision-record-fill:#3a2222;--node-decision-record-stroke:#fb7185;
+  --node-artifact-fill:#233044;--node-artifact-stroke:#cbd5e1;
+  --node-code-reference-fill:#143638;--node-code-reference-stroke:#2dd4bf;
+  --edge:#334155;--edge-cross:#64748b;--edge-label:#94a3b8;--grid-dot:#334155;
+  --tier-1:#f472b6;--tier-2:#fb7185;--tier-3:#fbbf24;--tier-4:#2dd4bf;--tier-5:#94a3b8;
+  --status-ready:#22d3ee;--status-in-progress:#fbbf24;--status-in-review:#a78bfa;--status-done:#34d399;--status-blocked:#8f9cb0;--status-draft:#94a3b8;--status-archived:#8f9cb0;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme=light]){
+  color-scheme:dark;
+  --surface:#090d18;--surface-raised:#0f172a;--surface-sunken:#080d17;--border:#1e293b;--border-strong:#334155;
+  --fg:#f1f5f9;--fg-muted:#94a3b8;--fg-subtle:#8391a7;
+  --accent:#22d3ee;--accent-fg:#020617;--accent-soft:#083344;
+  --success:#34d399;--success-soft:#0b2a22;--warning:#fbbf24;--warning-soft:#2a1f0a;--danger:#fb7185;--danger-soft:#2c1219;--info:#38bdf8;--info-soft:#0b2233;
+  --node-fg:#f1f5f9;--node-selected:#f8fafc;--node-ghost-fill:#083344;--node-ghost-stroke:#22d3ee;
+  --node-project-root-fill:#1e293b;--node-project-root-stroke:#94a3b8;
+  --node-module-fill:#102a43;--node-module-stroke:#38bdf8;
+  --node-feature-fill:#1d2448;--node-feature-stroke:#818cf8;
+  --node-requirement-fill:#3b2a18;--node-requirement-stroke:#fbbf24;
+  --node-work-item-fill:#12372a;--node-work-item-stroke:#34d399;
+  --node-milestone-fill:#3a1d39;--node-milestone-stroke:#e879f9;
+  --node-decision-record-fill:#3a2222;--node-decision-record-stroke:#fb7185;
+  --node-artifact-fill:#233044;--node-artifact-stroke:#cbd5e1;
+  --node-code-reference-fill:#143638;--node-code-reference-stroke:#2dd4bf;
+  --edge:#334155;--edge-cross:#64748b;--edge-label:#94a3b8;--grid-dot:#334155;
+  --tier-1:#f472b6;--tier-2:#fb7185;--tier-3:#fbbf24;--tier-4:#2dd4bf;--tier-5:#94a3b8;
+  --status-ready:#22d3ee;--status-in-progress:#fbbf24;--status-in-review:#a78bfa;--status-done:#34d399;--status-blocked:#8f9cb0;--status-draft:#94a3b8;--status-archived:#8f9cb0;
+}}
+/* dark: sigue al tema resuelto (forzado o del sistema), no solo a la media query. */
+@custom-variant dark{&:where([data-theme=dark],[data-theme=dark] *){@slot;}@media (prefers-color-scheme: dark){&:where(:root:not([data-theme=light]),:root:not([data-theme=light]) *){@slot;}}}
+@theme inline{
+  --color-surface:var(--surface);--color-surface-raised:var(--surface-raised);--color-surface-sunken:var(--surface-sunken);--color-border:var(--border);--color-border-strong:var(--border-strong);
+  --color-fg:var(--fg);--color-fg-muted:var(--fg-muted);--color-fg-subtle:var(--fg-subtle);
+  --color-accent:var(--accent);--color-accent-fg:var(--accent-fg);--color-accent-soft:var(--accent-soft);
+  --color-success:var(--success);--color-success-soft:var(--success-soft);--color-warning:var(--warning);--color-warning-soft:var(--warning-soft);--color-danger:var(--danger);--color-danger-soft:var(--danger-soft);--color-info:var(--info);--color-info-soft:var(--info-soft);
+  --color-tier-1:var(--tier-1);--color-tier-2:var(--tier-2);--color-tier-3:var(--tier-3);--color-tier-4:var(--tier-4);--color-tier-5:var(--tier-5);
+  --color-status-ready:var(--status-ready);--color-status-in-progress:var(--status-in-progress);--color-status-in-review:var(--status-in-review);--color-status-done:var(--status-done);--color-status-blocked:var(--status-blocked);--color-status-draft:var(--status-draft);--color-status-archived:var(--status-archived);
+  --color-grid-dot:var(--grid-dot);
+}

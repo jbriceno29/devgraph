@@ -1,34 +1,82 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GraphCanvas } from '../presentation/graph/GraphCanvas.js';
 import { ContextualInspector } from '../presentation/inspector/ContextualInspector.js';
 import { DocumentsPanel } from '../presentation/documents/DocumentsPanel.js';
+import { PlanningWorkspace } from '../presentation/planning/PlanningWorkspace.js';
+import { AgentsWorkspace } from '../presentation/agents/AgentsWorkspace.js';
+import { ActivityInbox, useActivity } from '../presentation/shell/ActivityInbox.js';
+import { Sidebar, panelId, tabId } from '../presentation/shell/Sidebar.js';
+import { NextStepBanner } from '../presentation/shell/NextStepBanner.js';
+import { EmptyProject } from '../presentation/shell/EmptyProject.js';
+import { ThemeToggle } from '../presentation/shell/ThemeToggle.js';
+import { VIEWS, viewInfo } from '../presentation/shell/views.js';
+import { nextStep, type ShellTarget, type ShellView } from '../presentation/shell/next-step.js';
 import { useWorkspaceNavigation } from './workspace-navigation-context.js';
 import { ProjectCreateForm } from './project-create-form.js';
 import type { GraphEdgeType, KnowledgeEntityType } from '../../shared/contracts/graph-view.js';
-import { PlanningWorkspace } from '../presentation/planning/PlanningWorkspace.js';
-import { AgentsWorkspace } from '../presentation/agents/AgentsWorkspace.js';
+import type { WorkspaceLoadedStateDto } from '../../shared/contracts/ipc-contracts.js';
+
+const focusRing='focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export function WorkspaceShell() {
  const state=useWorkspaceNavigation();
- const {projects,activeProject,workspace,inspector,selectedEntityId,loading,error}=state;
- const [activeView,setActiveView]=useState<'graph'|'documents'|'planning'|'agents'>('graph');
- if(loading&&!workspace) return <div className="grid min-h-screen place-items-center bg-[#090d18] text-sm text-slate-400">Preparando workspace…</div>;
- return <main className="flex min-h-screen flex-col bg-[#090d18] text-slate-100">
-  <header className="flex min-h-[72px] shrink-0 flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 px-7 py-3">
-   <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-400/10 text-sm font-bold text-cyan-300">G</div><div><p className="text-sm font-semibold tracking-tight">Graph Workspace</p><p className="text-[10px] uppercase tracking-[0.17em] text-slate-600">Local engineering memory</p></div></div>
-   {activeProject&&<div className="flex flex-wrap items-center gap-4">
-    <span className="text-xs text-slate-300">{activeProject.name}</span>
-    <span className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 font-mono text-[10px] text-slate-500">REV {activeProject.currentRevision}</span>
-    <select aria-label="Proyecto activo" value={activeProject.id} onChange={event=>void state.openProject(event.target.value)} className="max-w-48 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"><option value={activeProject.id}>{activeProject.name}</option>{projects.filter(project=>project.id!==activeProject.id).map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>
-    <button type="button" onClick={()=>void state.refreshProjects()} className="rounded px-2 py-1 text-xs text-slate-500 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-cyan-400">Actualizar proyectos</button>
-    <nav aria-label="Vistas del proyecto" className="flex rounded-lg border border-slate-800 bg-slate-950 p-1"><button type="button" aria-pressed={activeView==='graph'} onClick={()=>setActiveView('graph')} className={`rounded-md px-3 py-1.5 text-xs ${activeView==='graph'?'bg-slate-800 text-white':'text-slate-500 hover:text-slate-200'}`}>Grafo</button><button type="button" aria-pressed={activeView==='documents'} onClick={()=>setActiveView('documents')} className={`rounded-md px-3 py-1.5 text-xs ${activeView==='documents'?'bg-slate-800 text-white':'text-slate-500 hover:text-slate-200'}`}>Documentos</button><button type="button" aria-pressed={activeView==='planning'} onClick={()=>setActiveView('planning')} className={`rounded-md px-3 py-1.5 text-xs ${activeView==='planning'?'bg-slate-800 text-white':'text-slate-500 hover:text-slate-200'}`}>Planificar</button><button type="button" aria-pressed={activeView==='agents'} onClick={()=>setActiveView('agents')} className={`rounded-md px-3 py-1.5 text-xs ${activeView==='agents'?'bg-slate-800 text-white':'text-slate-500 hover:text-slate-200'}`}>Agentes</button></nav>
-   </div>}
+ const {projects,workspace,loading,error}=state;
+ if(loading&&!workspace) return <div className="grid min-h-screen place-items-center bg-surface text-sm text-fg-muted">Preparando el espacio de trabajo…</div>;
+ return workspace?<ProjectShell workspace={workspace}/>:<main className="flex min-h-screen flex-col bg-surface text-fg">
+  <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-7 py-3">
+   <div className="flex items-center gap-3"><div aria-hidden="true" className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-sm font-bold text-accent">G</div><p className="text-sm font-semibold">Graph Workspace</p></div>
+   <ThemeToggle/>
   </header>
-  {error&&<div role="alert" className="mx-7 mt-4 rounded-lg border border-rose-900/70 bg-rose-950/50 px-4 py-3 text-xs text-rose-300">{error}</div>}
-  {workspace?<div className="flex min-h-0 flex-1 p-5 lg:p-7">{activeView==='agents'?<AgentsWorkspace projectId={workspace.project.id} nodes={workspace.graph.nodes} selectedEntityId={selectedEntityId}/>:activeView==='planning'?<PlanningWorkspace/>:activeView==='documents'
-   ?<DocumentsPanel projectId={workspace.project.id} nodes={workspace.graph.nodes}/>
-   :<div className="flex min-h-0 min-w-0 flex-1 gap-4"><GraphCanvas projectId={workspace.project.id} nodes={workspace.graph.nodes} edges={workspace.graph.edges} selectedId={selectedEntityId} onSelect={id=>void state.selectEntity(id)} onFilter={(nodeTypes:KnowledgeEntityType[],edgeTypes:GraphEdgeType[])=>void state.refreshGraph({entityTypes:nodeTypes,edgeTypes})}/><ContextualInspector details={inspector} onChangeStatus={async status=>{if(!inspector||!workspace)return;await window.workspaceIpc.commands.setWorkItemStatus(workspace.project.id,inspector.entity.id,status);await state.refreshGraph();await state.selectEntity(inspector.entity.id);}} contextPackage={state.contextPackage} contextLoading={state.contextLoading} contextError={state.contextError} onRefreshContext={state.refreshContext}/></div>}
-  </div>:<div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-8 px-6 py-12 md:grid-cols-[0.9fr_1.1fr]"><div className="self-center"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400">Structured project knowledge</p><h1 className="mt-4 max-w-lg text-4xl font-semibold leading-tight tracking-tight text-white">El contexto del proyecto, conectado.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-slate-400">Explora estructura, requerimientos, decisiones y trabajo desde un único grafo local.</p>{projects.length>0&&<div className="mt-8"><p className="mb-3 text-xs font-medium text-slate-400">Workspaces recientes</p><ul className="space-y-2">{projects.map(project=><li key={project.id}><button type="button" onClick={()=>void state.openProject(project.id)} className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-left transition hover:border-slate-600 focus-visible:outline-2 focus-visible:outline-cyan-400"><span><span className="block text-sm font-medium text-slate-200">{project.name}</span><span className="mt-1 block font-mono text-[10px] text-slate-600">{project.slug}</span></span><span className="text-xs text-slate-600">REV {project.currentRevision} →</span></button></li>)}</ul></div>}</div><div className="self-center"><ProjectCreateForm onCreate={state.createProject} disabled={loading}/></div></div>}
-  <footer className="flex h-9 shrink-0 items-center justify-between border-t border-slate-900 px-7 text-[10px] text-slate-600"><span>Local-first · Tauri · SQLite</span><span>{activeProject?`${workspace?.graph.nodes.length??0} entidades · ${workspace?.graph.edges.length??0} relaciones`:'Sin proyecto abierto'}</span></footer>
+  {error&&<div role="alert" className="mx-7 mt-4 rounded-lg border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>}
+  <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-8 px-6 py-12 md:grid-cols-[0.9fr_1.1fr]">
+   <div className="self-center">
+    <p className="text-xs font-semibold uppercase tracking-wider text-accent">Memoria local del proyecto</p>
+    <h1 className="mt-4 max-w-lg text-4xl font-semibold leading-tight tracking-tight">El contexto del proyecto, conectado.</h1>
+    <p className="mt-4 max-w-lg text-sm leading-6 text-fg-muted">Planifica, ejecuta con agentes y revisa el trabajo desde un único grafo local.</p>
+    {projects.length>0&&<div className="mt-8"><h2 className="mb-3 text-sm font-medium text-fg-muted">Abrir un proyecto reciente</h2><ul className="space-y-2">{projects.map(project=><li key={project.id}><button type="button" onClick={()=>void state.openProject(project.id)} className={`flex w-full items-center justify-between rounded-xl border border-border bg-surface-raised p-4 text-left transition hover:border-border-strong ${focusRing}`}><span><span className="block text-sm font-medium text-fg">{project.name}</span><span className="mt-1 block font-mono text-[11px] text-fg-subtle">{project.slug}</span></span><span className="text-xs text-fg-subtle">REV {project.currentRevision} →</span></button></li>)}</ul></div>}
+   </div>
+   <div className="self-center"><ProjectCreateForm onCreate={state.createProject} disabled={loading}/></div>
+  </div>
  </main>;
+}
+
+function ProjectShell({workspace}:{workspace:WorkspaceLoadedStateDto}) {
+ const state=useWorkspaceNavigation();
+ const {projects,inspector,selectedEntityId,error}=state;
+ const projectId=workspace.project.id,nodes=workspace.graph.nodes;
+ const [view,setView]=useState<ShellView>('activity');
+ const heading=useRef<HTMLHeadingElement>(null);
+ const activity=useActivity(projectId);
+ const step=useMemo(()=>nextStep(workspace.graph,activity.summary),[workspace.graph,activity.summary]);
+ const hasFeatures=nodes.some(node=>node.type==='FEATURE'&&node.status!=='ARCHIVED');
+ useEffect(()=>{setView('activity');},[projectId]);
+ /** Cambia de vista (y selecciona lo indicado) desde la bandeja, el banner o un atajo; lleva el foco al título. */
+ const go=useCallback((target:ShellTarget)=>{if(target.workItemId)void state.selectEntity(target.workItemId);setView(target.view);requestAnimationFrame(()=>heading.current?.focus());},[state.selectEntity]);
+ useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(!(event.metaKey||event.ctrlKey)||event.altKey||event.shiftKey)return;const index=Number(event.key)-1;const target=VIEWS[index];if(!target)return;event.preventDefault();go({view:target.id});};window.addEventListener('keydown',onKey);return ()=>window.removeEventListener('keydown',onKey);},[go]);
+ const info=viewInfo(view);
+ const changeStatus=async(status:string)=>{if(!inspector)return;await window.workspaceIpc.commands.setWorkItemStatus(projectId,inspector.entity.id,status);await state.refreshGraph();await state.selectEntity(inspector.entity.id);};
+ const content=view==='activity'?<div className="mx-auto min-h-0 w-full max-w-4xl space-y-4 overflow-y-auto">
+   {hasFeatures?<NextStepBanner step={step} onGo={go}/>:<EmptyProject projectName={workspace.project.name} onPlan={()=>go({view:'planning'})}/>}
+   {(hasFeatures||(activity.summary?.items.length??0)>0)&&<ActivityInbox projectId={projectId} onNavigate={go}/>}
+  </div>
+  :view==='graph'?<div className="flex min-h-0 flex-1 flex-col gap-4">
+   <NextStepBanner step={step} onGo={go}/>
+   <div className="flex min-h-0 min-w-0 flex-1 gap-4"><GraphCanvas projectId={projectId} nodes={nodes} edges={workspace.graph.edges} selectedId={selectedEntityId} onSelect={id=>void state.selectEntity(id)} onFilter={(nodeTypes:KnowledgeEntityType[],edgeTypes:GraphEdgeType[])=>void state.refreshGraph({entityTypes:nodeTypes,edgeTypes})}/><ContextualInspector details={inspector} onChangeStatus={changeStatus} contextPackage={state.contextPackage} contextLoading={state.contextLoading} contextError={state.contextError} onRefreshContext={state.refreshContext}/></div>
+  </div>
+  :view==='planning'?<PlanningWorkspace/>
+  :view==='agents'?<AgentsWorkspace projectId={projectId} nodes={nodes} selectedEntityId={selectedEntityId}/>
+  :<DocumentsPanel projectId={projectId} nodes={nodes}/>;
+ return <div className="flex h-screen min-h-0 bg-surface text-fg">
+  <Sidebar projects={projects} activeProject={workspace.project} onOpenProject={id=>void state.openProject(id)} onRefreshProjects={()=>void state.refreshProjects()} view={view} onSelectView={next=>setView(next)} attentionCount={activity.summary?.attentionCount??0} nodes={nodes} selectedId={selectedEntityId} onSelectNode={id=>{void state.selectEntity(id);if(view==='activity'||view==='documents')setView('graph');}}/>
+  <main className="flex min-w-0 flex-1 flex-col">
+   <header className="shrink-0 border-b border-border px-6 py-4">
+    <nav aria-label="Ruta"><ol className="flex items-center gap-1.5 text-xs text-fg-subtle"><li>{workspace.project.name}</li><li aria-hidden="true">›</li><li aria-current="page" className="text-fg-muted">{info.label}</li></ol></nav>
+    <h1 ref={heading} tabIndex={-1} className="mt-1 text-lg font-semibold tracking-tight text-fg focus:outline-none">{info.title}</h1>
+    <p className="mt-0.5 text-sm text-fg-muted">{info.description}</p>
+   </header>
+   {error&&<div role="alert" className="mx-6 mt-4 rounded-lg border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>}
+   <div id={panelId(view)} role="tabpanel" aria-labelledby={tabId(view)} className="flex min-h-0 flex-1 flex-col p-5 lg:p-6">{content}</div>
+   {VIEWS.filter(other=>other.id!==view).map(other=><div key={other.id} id={panelId(other.id)} role="tabpanel" aria-labelledby={tabId(other.id)} hidden/>)}
+  </main>
+ </div>;
 }

@@ -72,6 +72,10 @@ Objetivo: una tarea pasa de `READY` a `DONE` desde la app, con el código en la 
 
 ### Etapa 2: Memoria que fluye (M)
 
+> **Estado (2026-11-10): hecha.** Al aceptar una tarea se guarda su resumen de cierre (`task_outcomes`: resumen final del agente con apartados Hecho / Decisiones / Pendiente, archivos del commit integrado y comprobaciones) y la evidencia en el grafo (`CODE_REFERENCE` por archivo con aristas `MODIFIES`, `GENERATED_BY` para documentos, procedencia `EXECUTION`). El contexto de una tarea incluye ese resumen para sus dependencias y para las tareas terminadas de la misma feature, y punteros (nivel 4) a los archivos que tocaron; el inspector muestra el resultado al cerrar; el contexto avisa cuando el bloque obligatorio supera el presupuesto; el prompt del planificador explica las reglas del grafo. **H2 demostrada en real** (Claude `haiku`, copia de `todo-app`): TASK-002 recibió el resumen de TASK-001, editó el módulo existente en lugar de crear otro, respetó sus decisiones y la feature quedó con 12/12 pruebas.
+>
+> Desviaciones: las referencias de código se pasan como punteros (el agente lee el archivo en su worktree) y no por búsqueda de texto; la lectura de fuentes desde `HEAD` no hizo falta porque D6 exige documentos commiteados antes de ejecutar. El ChangeSet posterior a la ejecución (`AGENT_EXECUTION`) queda para la Etapa 3, donde el piloto lo necesita.
+
 Objetivo: H2. Lo que se aprende al cerrar una tarea llega a las siguientes sin historial.
 
 - **Resumen de cierre** (`TaskOutcome`) al aceptar: qué se hizo (resumen final del agente), archivos tocados, pruebas que pasaron, decisiones tomadas y pendientes detectados. Se guarda en el grafo, ligado a la tarea.

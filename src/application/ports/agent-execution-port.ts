@@ -2,6 +2,7 @@ import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider, Execution
 import type { WorkItem } from '../../domain/work-management/entities.js';
 import type { ContextSnapshot } from '../../domain/knowledge/context-snapshot.js';
 import type { AutonomyPolicy,ApprovalRequest } from '../../domain/governance/models.js';
+import type { TaskOutcome } from '../../domain/work-management/task-outcome.js';
 
 export interface AgentExecutionProfile extends AgentProfile {
   provider: AgentProvider;
@@ -40,6 +41,12 @@ export interface AgentExecutionRepositoryPort {
   saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void;
   /** Repository paths of the project's Markdown documents (artifacts and decision records). */
   listDocumentPaths(projectId:string):string[];
+  /**
+   * Stores the outcome of an accepted task and its evidence in the graph: a CODE_REFERENCE per changed file with a
+   * MODIFIES edge (GENERATED_BY for the project's documents), provenance EXECUTION. Bumps and returns the graph revision.
+   */
+  recordTaskOutcome(outcome:TaskOutcome,repositoryId:string):number;
+  findTaskOutcome(workItemId:string):TaskOutcome|null;
   listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}>;
   recordFileDiffs(executionId:string,repositoryId:string,diffs:Array<Pick<ExecutionFileDiff,'filePath'|'changeType'|'additions'|'deletions'|'diffPatch'>>):void;
 }
@@ -53,6 +60,7 @@ export interface GitIsolationPort {
   createIntegrationBranch(input:{repositoryRoot:string;preferredName:string;sourceRef:string}):Promise<string>;
   mergeInto(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
   uncommittedPaths(repositoryRoot:string,paths:string[]):Promise<string[]>;
+  commitFiles(repositoryRoot:string,commit:string):Promise<Array<{path:string;status:'ADDED'|'MODIFIED'|'DELETED'|'RENAMED'}>>;
   pathsDiffer(repositoryRoot:string,leftRef:string,rightRef:string,paths:string[]):Promise<string[]>;
   squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
 }

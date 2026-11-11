@@ -108,7 +108,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      // Resolve ownership from the workspace registry without exposing its database path to the renderer.
      for(const project of store.listProjects()) {
       const workspace=store.openProject(project.id);
-      if(workspace.graph.findEntityById(id)){const details=new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);return details.entity.type==='WORK_ITEM'?{...details,allowedStatusChanges:manualWorkItemTransitions(details.entity.status as WorkItemStatus)}:details;}
+      if(workspace.graph.findEntityById(id)){const details=new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);if(details.entity.type!=='WORK_ITEM')return details;const outcome=getExecutionService(project.id).taskOutcome(id);return {...details,allowedStatusChanges:manualWorkItemTransitions(details.entity.status as WorkItemStatus),...(outcome?{outcome:{summary:outcome.summary,files:outcome.files,checks:outcome.checks,mergedCommit:outcome.mergedCommit,integrationBranch:outcome.integrationBranch,createdAt:outcome.createdAt}}:{})};}
      }
      throw new Error(`Entity not found: ${id}`);
     }

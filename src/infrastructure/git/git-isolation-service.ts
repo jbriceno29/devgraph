@@ -82,6 +82,18 @@ export class GitIsolationService implements GitIsolationPort {
   return [...new Set(dirty)].sort();
  }
 
+ /** Files changed by a commit relative to its first parent (the net change of a squash-merged task). */
+ async commitFiles(repositoryRoot:string,commit:string):Promise<Array<{path:string;status:'ADDED'|'MODIFIED'|'DELETED'|'RENAMED'}>> {
+  const records=(await git(await realpath(repositoryRoot),['diff-tree','--no-commit-id','--name-status','-r','-z','-M',`${commit}^`,commit])).split('\0').filter(Boolean);
+  const files:Array<{path:string;status:'ADDED'|'MODIFIED'|'DELETED'|'RENAMED'}>=[];
+  for(let index=0;index<records.length;index+=1){
+   const code=records[index]![0];
+   if(code==='R'){files.push({path:records[index+2]!,status:'RENAMED'});index+=2;continue;}
+   files.push({path:records[index+1]!,status:code==='A'?'ADDED':code==='D'?'DELETED':'MODIFIED'});index+=1;
+  }
+  return files;
+ }
+
  /** Paths whose content differs between two refs (including paths missing from one of them). */
  async pathsDiffer(repositoryRoot:string,leftRef:string,rightRef:string,paths:string[]):Promise<string[]> {
   if(!paths.length)return [];

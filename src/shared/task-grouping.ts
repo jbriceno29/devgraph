@@ -4,9 +4,11 @@
  * Pure: decides which READY tasks of one feature run together in a single execution. The plan is never changed;
  * a group is only an execution that covers several WorkItems. Rules (decisión 5 del plan):
  * - same feature, all READY, or BLOCKED only by tasks already in the group (A1+A2 with DEPENDS_ON can go together);
- * - at most `maxGroupSize` tasks and at most `maxCriteria` acceptance criteria in total;
- * - a task that fixes a convention runs alone: the first task of the project, and any task whose title or summary
- *   says «convención» or «a partir de esta tarea»;
+ * - at most `maxGroupSize` tasks and at most `maxCriteria` acceptance criteria in total (default 2 × `maxGroupSize`:
+ *   6 for groups of 3; the eighth measurement showed a flat 6 kept pairs of medium tasks apart);
+ * - a task that FIXES a convention runs alone: the first task of the project, and any task whose title or summary
+ *   declares one («a partir de esta tarea», «convención del proyecto», «fija/establece/define la convención»). A task
+ *   that merely follows a convention («según la convención») groups like any other;
  * - a task listed in `runAlone` (pending retry context) runs alone, and never joins another leader's group;
  * - the order respects DEPENDS_ON and, otherwise, the display key (TASK-n).
  */
@@ -25,7 +27,7 @@ export interface GroupableTask {
 export interface TaskGroupingOptions {
   /** 1 disables grouping. Default 3. */
   maxGroupSize?: number;
-  /** Total acceptance criteria a group may hold. Default 6. */
+  /** Total acceptance criteria a group may hold. Default 2 × `maxGroupSize`. */
   maxCriteria?: number;
   /** False while no task of the project is DONE: the first task runs alone so its conventions land before the rest. Default true. */
   projectHasDoneTasks?: boolean;
@@ -34,10 +36,10 @@ export interface TaskGroupingOptions {
 }
 export interface TaskGroup { leader: GroupableTask; tasks: GroupableTask[] }
 
-export const DEFAULT_GROUPING = { maxGroupSize: 3, maxCriteria: 6 } as const;
-const CONVENTION_PATTERN = /convenci[oó]n|a partir de esta tarea/i;
+export const DEFAULT_GROUPING = { maxGroupSize: 3, criteriaPerTask: 2 } as const;
+const CONVENTION_PATTERN = /a partir de esta tarea|convenci[oó]n(?:es)? del proyecto|\b(?:fija|fijar|fijan|establece|establecer|define|definir|introduce|nueva|nuevas)\s+(?:la |una |las |esta |estas )?convenci/i;
 
-/** True when the task declares or fixes a project-wide convention and should run alone. */
+/** True when the task declares or fixes a project-wide convention and should run alone (not when it only follows one). */
 export function fixesConvention(task: Pick<GroupableTask, 'title' | 'summary'>): boolean {
   return CONVENTION_PATTERN.test(task.title) || CONVENTION_PATTERN.test(task.summary ?? '');
 }
@@ -65,7 +67,7 @@ export function orderTasks<T extends GroupableTask>(tasks: readonly T[]): T[] {
  */
 export function nextTaskGroup(tasks: readonly GroupableTask[], options: TaskGroupingOptions = {}): TaskGroup | null {
   const maxGroupSize = Math.max(1, Math.floor(options.maxGroupSize ?? DEFAULT_GROUPING.maxGroupSize));
-  const maxCriteria = Math.max(0, options.maxCriteria ?? DEFAULT_GROUPING.maxCriteria);
+  const maxCriteria = Math.max(0, options.maxCriteria ?? DEFAULT_GROUPING.criteriaPerTask * maxGroupSize);
   const alone = new Set(options.runAlone ?? []);
   const ordered = orderTasks(tasks);
   const leader = ordered.find(task => task.status === 'READY');

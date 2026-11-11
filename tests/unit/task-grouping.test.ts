@@ -16,9 +16,12 @@ describe('nextTaskGroup', () => {
     expect(ids(nextTaskGroup([task(3), task(1), task(2), task(4)]))).toEqual(['t1', 't2', 't3']);
   });
 
-  it('respects the criteria cap, skipping a big task but still taking a smaller later one', () => {
+  it('respects the criteria cap (2 per task of the group size by default), skipping a big task but still taking a smaller later one', () => {
     expect(ids(nextTaskGroup([task(1, { criteriaCount: 3 }), task(2, { criteriaCount: 4 }), task(3, { criteriaCount: 3 }), task(4, { criteriaCount: 1 })]))).toEqual(['t1', 't3']);
     expect(ids(nextTaskGroup([task(1, { criteriaCount: 3 }), task(2, { criteriaCount: 4 }), task(3, { criteriaCount: 5 }), task(4, { criteriaCount: 1 })]))).toEqual(['t1', 't4']);
+    // A group of 4 may hold 8 criteria; an explicit cap wins.
+    expect(ids(nextTaskGroup([task(1, { criteriaCount: 3 }), task(2, { criteriaCount: 4 }), task(3, { criteriaCount: 3 })], { maxGroupSize: 4 }))).toEqual(['t1', 't2']);
+    expect(ids(nextTaskGroup([task(1, { criteriaCount: 3 }), task(2, { criteriaCount: 4 }), task(3, { criteriaCount: 3 })], { maxGroupSize: 4, maxCriteria: 6 }))).toEqual(['t1', 't3']);
   });
 
   it('lets a BLOCKED task join when everything it depends on is in the group (A1+A2), but not when it waits for something outside', () => {
@@ -34,10 +37,13 @@ describe('nextTaskGroup', () => {
 
   it('runs a convention-fixing task alone, whether it is the leader or a later candidate', () => {
     expect(fixesConvention({ title: 'Prioridad', summary: 'Convención del proyecto a partir de esta tarea: los errores son RangeError.' })).toBe(true);
-    expect(fixesConvention({ title: 'Fijar convenciones de errores', summary: null })).toBe(true);
+    expect(fixesConvention({ title: 'Fijar la convención de errores', summary: null })).toBe(true);
+    expect(fixesConvention({ title: 'Nombres', summary: 'Define una convención de nombres para los módulos.' })).toBe(true);
     expect(fixesConvention({ title: 'Etiquetas', summary: 'Añade tag y untag.' })).toBe(false);
+    // Following a convention is not fixing one: the task groups like any other (TASK-213 of todo-v2 ran alone for this).
+    expect(fixesConvention({ title: 'Validar datos externos', summary: 'Rechaza datos inválidos según la convención del RangeError.' })).toBe(false);
     expect(ids(nextTaskGroup([task(1, { summary: 'A partir de esta tarea, las validaciones lanzan RangeError.' }), task(2), task(3)]))).toEqual(['t1']);
-    expect(ids(nextTaskGroup([task(1), task(2, { title: 'Convención de nombres' }), task(3), task(4)]))).toEqual(['t1', 't3', 't4']);
+    expect(ids(nextTaskGroup([task(1), task(2, { title: 'Convención del proyecto para nombres' }), task(3), task(4)]))).toEqual(['t1', 't3', 't4']);
   });
 
   it('keeps a task with pending retry context on its own and out of other groups', () => {

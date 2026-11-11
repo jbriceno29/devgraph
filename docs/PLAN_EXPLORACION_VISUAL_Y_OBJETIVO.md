@@ -6,6 +6,7 @@ Documentos relacionados:
 - `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md` (Asistente de inicio de proyecto en puertas con `ProjectInceptionService`)
 - `docs/ARCHITECTURE.md` y `docs/DOMAIN.md` (Invariantes del grafo, niveles de autoridad y aislamiento Git)
 - `docs/benchmarks/2026-11-11-todo-v2-haiku-agrupacion-repeticion.md` (Séptima medición: la agrupación de tareas y sus salvaguardas, base de la Etapa 0)
+- `docs/benchmarks/2026-11-11-todo-v2-haiku-piloto-agrupando.md` (Octava medición: el piloto agrupando solo; cierra la Etapa 0)
 
 ---
 
@@ -154,8 +155,8 @@ Va antes que la Mitad A porque afecta a **todo** usuario del piloto hoy, mientra
 4. **Un resumen de cierre por tarea.** El prompt exige el resumen final con un apartado por WorkItem (Hecho / Decisiones / Convenciones / Pendiente para cada uno). Al aceptar se guarda un `TaskOutcome` por tarea a partir de su apartado; si el agente no separó los apartados, se guarda el resumen completo en cada tarea con una nota, y se registra como incidencia en el log del piloto (sirve para medir cuántas veces pasa). Las convenciones se promueven a nivel 1 una sola vez (sin duplicados).
 5. **Qué puede agruparse** (función pura `planTaskGroups`, en `src/application/execution/task-grouping.ts`, probada en unitario):
    - misma feature, todas `READY` o `BLOCKED` solo por tareas del mismo grupo (así A1+A2 con `DEPENDS_ON` entre ellas pueden ir juntas, como en el escenario medido);
-   - tamaño máximo 3 tareas y suma de criterios de aceptación ≤ 6 (configurable en la feature);
-   - **la tarea que fija una convención va sola**: la primera tarea del proyecto (ninguna tarea `DONE` antes), y toda tarea cuyo título o resumen contenga «convención» o «a partir de esta tarea»;
+   - tamaño máximo 3 tareas (configurable en la feature, 1–5) y suma de criterios de aceptación ≤ 2 × tamaño (6 para grupos de 3; ajustado tras la octava medición: un tope fijo dejaba solas a tareas medianas);
+   - **la tarea que fija una convención va sola**: la primera tarea del proyecto (ninguna tarea `DONE` antes), y toda tarea cuyo título o resumen declare una («a partir de esta tarea», «convención del proyecto», «fija/establece/define la convención»); mencionarla («según la convención») no cuenta (ajustado tras la octava medición);
    - no se agrupa una tarea con `retryContext` pendiente ni una que ya tenga ejecución activa;
    - el orden del grupo respeta `DEPENDS_ON` y, a igualdad, la clave (`TASK-n`).
 6. **Contexto del grupo.** `ContextEngine.preview` recibe la tarea líder como foco y las demás como anclas adicionales (`extraFocusEntityIds`), para que las especificaciones (`DOCUMENTED_BY`) y decisiones (`AFFECTS`) de todas las partes entren en el snapshot con su nivel. Un solo snapshot sellado por ejecución, enlazado desde la ejecución como hoy.
@@ -173,14 +174,14 @@ Va antes que la Mitad A porque afecta a **todo** usuario del piloto hoy, mientra
 | 0.5 | UI: interruptor «Agrupar tareas pequeñas (experimental)» y tamaño en `FeaturePilotPanel`, aviso de costo con «~M ejecuciones», tareas cubiertas en `ExecutionReview`, claves en `ActivityInbox`; `feature-metrics.ts` atribuye una ejecución agrupada a **todas** sus tareas (hoy solo a la líder, visto en el humo real del 2026-11-11) | `agents/FeaturePilotPanel.tsx`, `agents/ExecutionReview.tsx`, `shell/ActivityInbox.tsx`, `application/execution/feature-metrics.ts` | `feature-pilot-panel.test.tsx`, `review-and-policy.test.tsx`, `feature-pilot.test.ts` (métricas) |
 | 0.6 | Benchmark: nuevo brazo `workspace-grouped` en `scripts/benchmark/run-benchmark.mjs` que corre el escenario **sin agrupar** (`todo-v2`) con el piloto agrupando solo, en lugar del escenario pre-agrupado | `scripts/benchmark/` | Corrida real con `haiku` (ver criterios) |
 
-**Estado (2026-11-11):** entregas 0.1 a 0.4 hechas y verificadas con un humo real (haiku, copia de `todo-app` en `2d321f6`, tareas TASK-201, 202 y 204): el piloto ejecutó TASK-201 sola (fija convención), agrupó TASK-202 + TASK-204 en una ejecución, hizo un commit por grupo con trailers, dejó un resumen de cierre por tarea y las 9 pruebas ocultas pasaron (incluida la convención `RangeError`). Pendientes 0.5 y 0.6.
+**Estado (2026-11-11): Etapa 0 hecha** (`d728673`, `5c37886`, `71edf5e` y el commit de la octava medición). Medida con el piloto agrupando solo sobre `todo-v2` (`docs/benchmarks/2026-11-11-todo-v2-haiku-piloto-agrupando.md`): con grupos de 3, **33/33 pruebas ocultas y 9/9 de la convención en tres corridas, 8–9 ejecuciones en vez de 13 y −17 % a −20 % de costo ponderado** (la base sacó 28/33); con grupos de 4, −26 % pero la convención cae a 3/9. El criterio 2 (−30 %) **no se alcanza**: el 30 % venía del escenario agrupado a mano, que no respeta las salvaguardas. La opción queda en el producto **desactivada por defecto** (tamaño 3) hasta que el usuario decida activarla; tamaño 4 o más, solo con medición propia.
 
 **Criterios de aceptación de la Etapa 0:**
 
 1. Con la opción desactivada, ninguna prueba existente cambia de resultado y el piloto se comporta exactamente como hoy.
-2. Con la opción activa sobre `todo-v2` y el piloto real (brazo `workspace-grouped`, ×2): costo ponderado al menos un 30 % por debajo del brazo `workspace` de la misma corrida, pruebas ocultas y convención respetada por tarea **no peores** que sin agrupar, cero intervenciones. Si la deriva de convención del agrupado supera a la del modo normal, la opción se queda desactivada por defecto y se documenta.
+2. Con la opción activa sobre `todo-v2` y el piloto real (brazo `workspace-grouped`, ×2): costo ponderado al menos un 30 % por debajo del brazo `workspace` de la misma corrida, pruebas ocultas y convención respetada por tarea **no peores** que sin agrupar, cero intervenciones. Si la deriva de convención del agrupado supera a la del modo normal, la opción se queda desactivada por defecto y se documenta. **Resultado (octava medición):** calidad y convención no peores (mejores, de hecho) y cero intervenciones; costo −19 % (no −30 %). Opción desactivada por defecto, documentada.
 3. En el workspace resultante: cada tarea del grupo está en `DONE`, tiene su propio `TaskOutcome` y sus `CODE_REFERENCE` con `MODIFIES`; el commit del grupo lleva un trailer por tarea; la siguiente tarea de la feature recibe en su contexto el resumen de **cada** tarea de la que depende, no uno solo.
-4. README, `GUIA_DE_USO.md` y `PLAN_DE_TRABAJO.md` dejan de decir «repetición en curso» y describen la opción, su valor por defecto y la cifra medida en el piloto real.
+4. README, `GUIA_DE_USO.md` y `PLAN_DE_TRABAJO.md` dejan de decir «repetición en curso» y describen la opción, su valor por defecto y la cifra medida en el piloto real. **Hecho.**
 
 **Fuera de la Etapa 0:** agrupar desde la vista Agentes en modo manual (selección múltiple de tareas `READY`), agrupar tareas de distintas features y activar la opción por defecto. Las dos primeras se deciden tras medir; la tercera, solo si el criterio 2 se cumple en 3–5 features reales.
 

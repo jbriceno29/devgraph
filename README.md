@@ -72,12 +72,12 @@ Funciona (verificado en el código y en las pruebas; las pruebas reales con `hai
 - Ciclo completo con Claude Code: contexto curado, worktree por tarea, validación, aceptación con squash en la rama de la feature, memoria entre tareas (resumen de cierre y convenciones como reglas de nivel 1), integración de la feature en la rama base.
 - Piloto automático por feature con reintentos, escalamiento de modelo, pausa por uso y política de decisiones del proyecto.
 - Asistente de inicio de proyecto, bandeja de actividad, grafo con estado vivo y flujo de contexto, tema claro/oscuro.
-- Mediciones: el workspace iguala la calidad del mejor chat sin intervención humana, a ~1,5× el costo ponderado antes de agrupar tareas (detalle en el plan).
+- Mediciones: el workspace iguala la calidad del mejor chat sin intervención humana, a ~1,5× el costo ponderado del chat largo; con la agrupación de tareas del piloto activa, ~19 % menos con la misma calidad (octava medición; detalle en `docs/benchmarks/`).
 
 Pendiente o con límites:
 
 - **Codex:** `CodexAgentAdapter` y `CodexChangeSetPlanner` siguen en el repositorio pero no están cableados; reconectarlos es la Etapa 4. Hoy solo funciona Claude Code.
 - **Avisos de escritorio:** usan la API web `Notification` (no hay plugin de Tauri); en un webview sin esa API o sin permiso no se muestra nada. La bandeja de actividad dentro de la app sí es fiable.
-- **Agrupación de tareas:** el piloto puede agrupar 2–3 tareas pequeñas de una feature en una ejecución (opción «Agrupar tareas pequeñas» de la feature, desactivada por defecto). En el benchmark agrupado a mano bajó el costo ponderado un 42 % con igual calidad (séptima medición); la medición con el piloto agrupando solo (brazo `workspace-grouped` del harness) está pendiente de una ventana de uso libre, y hasta tenerla la opción sigue siendo experimental.
+- **Agrupación de tareas:** el piloto puede agrupar 2–3 tareas pequeñas de una feature en una ejecución (opción «Agrupar tareas pequeñas» de la feature, desactivada por defecto). Medido con el piloto agrupando solo (octava medición): −17 % a −20 % de costo ponderado con 33/33 pruebas ocultas y la convención intacta; con grupos de 4 el ahorro sube pero la convención se pierde, así que el tamaño recomendado es 3. No alcanzó el −30 % que pedía el plan, por eso sigue desactivada por defecto.
 - **Recorte del prompt de contexto** y **camino crítico en el grafo:** sin hacer.
 - **Inicio de proyecto:** solo con Claude Code; en un proyecto con plan ya creado no se usa; cancelar una llamada envía SIGINT y luego SIGTERM, y si el sidecar muere por SIGKILL el proceso del motor puede quedar huérfano (por verificar en detalle).

@@ -2,16 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { nextStep } from '../../src/desktop/presentation/shell/next-step.js';
 import type { ActivityItemDto, ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import type { GraphNodeView } from '../../src/shared/contracts/graph-view.js';
+import type { InceptionActivityDto } from '../../src/shared/contracts/inception-view.js';
 
 const feature:GraphNodeView={id:'f',key:'FEAT-001',type:'FEATURE',label:'Búsqueda',status:'DRAFT',parentId:'m'};
 const task=(id:string,key:string,status:string):GraphNodeView=>({id,key,type:'WORK_ITEM',label:`Tarea ${key}`,status,parentId:'f'});
 const graph=(...nodes:GraphNodeView[])=>({nodes:[{id:'root',key:'PROJ-01',type:'PROJECT_ROOT' as const,label:'P',status:'ACTIVE'},...nodes]});
 const item=(over:Partial<ActivityItemDto>&Pick<ActivityItemDto,'kind'>):ActivityItemDto=>({id:over.kind,at:'2026-11-11T00:00:00Z',title:'Algo',detail:null,needsAttention:true,workItemId:null,executionId:null,featureId:null,changeSetId:null,target:'agents',...over});
-const activity=(items:ActivityItemDto[],running:ActivitySummaryDto['running']=[]):ActivitySummaryDto=>({items,running,attentionCount:items.filter(entry=>entry.needsAttention).length});
+const activity=(items:ActivityItemDto[],running:ActivitySummaryDto['running']=[],inception:InceptionActivityDto|null=null):ActivitySummaryDto=>({items,running,attentionCount:items.filter(entry=>entry.needsAttention).length,inception});
+const inception=(over:Partial<InceptionActivityDto>):InceptionActivityDto=>({stage:'ASK_GOALS',status:'WAITING_USER',title:'Inicio',detail:'Detalle',needsAttention:true,changeSetId:null,at:'now',...over});
 
 describe('nextStep',()=>{
+ it('inception pending: define the project, answer, wait or approve in Inicio, before anything else',()=>{
+  expect(nextStep(graph(),activity([],[],inception({stage:'ASK_GOALS',detail:'3 preguntas'})))).toMatchObject({id:'inception-answer',title:'Responde las preguntas del asistente de inicio',detail:'3 preguntas',target:{view:'inception'},tone:'attention'});
+  const proposal=item({kind:'PLAN_PROPOSAL',changeSetId:'cs-inception',target:'planning'});
+  expect(nextStep(graph(),activity([proposal],[],inception({stage:'PROPOSAL',changeSetId:'cs-inception'})))).toMatchObject({id:'inception-approve',title:'Revisa y aprueba la propuesta',target:{view:'inception'}});
+  expect(nextStep(graph(),activity([],[],inception({status:'FAILED',detail:'sin red'})))).toMatchObject({id:'inception-failed',detail:'sin red',target:{view:'inception'}});
+  expect(nextStep(graph(),activity([],[],inception({status:'WORKING',needsAttention:false})))).toMatchObject({id:'inception-working',target:{view:'inception'},tone:'neutral'});
+  // Una propuesta de Planificar (no la del inicio) sigue yendo a Planificar.
+  expect(nextStep(graph(),activity([item({kind:'PLAN_PROPOSAL',changeSetId:'otra'})],[],inception({status:'WORKING',needsAttention:false,changeSetId:'cs-inception'})))).toMatchObject({id:'review-proposal',target:{view:'planning',changeSetId:'otra'}});
+ });
  it('without features: start planning, or review a pending proposal',()=>{
-  expect(nextStep(graph(),null)).toMatchObject({id:'start',title:'Empieza describiendo qué quieres construir',target:{view:'planning'}});
+  expect(nextStep(graph(),null)).toMatchObject({id:'define-project',title:'Define tu proyecto',target:{view:'inception'}});
   expect(nextStep(graph(),activity([item({kind:'PLAN_PROPOSAL',changeSetId:'cs',target:'planning'})]))).toMatchObject({id:'review-proposal',target:{view:'planning',changeSetId:'cs'}});
  });
  it('pending proposals go to Planificar and pending decisions to Actividad, before anything else',()=>{

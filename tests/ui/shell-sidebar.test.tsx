@@ -18,13 +18,13 @@ describe('Barra lateral del shell',()=>{
   installShellIpc(nodes);const list=await open();
   expect(list.getAttribute('aria-orientation')).toBe('vertical');
   const tabs=within(list).getAllByRole('tab');
-  expect(tabs.map(tab=>tab.textContent?.replace(/(Ctrl\+|⌘)\d/,''))).toEqual(['Actividad','Grafo','Planificar','Agentes','Documentos']);
+  expect(tabs.map(tab=>tab.textContent?.replace(/(Ctrl\+|⌘)\d/,''))).toEqual(['Actividad','Grafo','Planificar','Agentes','Documentos','Inicio']);
   const panel=screen.getByRole('tabpanel');expect(panel.id).toBe(tabs[0]!.getAttribute('aria-controls'));expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0]!.id);
   expect(tabs.filter(tab=>tab.tabIndex===0)).toEqual([tabs[0]]);
   fireEvent.keyDown(tabs[0]!,{key:'ArrowDown'});expect(selected()).toBe(tabs[1]);expect(document.activeElement).toBe(tabs[1]);
-  fireEvent.keyDown(tabs[1]!,{key:'End'});expect(selected()).toBe(tabs[4]);
-  fireEvent.keyDown(tabs[4]!,{key:'ArrowDown'});expect(selected()).toBe(tabs[0]);
-  fireEvent.keyDown(tabs[0]!,{key:'ArrowUp'});expect(selected()).toBe(tabs[4]);
+  fireEvent.keyDown(tabs[1]!,{key:'End'});expect(selected()).toBe(tabs[5]);
+  fireEvent.keyDown(tabs[5]!,{key:'ArrowDown'});expect(selected()).toBe(tabs[0]);
+  fireEvent.keyDown(tabs[0]!,{key:'ArrowUp'});expect(selected()).toBe(tabs[5]);
  });
  it('changes view on click and with Ctrl/⌘+number shortcuts',async()=>{
   installShellIpc(nodes);await open();
@@ -59,13 +59,28 @@ describe('Barra lateral del shell',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Actualizar proyectos'}));
   await waitFor(()=>expect(client.queries.listProjects).toHaveBeenCalledTimes(2));
  });
- it('guides an empty project through Planificar → Aplicar → Ejecutar',async()=>{
+ it('opens an empty project in Inicio; Actividad guides Definir → Aprobar → Ejecutar with Planificar as alternative',async()=>{
   installShellIpc([root]);await open();
+  await waitFor(()=>expect(selected().textContent).toMatch(/Inicio/));
+  expect(screen.getByRole('heading',{level:1,name:'Inicio del proyecto'})).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab',{name:/Actividad/}));
   const empty=await screen.findByRole('region',{name:'Example Workspace aún no tiene features'});
-  expect(within(empty).getAllByRole('listitem').map(item=>item.querySelector('p')!.textContent)).toEqual(['1Planificar','2Aplicar','3Ejecutar']);
+  expect(within(empty).getAllByRole('listitem').map(item=>item.querySelector('p')!.textContent)).toEqual(['1Definir','2Aprobar','3Ejecutar']);
   expect(screen.queryByText('Siguiente paso')).toBeNull();
-  fireEvent.click(within(empty).getByRole('button',{name:'Describir qué quiero construir'}));
+  fireEvent.click(within(empty).getByRole('button',{name:'Definir mi proyecto'}));
+  await waitFor(()=>expect(selected().textContent).toMatch(/Inicio/));
+  fireEvent.click(screen.getByRole('tab',{name:/Actividad/}));
+  fireEvent.click(within(await screen.findByRole('region',{name:'Example Workspace aún no tiene features'})).getByRole('button',{name:'Prefiero describir el plan a mano'}));
   await waitFor(()=>expect(selected().textContent).toMatch(/Planificar/));
+ });
+ it('badges Inicio when the inception needs an answer and opens a project with a plan in Actividad',async()=>{
+  installShellIpc(nodes,{items:[],running:[],attentionCount:1,inception:{stage:'ASK_GOALS',status:'WAITING_USER',title:'Inicio del proyecto: te falta responder',detail:'3 preguntas sobre el objetivo y el alcance.',needsAttention:true,changeSetId:null,at:'now'}});
+  await open();
+  expect(selected().textContent).toMatch(/Actividad/);
+  expect(await screen.findByRole('img',{name:'Inicio del proyecto: te falta responder'})).toBeTruthy();
+  expect(screen.getByRole('heading',{name:'Responde las preguntas del asistente de inicio'})).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Responder'}));
+  await waitFor(()=>expect(selected().textContent).toMatch(/Inicio/));
  });
 });
 

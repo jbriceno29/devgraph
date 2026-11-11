@@ -10,10 +10,10 @@ export const tabId=(view:ShellView)=>`vista-tab-${view}`;
 export const panelId=(view:ShellView)=>`vista-panel-${view}`;
 const focusRing='focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
-interface SidebarProps { projects:ProjectSummaryDto[]; activeProject:ProjectSummaryDto; onOpenProject(id:string):void; onRefreshProjects():void; view:ShellView; onSelectView(view:ShellView):void; attentionCount:number; nodes:GraphNodeView[]; selectedId:string|null; onSelectNode(id:string):void }
+interface SidebarProps { projects:ProjectSummaryDto[]; activeProject:ProjectSummaryDto; onOpenProject(id:string):void; onRefreshProjects():void; view:ShellView; onSelectView(view:ShellView):void; attentionCount:number; /** Texto de la insignia de Inicio cuando falta responder o aprobar (null: sin insignia). */ inceptionBadge?:string|null; nodes:GraphNodeView[]; selectedId:string|null; onSelectNode(id:string):void }
 
 /** Barra lateral: proyecto, vistas (tablist con atajos), árbol del proyecto y tema. En < 900 px se pliega a iconos y se abre como panel superpuesto. */
-export function Sidebar({projects,activeProject,onOpenProject,onRefreshProjects,view,onSelectView,attentionCount,nodes,selectedId,onSelectNode}:SidebarProps) {
+export function Sidebar({projects,activeProject,onOpenProject,onRefreshProjects,view,onSelectView,attentionCount,inceptionBadge=null,nodes,selectedId,onSelectNode}:SidebarProps) {
  const [open,setOpen]=useState(false);const tabs=useRef<(HTMLButtonElement|null)[]>([]);
  const narrowHidden=open?'':'max-[900px]:hidden',narrowSr=open?'':'max-[900px]:sr-only';
  useEffect(()=>{if(!open)return;const close=(event:globalThis.KeyboardEvent)=>{if(event.key==='Escape')setOpen(false);};window.addEventListener('keydown',close);return ()=>window.removeEventListener('keydown',close);},[open]);
@@ -36,10 +36,10 @@ export function Sidebar({projects,activeProject,onOpenProject,onRefreshProjects,
     <button type="button" onClick={onRefreshProjects} className={`min-h-9 w-full rounded-lg px-2 text-left text-xs text-fg-muted hover:bg-surface-sunken hover:text-fg ${focusRing}`}>Actualizar proyectos</button>
    </div>
    <div role="tablist" aria-label="Vistas del proyecto" aria-orientation="vertical" className="space-y-0.5 px-2 py-3">
-    {VIEWS.map((info,index)=>{const selected=info.id===view,count=info.id==='activity'?attentionCount:0;return <button key={info.id} ref={element=>{tabs.current[index]=element;}} id={tabId(info.id)} type="button" role="tab" aria-selected={selected} aria-controls={panelId(info.id)} tabIndex={selected?0:-1} aria-keyshortcuts={`${keys}+${index+1}`} title={`${info.label} (${shortcutLabel(index)})`} onClick={()=>pick(info.id)} onKeyDown={event=>onTabKey(event,index)} className={`relative flex min-h-9 w-full items-center gap-3 rounded-lg px-3 text-sm ${focusRing} ${selected?'bg-accent-soft font-semibold text-fg':'text-fg-muted hover:bg-surface-sunken hover:text-fg'} ${open?'':'max-[900px]:justify-center max-[900px]:px-0'}`}>
+    {VIEWS.map((info,index)=>{const selected=info.id===view,count=info.id==='activity'?attentionCount:info.id==='inception'&&inceptionBadge?1:0,badge=info.id==='inception'?inceptionBadge:`${count} ${count===1?'pendiente':'pendientes'} de tu atención`;return <button key={info.id} ref={element=>{tabs.current[index]=element;}} id={tabId(info.id)} type="button" role="tab" aria-selected={selected} aria-controls={panelId(info.id)} tabIndex={selected?0:-1} aria-keyshortcuts={`${keys}+${index+1}`} title={`${info.label} (${shortcutLabel(index)})`} onClick={()=>pick(info.id)} onKeyDown={event=>onTabKey(event,index)} className={`relative flex min-h-9 w-full items-center gap-3 rounded-lg px-3 text-sm ${focusRing} ${selected?'bg-accent-soft font-semibold text-fg':'text-fg-muted hover:bg-surface-sunken hover:text-fg'} ${open?'':'max-[900px]:justify-center max-[900px]:px-0'}`}>
      <span className={selected?'text-accent':''}>{info.icon}</span>
      <span className={`flex-1 text-left ${narrowSr}`}>{info.label}</span>
-     {count>0&&<span role="img" aria-label={`${count} pendientes de tu atención`} className={`min-w-5 rounded-full bg-warning px-1.5 text-center text-[11px] font-semibold leading-5 text-surface ${open?'':'max-[900px]:absolute max-[900px]:right-1 max-[900px]:top-0'}`}>{count}</span>}
+     {count>0&&<span role="img" aria-label={badge??''} className={`min-w-5 rounded-full bg-warning px-1.5 text-center text-[11px] font-semibold leading-5 text-surface ${open?'':'max-[900px]:absolute max-[900px]:right-1 max-[900px]:top-0'}`}>{count}</span>}
      <kbd aria-hidden="true" className={`font-sans text-[11px] text-fg-subtle ${narrowHidden}`}>{shortcutLabel(index)}</kbd>
     </button>;})}
    </div>

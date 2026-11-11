@@ -40,6 +40,7 @@ export function useActivity(projectId: string): { summary: ActivitySummaryDto | 
       events.onGraphRevisionUpdated?.(event => { if (event.projectId === projectId) schedule(); }),
       events.onExecutionStatusChanged?.(() => schedule()),
       events.onPilotUpdated?.(event => { if (event.projectId === projectId) schedule(); }),
+      window.workspaceIpc?.inception?.onUpdated?.(event => { if (event.projectId === projectId) schedule(); }),
     ];
     return () => { clearTimeout(timer); for (const stop of stops) { try { stop?.(); } catch { /* ya cerrada */ } } };
   }, [projectId, reload]);

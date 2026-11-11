@@ -25,6 +25,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   stopPilot:(projectId,featureId)=>invokeCore('pilot:stop',[projectId,featureId]),
   resumePilot:(projectId,featureId)=>invokeCore('pilot:resume',[projectId,featureId]),
   setAuthMode:(projectId,mode)=>invokeCore('provider:set_auth_mode',[projectId,mode]),
+  exportFeatureReport:(projectId,featureId)=>invokeCore('metrics:export_report',[projectId,featureId]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),
@@ -42,6 +43,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
   getExecutionPolicy:projectId=>invokeCore('policy:get',[projectId]),
   getFeaturePilot:(projectId,featureId)=>invokeCore('pilot:get',[projectId,featureId]),
+  getFeatureReport:(projectId,featureId)=>invokeCore('metrics:feature_report',[projectId,featureId]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},

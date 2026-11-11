@@ -17,4 +17,5 @@ export type PilotStatusDto='RUNNING'|'PAUSED'|'WAITING_USER'|'COMPLETED'|'STOPPE
 export interface PilotRunDto {id:string;featureId:string;status:PilotStatusDto;reason:string|null;startedAt:string;endedAt:string|null}
 export interface PilotEventDto {id:string;sequenceNo:number;kind:string;message:string;workItemId:string|null;executionId:string|null;createdAt:string}
 export interface FeaturePilotDto {autonomy:FeatureAutonomyDto;run:PilotRunDto|null;events:PilotEventDto[];tasks:Array<{id:string;displayKey:string;title:string;status:string;dependsOn:string[]}>;usage:{utilization:number|null;window:string;resetsAt:string|null;status:string}|null;running:boolean;authMode:'subscription'|'api_key';apiKeyAvailable:boolean;availableModels:string[]}
+export interface FeatureReportDto {report:import('../../application/execution/feature-metrics.js').FeatureReport;markdown:string}
 export interface ResolveExecutionApprovalInput {executionId:string;requestId:string;decision:{approved:true;scope:'ONCE'|'SESSION';note?:string}|{approved:false;reason:string}}

@@ -11,7 +11,7 @@ afterEach(cleanup);
 const execution:AgentExecutionDto={id:'run-1',projectId:'p',workItemId:'t1',profileId:'dev',providerId:'provider',sessionId:null,contextSnapshotId:'snap',status:'COMPLETED',modelUsed:'claude-haiku-5-5',initialCommit:'aaaaaaaa1',finalCommit:'bbbbbbbb2',branchOrWorktree:'/wt',baseBranch:'feature/feat-001-tareas',executionBranch:'graphdev/task-001-run',revisionOf:null,reviewStatus:null,reviewNote:null,mergedCommit:null,reviewedAt:null,resultSummary:'Diff audit passed.',startedAt:'now',completedAt:'now'};
 const detail:ExecutionDetailDto={execution,taskStatus:'IN_REVIEW',files:[{path:'src/tasks.js',changeType:'ADDED',additions:40,deletions:0,patch:'+export const tasks = [];'},{path:'.env',changeType:'ADDED',additions:0,deletions:0,patch:null}],testLog:'$ node --test\nℹ pass 8',deniedActions:[{toolName:'Bash',target:'npm test | tail',reason:'mode'}],canAccept:true,canRequestChanges:true};
 function ipc(overrides:Record<string,unknown>={}){
- const value={commands:{acceptExecution:vi.fn(async()=>({execution:{...execution,reviewStatus:'ACCEPTED',mergedCommit:'cccccccc3',branchOrWorktree:null},merged:true,conflict:null})),requestExecutionChanges:vi.fn(async()=>({...execution,id:'run-2',revisionOf:'run-1',status:'RUNNING'})),setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),updateExecutionPolicy:vi.fn(async(_p:string,policy:unknown)=>policy)},queries:{getExecutionDetail:vi.fn(async()=>detail),getFeaturePilot:vi.fn(),getExecutionPolicy:vi.fn(async()=>({writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:[]}))},...overrides};
+ const value={commands:{acceptExecution:vi.fn(async()=>({execution:{...execution,reviewStatus:'ACCEPTED',mergedCommit:'cccccccc3',branchOrWorktree:null},merged:true,conflict:null})),requestExecutionChanges:vi.fn(async()=>({...execution,id:'run-2',revisionOf:'run-1',status:'RUNNING'})),setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),exportFeatureReport:vi.fn(),updateExecutionPolicy:vi.fn(async(_p:string,policy:unknown)=>policy)},queries:{getExecutionDetail:vi.fn(async()=>detail),getFeaturePilot:vi.fn(),getFeatureReport:vi.fn(),getExecutionPolicy:vi.fn(async()=>({writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:[]}))},...overrides};
  Object.defineProperty(window,'workspaceIpc',{configurable:true,value});return value;
 }
 
@@ -70,7 +70,7 @@ describe('ExecutionPolicyForm',()=>{
  });
 
  it('shows the server error when a command is rejected',async()=>{
-  ipc({commands:{setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),updateExecutionPolicy:vi.fn(async()=>{throw new Error('Comando no permitido: npm test | tail.');})}});
+  ipc({commands:{setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),exportFeatureReport:vi.fn(),updateExecutionPolicy:vi.fn(async()=>{throw new Error('Comando no permitido: npm test | tail.');})}});
   render(<ExecutionPolicyForm projectId="p"/>);
   fireEvent.click(await screen.findByRole('button',{name:'Guardar política'}));
   expect((await screen.findByRole('alert')).textContent).toContain('Comando no permitido');

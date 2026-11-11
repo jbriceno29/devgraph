@@ -120,6 +120,8 @@ Objetivo: H3. El mismo workspace funciona con Claude Code y con Codex.
 
 ### Etapa 5: Demostración y medición (M, continuo)
 
+> **Primera medición (2026-11-10, Claude `haiku`, 5 tareas sobre `todo-app`)** — informe en `docs/benchmarks/2026-11-10-todo-app-haiku.md`, herramienta en `scripts/benchmark/`, métricas por feature en la app (panel de autonomía y exportación a `reports/`). Resultado: **empate en calidad** (5/5 tareas y 13/13 pruebas ocultas en ambos brazos), **+38 % de tokens de entrada en el workspace** (sesión nueva por tarea; el contexto curado solo ocupó 0,9–2,5 k tokens), tiempo igual, y **0 mensajes humanos con el piloto frente a 5 en el chat**. Según el criterio de corte, **H1 no pasa en este escenario y H4 sí**. El escenario era demasiado fácil para exponer el problema que el proyecto ataca (conversaciones largas, temas mezclados, decisiones previas no repetidas); la siguiente medición debe diseñarse para eso antes de decidir.
+
 Objetivo: decidir con datos, según el criterio de corte de la sección 2.
 
 - **Protocolo:** el mismo conjunto de tareas resuelto de tres formas: (a) Claude Code a mano en una conversación, (b) Graph Workspace con el contexto curado y (c) Graph Workspace en piloto automático. Primero en `todo-app`, después en `graphdev2` mismo.
@@ -139,7 +141,9 @@ Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demues
 
 ## 6. Orden y dependencias
 
-Etapa 1 → Etapa 2 → Etapa 3 → Etapa 5 (primera medición con Claude) → Etapa 4 → Etapa 5 (medición con Codex) → Etapa 6.
+Etapa 1 → Etapa 2 → Etapa 3 → Etapa 5 (medición con Claude) → Etapa 6 → Etapa 4 → Etapa 5 (medición con Codex).
+
+Reordenado el 2026-11-10: la Etapa 4 pasa al final porque su prueba real necesita cuota de Codex, que no hay disponible ahora; preparar el código sin poder validarlo con el CLI real no compensa.
 
 El protocolo de medición (Etapa 5) se define al empezar la Etapa 1 para registrar métricas desde la primera tarea real. Todo cambio se prueba primero con el motor simulado y después, una vez por etapa, con el motor real sobre una copia del proyecto.
 

@@ -1,0 +1,5 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
+import { createTaskList } from '../src/tasks.js'; import { saveTasks, loadTasks } from '../src/storage.js';
+const file = () => join(mkdtempSync(join(tmpdir(), 'bench-')), 'tasks.json');
+test('B5 save and load keep ids, titles and state', async () => { const l = createTaskList(); const a = l.add('a'); l.add('b'); l.complete(a.id); const f = file(); await saveTasks(l, f); const loaded = await loadTasks(f); assert.deepEqual(loaded.list(), l.list()); });
+test('B5 loaded list supports the full interface and continues ids', async () => { const l = createTaskList(); l.add('a'); const b = l.add('b'); const f = file(); await saveTasks(l, f); const loaded = await loadTasks(f); const c = loaded.add('c'); assert.ok(c.id > b.id); loaded.rename(c.id, 'cc'); loaded.complete(c.id); loaded.remove(b.id); assert.deepEqual(loaded.list().map(t => t.title), ['a', 'cc']); });

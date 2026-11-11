@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { manualWorkItemTransitions, type WorkItemStatus } from '../../../domain/work-management/entities.js';
 import { ProjectWorkspaceStore } from '../../persistence/sqlite/project-workspace-store.js';
@@ -35,6 +35,7 @@ import { GitIsolationService } from '../../git/git-isolation-service.js';
 import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
 import { FeaturePilot } from '../../../application/execution/feature-pilot.js';
+import { FeatureMetrics, renderFeatureReport } from '../../../application/execution/feature-metrics.js';
 import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
@@ -79,6 +80,11 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  };
  // One autopilot service per project, sharing that project's orchestrator.
  const getPilot=(projectId:string)=>{const cached=pilots.get(projectId);if(cached)return cached;const pilot=new FeaturePilot(getExecutionService(projectId),new SqlitePilotRepository(store.openProject(projectId).database),(channel,payload)=>emit(channel,payload));pilots.set(projectId,pilot);return pilot;};
+ const featureReport=(projectId:string,featureId:string)=>{
+  const workspace=store.openProject(projectId);const feature=workspace.graph.findEntityById(featureId);if(!feature||feature.projectId!==projectId||feature.entityType!=='FEATURE')throw new Error('Feature no encontrada en este proyecto.');
+  const report=new FeatureMetrics(getExecutionService(projectId),new SqlitePilotRepository(workspace.database)).report(projectId,featureId);
+  return {report,markdown:renderFeatureReport(report,`${feature.displayKey} ${feature.title}`)};
+ };
  const startWatcher=async(projectId:string)=>{
   const management=getManagement(projectId),repositoryPath=management.repositoryPath(projectId);
   const previous=watchers.get(projectId);previous?.stop();watchers.delete(projectId);
@@ -183,6 +189,13 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
      return {...status,authMode:service.authMode(projectId),apiKeyAvailable:Boolean(process.env.ANTHROPIC_API_KEY),availableModels:service.listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER')?.availableModels??[]};
+    }
+    case 'metrics:feature_report': {const projectId=String(args[0]??''),featureId=String(args[1]??'');return featureReport(projectId,featureId);}
+    case 'metrics:export_report': {
+     const projectId=String(args[0]??''),featureId=String(args[1]??'');const {markdown}=featureReport(projectId,featureId);
+     if(!/^[a-f0-9-]{36}$/i.test(projectId))throw new Error('Proyecto inválido.');
+     const directory=join(workspaceRoot,'projects',projectId,'reports');mkdirSync(directory,{recursive:true});
+     const path=join(directory,`feature-${featureId.replace(/[^a-zA-Z0-9-]/g,'')}-${new Date().toISOString().replace(/[:.]/g,'-')}.md`);writeFileSync(path,markdown,'utf8');return {path};
     }
     case 'pilot:set_autonomy': {const projectId=String(args[0]??'');return getPilot(projectId).setAutonomy(projectId,String(args[1]??''),args[2] as import('../../../shared/contracts/agent-view.js').SetFeatureAutonomyInput);}
     case 'pilot:start': {const projectId=String(args[0]??'');return getPilot(projectId).start(projectId,String(args[1]??''),{acknowledgeCost:Boolean((args[2] as {acknowledgeCost?:boolean}|undefined)?.acknowledgeCost)});}

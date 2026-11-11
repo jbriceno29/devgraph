@@ -150,3 +150,19 @@ describe('feature autopilot (Stage 3)',()=>{
   expect(status.run).toMatchObject({status:'STOPPED',reason:expect.stringContaining('interrumpido')});
  });
 });
+
+describe('feature metrics (Stage 5)',()=>{
+ it('reports attempts, first-attempt acceptance, interventions and usage, and exports a markdown report',async()=>{
+  const {core,projectId,pilot,until}=await setup('bad-then-good',{tasks:[['t1','TASK-001','READY']],edges:[]});
+  await pilot('set_autonomy',{level:'PILOT',maxAttempts:2});
+  await pilot('start',{acknowledgeCost:true});
+  await until(value=>value.run?.status==='COMPLETED');
+  const {report,markdown}=await core.handle({channel:'metrics:feature_report',args:[projectId,'feat']}) as {report:{tasks:Array<{displayKey:string;attempts:number;acceptedOnFirstAttempt:boolean;interventions:number;executions:Array<{status:string;checksPassed:boolean|null;filesChanged:number}>}>;totals:{done:number;executions:number;acceptedWithoutHuman:number;interventions:number;acceptedOnFirstAttempt:number}};markdown:string};
+  expect(report.totals).toMatchObject({done:1,executions:2,acceptedWithoutHuman:1,interventions:0,acceptedOnFirstAttempt:0});
+  expect(report.tasks[0]).toMatchObject({displayKey:'TASK-001',attempts:2,acceptedOnFirstAttempt:false,interventions:0});
+  expect(report.tasks[0]!.executions.map(item=>`${item.status}:${item.checksPassed}`)).toEqual(['FAILED:false','COMPLETED:true']);
+  expect(markdown).toContain('| Tareas cerradas | 1 de 1 |');
+  const exported=await core.handle({channel:'metrics:export_report',args:[projectId,'feat']}) as {path:string};
+  expect((await import('node:fs')).readFileSync(exported.path,'utf8')).toBe(markdown.replace(/Generado: .*/,(await import('node:fs')).readFileSync(exported.path,'utf8').match(/Generado: .*/)![0]));
+ });
+});

@@ -11,11 +11,16 @@ export function useInception(projectId: string) {
   const [loadError, setLoadError] = useState<unknown>(null), [actionError, setActionError] = useState<unknown>(null), [busy, setBusy] = useState(false);
   const current = useRef(projectId);
   current.current = projectId;
+  // Cada lectura o acción toma un número al empezar; su respuesta solo se aplica si no se aplicó ya otra que empezó después,
+  // para que una lectura lenta no pise el estado que devolvió una acción o un aviso posterior.
+  const started = useRef(0), applied = useRef(0);
+  const fresh = (request: number) => { if (request < applied.current) return false; applied.current = request; return true; };
 
   const reload = useCallback(async () => {
     if (!client) return;
-    try { const next = await client.get(projectId); if (current.current === projectId) { setView(next); setLoadError(null); } }
-    catch (reason) { if (current.current === projectId) setLoadError(reason); }
+    const request = ++started.current;
+    try { const next = await client.get(projectId); if (current.current === projectId && fresh(request)) { setView(next); setLoadError(null); } }
+    catch (reason) { if (current.current === projectId && request >= applied.current) setLoadError(reason); }
   }, [client, projectId]);
   useEffect(() => { setView(null); setActionError(null); void reload(); }, [reload]);
   useEffect(() => client?.onUpdated(event => { if (event.projectId === projectId) void reload(); }), [client, projectId, reload]);
@@ -25,7 +30,8 @@ export function useInception(projectId: string) {
   const act = useCallback(async (work: (ipc: InceptionIpcClient) => Promise<InceptionViewDto | void>) => {
     if (!client) return false;
     setBusy(true); setActionError(null);
-    try { const next = await work(client); if (next && current.current === projectId) setView(next); return true; }
+    const request = ++started.current;
+    try { const next = await work(client); if (next && current.current === projectId && fresh(request)) setView(next); return true; }
     catch (reason) { setActionError(reason); return false; }
     finally { setBusy(false); }
   }, [client, projectId]);

@@ -5,6 +5,7 @@ import type { ShellTarget } from '../shell/next-step.js';
 import { ErrorNotice } from '../errors.js';
 import { control, primary, secondary } from '../ui.js';
 import { useInception } from './use-inception.js';
+import { useResetOnChange } from '../use-reset-on-change.js';
 import { QuestionsStep } from './QuestionsStep.js';
 import { ProposalReview, approvalBlockers, taskCount } from './ProposalReview.js';
 import { RepositoryCreated, RepositorySetup } from './RepositorySetup.js';
@@ -22,7 +23,8 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
  const {client,view,loadError,actionError,setActionError,busy,reload,act}=useInception(projectId);
  const [mode,setMode]=useState<Mode>('view'),[created,setCreated]=useState<InitializeRepositoryResultDto|null>(null);
  const heading=useRef<HTMLHeadingElement>(null),screenKey=view?`${view.stage}:${view.status}:${mode}`:'loading',firstScreen=useRef(true);
- useEffect(()=>{setMode('view');},[view?.stage,view?.status]);
+ // Un paso nuevo del motor vuelve a la vista normal; en el render, no en un efecto que pisaría un clic hecho justo después.
+ useResetOnChange(view?`${view.stage}:${view.status}`:null,()=>setMode('view'));
  // Al cambiar de paso el foco va al título de la nueva pantalla (no en la primera carga: ahí lo pone el shell).
  useEffect(()=>{if(screenKey==='loading')return;if(firstScreen.current){firstScreen.current=false;return;}heading.current?.focus();},[screenKey]);
 

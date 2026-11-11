@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
-import { WorkspaceNavigationProvider } from '@desktop/state/workspace-navigation-context.js';
-import { WorkspaceShell } from '@desktop/state/WorkspaceShell.js';
 import { activityItem, installShellIpc } from './shell-ipc.js';
+import { openShell as open, selectView } from './helpers.js';
 const nodes=[{id:'root',key:'PROJ-01',type:'PROJECT_ROOT' as const,label:'Example Workspace',status:'ACTIVE'},{id:'feature',key:'FEAT-01',type:'FEATURE' as const,label:'Feature work',status:'DRAFT',parentId:'root'},{id:'task',key:'TASK-001',type:'WORK_ITEM' as const,label:'Primera tarea',status:'READY',parentId:'feature'}];
 afterEach(cleanup);
-async function open(){render(<WorkspaceNavigationProvider><WorkspaceShell/></WorkspaceNavigationProvider>);fireEvent.click((await screen.findByText('Example Workspace')).closest('button')!);await screen.findByRole('tablist',{name:'Vistas del proyecto'});}
 
 it('updates navigation focus and inspector immediately when a graph node is selected',async()=>{
  const client=installShellIpc(nodes);await open();
- fireEvent.click(screen.getByRole('tab',{name:/Grafo/}));
+ await selectView(/Grafo/);
  fireEvent.click(await screen.findByRole('button',{name:'Feature: Feature work'}));
  await waitFor(()=>expect(client.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('feature'));
  // The inspector renders when the IPC answer arrives, a tick after the call: wait for it instead of reading at once.
@@ -25,9 +23,9 @@ it('opens the project on Actividad with breadcrumb, explanation and the next ste
  expect(screen.getByRole('heading',{level:1,name:'Actividad'})).toBeTruthy();
  expect(screen.queryByText(/Project graph|Structured project knowledge/)).toBeNull();
  expect(await screen.findByRole('heading',{name:'Ejecuta TASK-001 «Primera tarea» con un agente'})).toBeTruthy();
- fireEvent.click(screen.getByRole('button',{name:'Ejecutar TASK-001'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Ejecutar TASK-001'}));
  await waitFor(()=>expect(screen.getByRole('tab',{name:/Agentes/}).getAttribute('aria-selected')).toBe('true'));
- expect(window.workspaceIpc.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('task');
+ await waitFor(()=>expect(window.workspaceIpc.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('task'));
 });
 
 it('follows inbox actions to the target view and selects the work item',async()=>{

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useResetOnChange } from '../use-reset-on-change.js';
 import type { AgentExecutionDto, ExecutionDetailDto } from '../../../shared/contracts/agent-view.js';
 import { fileChangeLabel } from '../labels.js';
 import { errorText } from '../errors.js';
@@ -30,7 +31,7 @@ export function ExecutionReview({ execution, models, defaultModel, onChanged }: 
       .catch(reason => { if (current) setMessage({ tone: 'error', text: errorText(reason) }); });
     return () => { current = false; };
   }, [execution.id, execution.status, execution.reviewStatus]);
-  useEffect(() => { setModel(defaultModel ?? ''); }, [defaultModel]);
+  useResetOnChange(defaultModel, () => setModel(defaultModel ?? ''));
 
   const accept = async () => {
     setBusy(true); setMessage(null);

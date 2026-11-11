@@ -39,11 +39,11 @@ describe('«Integrar en main» in the feature pilot panel',()=>{
   let call=0;
   ipc(pilot(ready),async()=>{call+=1;if(call===1)return {...merged,merged:false,alreadyIntegrated:true,commit:null};throw new Error(errors[call-2]);});panel();
   fireEvent.click(await screen.findByRole('button',{name:'Integrar en main'}));
-  fireEvent.click(screen.getByRole('button',{name:'Sí, integrar'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Sí, integrar'}));
   expect((await screen.findByRole('status')).textContent).toBe('Ya estaba integrada en main.');
   for(const message of errors){
-   fireEvent.click(screen.getByRole('button',{name:'Integrar en main'}));
-   fireEvent.click(screen.getByRole('button',{name:'Sí, integrar'}));
+   fireEvent.click(await screen.findByRole('button',{name:'Integrar en main'}));
+   fireEvent.click(await screen.findByRole('button',{name:'Sí, integrar'}));
    await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain(message));
    expect(screen.queryByRole('status')).toBeNull();
    fireEvent.click(screen.getByRole('button',{name:'Cancelar'}));

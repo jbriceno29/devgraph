@@ -1,3 +1,4 @@
+import { act } from '@testing-library/react';
 import { vi } from 'vitest';
 import type { InceptionIpcClient, InceptionProposalDto, InceptionQuestionDto, InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 
@@ -24,12 +25,14 @@ export const proposal:InceptionProposalDto={
 export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,updatedAt:null};
 export const usage2={calls:2,inputTokens:9000,outputTokens:3000,cacheReadTokens:0,cacheCreationTokens:0,costUsd:0.043};
 
-/** Cliente `inception` falso con estado: start/answer responden WORKING y `emit` simula el aviso del motor. */
+/** Cliente `inception` falso con estado: start/answer responden WORKING y `emit` simula el aviso del motor.
+ *  Todo resuelve en el siguiente microtask (sin temporizadores) y `emit` va siempre dentro de `act`, para que React procese el aviso
+ *  antes de la siguiente línea de la prueba aunque quien llame olvide envolverlo. */
 export function fakeInception(initial:Partial<InceptionViewDto>={}) {
  let view:InceptionViewDto={...notStarted,...initial};
  const listeners=new Set<(event:{projectId:string;stage:InceptionViewDto['stage'];status:InceptionViewDto['status']})=>void>();
  const set=(patch:Partial<InceptionViewDto>)=>{view={...view,...patch};return view;};
- const emit=(patch:Partial<InceptionViewDto>)=>{set(patch);for(const listener of listeners)listener({projectId:view.projectId,stage:view.stage,status:view.status});};
+ const emit=(patch:Partial<InceptionViewDto>)=>{set(patch);act(()=>{for(const listener of [...listeners])listener({projectId:view.projectId,stage:view.stage,status:view.status});});};
  const client:InceptionIpcClient={
   get:vi.fn(async()=>view),
   start:vi.fn(async(_projectId,input)=>set({stage:'ASK_GOALS',status:'WORKING',nextAction:'WAIT',brief:input.brief,model:input.model??null,error:null,updatedAt:new Date().toISOString()})),

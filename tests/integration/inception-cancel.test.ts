@@ -17,16 +17,19 @@ const FAKE=`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path');
 const dir=__dirname,mode=fs.readFileSync(path.join(dir,'mode'),'utf8').trim(),args=process.argv.slice(2);
 if(args[0]==='auth'){process.stdout.write(JSON.stringify({loggedIn:true})+'\\n',()=>process.exit(0));return;}
-fs.writeFileSync(path.join(dir,'pid'),String(process.pid));
 process.on('SIGINT',()=>{fs.appendFileSync(path.join(dir,'signals'),'SIGINT\\n');if(mode==='polite')process.exit(130);});
 process.on('SIGTERM',()=>{fs.appendFileSync(path.join(dir,'signals'),'SIGTERM\\n');process.exit(143);});
+// The pid is the "ready" signal for the test: write it only once the handlers exist, or an early SIGINT kills the process unlogged.
+fs.writeFileSync(path.join(dir,'pid'),String(process.pid));
 process.stdin.resume();setInterval(()=>undefined,1000);
 `;
 function fake(mode:'polite'|'stubborn'){
  const root=mkdtempSync(join(tmpdir(),'graphdev2-cancel-'));roots.push(root);
  const bin=join(root,'bin');mkdirSync(bin);const executable=join(bin,'claude');
  writeFileSync(executable,FAKE);chmodSync(executable,0o755);writeFileSync(join(bin,'mode'),mode);
- const pid=async()=>{for(let i=0;i<200&&!existsSync(join(bin,'pid'));i++)await new Promise(resolve=>setTimeout(resolve,20));const value=Number(readFileSync(join(bin,'pid'),'utf8'));pids.push(value);return value;};
+ // Waits for a complete pid (the file can exist and still be empty for an instant); never returns 0, which would mean "my process group" to kill().
+ const readPid=()=>existsSync(join(bin,'pid'))?Number(readFileSync(join(bin,'pid'),'utf8')):0;
+ const pid=async()=>{let value=readPid();for(let i=0;i<500&&!(value>0);i++){await new Promise(resolve=>setTimeout(resolve,20));value=readPid();}if(!(value>0))throw new Error('the fake CLI never wrote its pid');pids.push(value);return value;};
  const gone=async(id:number,ms=3000)=>{const end=Date.now()+ms;while(alive(id)&&Date.now()<end)await new Promise(resolve=>setTimeout(resolve,20));return !alive(id);};
  const signals=()=>existsSync(join(bin,'signals'))?readFileSync(join(bin,'signals'),'utf8').trim().split('\n'):[];
  return {root,executable,pid,gone,signals};

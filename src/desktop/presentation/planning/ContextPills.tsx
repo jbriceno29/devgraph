@@ -1,4 +1,5 @@
-import { useEffect,useState } from 'react';
+import { useState } from 'react';
+import { useResetOnChange } from '../use-reset-on-change.js';
 import type { ContextPackageDto } from '../../../shared/contracts/context-view.js';
 import { AUTHORITY_TIER, authorityLabel, exclusionLabel, retrievalLabel, sourceTypeLabel } from '../labels.js';
 import { ErrorNotice } from '../errors.js';
@@ -6,7 +7,7 @@ import { ErrorNotice } from '../errors.js';
 const summary='min-h-9 cursor-pointer rounded py-2.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 /** El contexto que recibiría un agente para la feature o tarea elegida: qué fuentes entran, cuáles no y por qué. */
 export function ContextPills({context,loading,error,onRefresh}:{context:ContextPackageDto|null;loading:boolean;error:string|null;onRefresh(maxTokens:number,query?:string):void}){
- const [budget,setBudget]=useState('32000');useEffect(()=>{if(context)setBudget(String(context.snapshot.tokenUsage.maxAllowedTokens));},[context?.snapshot.id]);
+ const [budget,setBudget]=useState(()=>context?String(context.snapshot.tokenUsage.maxAllowedTokens):'32000');useResetOnChange(context?.snapshot.id,()=>{if(context)setBudget(String(context.snapshot.tokenUsage.maxAllowedTokens));});
  const tiers=context?[...new Set(context.snapshot.includedSources.map(source=>source.authorityTier))].sort():[];
  return <section className="rounded-lg border border-border bg-surface-sunken p-3" aria-label="Paquete de contexto">
   <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">Contexto para el agente</h3>{context&&<span className="text-[11px] text-accent">{context.snapshot.includedSources.length} incluidas · {context.snapshot.excludedSources.length} excluidas</span>}</div>

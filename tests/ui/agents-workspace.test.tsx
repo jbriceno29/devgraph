@@ -53,7 +53,7 @@ it('explains when no READY WorkItems are available',async()=>{
  const ipc=client();Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
  render(<AgentsWorkspace projectId="project" nodes={[{id:'task-draft',key:'TASK-002',type:'WORK_ITEM',label:'Draft task',status:'DRAFT'}]} selectedEntityId="task-draft"/>);
  await screen.findByRole('heading',{name:'Monitor de tareas'});
- expect((screen.getByLabelText('Tarea lista') as HTMLSelectElement).disabled).toBe(true);
+ await waitFor(()=>expect((screen.getByLabelText('Tarea lista') as HTMLSelectElement).disabled).toBe(true));
  expect((screen.getByRole('button',{name:'Iniciar ejecución · Claude Code CLI'}) as HTMLButtonElement).disabled).toBe(true);
  expect(screen.getByText('No hay tareas listas para ejecutar').parentElement!.textContent).toMatch(/Grafo.*«Lista»/);
 });
@@ -88,7 +88,7 @@ it('opens the execution that comes from the inbox, on Revisión when it already 
  Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
  render(<AgentsWorkspace projectId="project" nodes={[{id:'task-ready',key:'TASK-001',type:'WORK_ITEM',label:'Task',status:'IN_REVIEW'}]} selectedEntityId="task-ready" selectedExecutionId="execution-2"/>);
  await waitFor(()=>expect(screen.getByRole('tab',{name:/Revisión/}).getAttribute('aria-selected')).toBe('true'));
- expect((screen.getByLabelText('Ejecución') as HTMLSelectElement).value).toBe('execution-2');
+ await waitFor(()=>expect((screen.getByLabelText('Ejecución') as HTMLSelectElement).value).toBe('execution-2'));
  expect(await screen.findByRole('button',{name:/Aceptar e integrar/})).toBeTruthy();
  expect(ipc.queries.getExecutionDetail).toHaveBeenCalledWith('execution-2');
 });

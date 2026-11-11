@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
+import { useResetOnChange } from '../use-reset-on-change.js';
 import type { FeatureIntegrationResultDto, FeatureIntegrationStateDto } from '../../../shared/contracts/agent-view.js';
 import { ErrorNotice } from '../errors.js';
 import { primary, secondary } from '../ui.js';
@@ -16,7 +17,7 @@ export function FeatureIntegration({featureKey,state,onIntegrate,onDone,classNam
  const id=useId();
  const [confirming,setConfirming]=useState(false),[busy,setBusy]=useState(false);
  const [result,setResult]=useState<FeatureIntegrationResultDto|null>(null),[error,setError]=useState<unknown>(null);
- useEffect(()=>{setConfirming(false);setResult(null);setError(null);},[featureKey]);
+ useResetOnChange(featureKey,()=>{setConfirming(false);setResult(null);setError(null);});
  if(!onIntegrate||!canIntegrate(state))return null;
  const target=result?.targetBranch??state.targetBranch;
  const run=async()=>{setBusy(true);setError(null);try{const next=await onIntegrate();setResult(next);setConfirming(false);onDone?.(next);}catch(reason){setError(reason);}finally{setBusy(false);}};

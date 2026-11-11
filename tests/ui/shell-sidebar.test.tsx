@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { WorkspaceNavigationProvider } from '@desktop/state/workspace-navigation-context.js';
-import { WorkspaceShell } from '@desktop/state/WorkspaceShell.js';
 import { buildProjectTree } from '@desktop/presentation/shell/ProjectTree.js';
 import { activityItem, installShellIpc } from './shell-ipc.js';
+import { openShell as open, selectedTab as selected } from './helpers.js';
 const root={id:'root',key:'PROJ-01',type:'PROJECT_ROOT' as const,label:'Example Workspace',status:'ACTIVE'};
 const nodes=[root,{id:'mod',key:'MOD-001',type:'MODULE' as const,label:'Catálogo',status:'ACTIVE',parentId:'root'},{id:'feat',key:'FEAT-001',type:'FEATURE' as const,label:'Búsqueda',status:'DRAFT',parentId:'mod'},
  {id:'t2',key:'TASK-002',type:'WORK_ITEM' as const,label:'Endpoint',status:'IN_PROGRESS',parentId:'feat'},{id:'t1',key:'TASK-001',type:'WORK_ITEM' as const,label:'Índice',status:'DONE',parentId:'feat'},{id:'old',key:'TASK-009',type:'WORK_ITEM' as const,label:'Vieja',status:'ARCHIVED',parentId:'feat'}];
 const attention={attentionCount:2,running:[],items:[activityItem({id:'a',kind:'TASK_IN_REVIEW',title:'TASK-002 lista para revisar',needsAttention:true,workItemId:'t2'}),activityItem({id:'b',kind:'APPROVAL_PENDING',title:'Un agente pide permiso',needsAttention:true})]};
 afterEach(cleanup);
-async function open(){render(<WorkspaceNavigationProvider><WorkspaceShell/></WorkspaceNavigationProvider>);fireEvent.click((await screen.findByText('Example Workspace')).closest('button')!);return screen.findByRole('tablist',{name:'Vistas del proyecto'});}
-const selected=()=>screen.getAllByRole('tab').find(tab=>tab.getAttribute('aria-selected')==='true')!;
 
 describe('Barra lateral del shell',()=>{
  it('is an accessible vertical tablist wired to its tabpanel, with arrow keys',async()=>{
@@ -37,7 +34,7 @@ describe('Barra lateral del shell',()=>{
  it('shows the attention count as a labelled badge on Actividad',async()=>{
   installShellIpc(nodes,attention);await open();
   expect(await screen.findByRole('img',{name:'2 pendientes de tu atención'})).toBeTruthy();
-  expect(screen.getByRole('tab',{name:/Actividad.*2 pendientes de tu atención/})).toBeTruthy();
+  expect(await screen.findByRole('tab',{name:/Actividad.*2 pendientes de tu atención/})).toBeTruthy();
   expect(await screen.findByRole('heading',{name:'Un agente espera tu permiso'})).toBeTruthy();
  });
  it('lists modules › features › tasks with their status and selects the node in the graph',async()=>{
@@ -62,7 +59,7 @@ describe('Barra lateral del shell',()=>{
  it('opens an empty project in Inicio; Actividad guides Definir → Aprobar → Ejecutar with Planificar as alternative',async()=>{
   installShellIpc([root]);await open();
   await waitFor(()=>expect(selected().textContent).toMatch(/Inicio/));
-  expect(screen.getByRole('heading',{level:1,name:'Inicio del proyecto'})).toBeTruthy();
+  expect(await screen.findByRole('heading',{level:1,name:'Inicio del proyecto'})).toBeTruthy();
   fireEvent.click(screen.getByRole('tab',{name:/Actividad/}));
   const empty=await screen.findByRole('region',{name:'Example Workspace aún no tiene features'});
   expect(within(empty).getAllByRole('listitem').map(item=>item.querySelector('p')!.textContent)).toEqual(['1Definir','2Aprobar','3Ejecutar']);
@@ -78,8 +75,8 @@ describe('Barra lateral del shell',()=>{
   await open();
   expect(selected().textContent).toMatch(/Actividad/);
   expect(await screen.findByRole('img',{name:'Inicio del proyecto: te falta responder'})).toBeTruthy();
-  expect(screen.getByRole('heading',{name:'Responde las preguntas del asistente de inicio'})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Responder'}));
+  expect(await screen.findByRole('heading',{name:'Responde las preguntas del asistente de inicio'})).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button',{name:'Responder'}));
   await waitFor(()=>expect(selected().textContent).toMatch(/Inicio/));
  });
 });

@@ -10,6 +10,7 @@ import { NextStepBanner } from '../presentation/shell/NextStepBanner.js';
 import { EmptyProject } from '../presentation/shell/EmptyProject.js';
 import { InceptionAssistant } from '../presentation/inception/InceptionAssistant.js';
 import { ThemeToggle } from '../presentation/shell/ThemeToggle.js';
+import { useResetOnChange } from '../presentation/use-reset-on-change.js';
 import { VIEWS, viewInfo } from '../presentation/shell/views.js';
 import { nextStep, type ShellTarget, type ShellView } from '../presentation/shell/next-step.js';
 import { useWorkspaceNavigation } from './workspace-navigation-context.js';
@@ -52,7 +53,8 @@ function ProjectShell({workspace}:{workspace:WorkspaceLoadedStateDto}) {
  const activity=useActivity(projectId);
  const step=useMemo(()=>nextStep(workspace.graph,activity.summary),[workspace.graph,activity.summary]);
  const hasFeatures=nodes.some(node=>node.type==='FEATURE'&&node.status!=='ARCHIVED');
- useEffect(()=>{setView(hasPlan?'activity':'inception');},[projectId]);
+ // Al cambiar de proyecto vuelve a su vista inicial; en el mismo render, para no pisar una vista que el usuario acabe de elegir.
+ useResetOnChange(projectId,()=>{setView(hasPlan?'activity':'inception');setFocus({});});
  const inception=activity.summary?.inception??null;
  /** Cambia de vista (y selecciona lo indicado) desde la bandeja, el banner o un atajo; lleva el foco al título. */
  const go=useCallback((input:ShellTarget)=>{const target:ShellTarget=input.view==='planning'&&input.changeSetId&&input.changeSetId===inception?.changeSetId?{view:'inception'}:input;if(target.workItemId)void state.selectEntity(target.workItemId);setFocus({changeSetId:target.changeSetId??null,executionId:target.executionId??null});setView(target.view);requestAnimationFrame(()=>heading.current?.focus());},[state.selectEntity,inception?.changeSetId]);

@@ -3,6 +3,7 @@ import { ExecutionReview } from './ExecutionReview.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
 import { FeaturePilotPanel } from './FeaturePilotPanel.js';
 import { EngineAuthForm } from './EngineAuthForm.js';
+import { useResetOnChange } from '../use-reset-on-change.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import type { AgentEventRecordDto,AgentExecutionDto,AgentProfileDto } from '../../../shared/contracts/agent-view.js';
 import { eventLabel, executionStatusLabel, shortDate } from '../labels.js';
@@ -36,8 +37,10 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId,selectedExecut
  // En Revisión, si lo elegido no terminó, se propone la primera ejecución pendiente de revisar.
  useEffect(()=>{if(tab!=='review'||selectedExecution?.status==='COMPLETED')return;const next=executions.find(item=>item.status==='COMPLETED'&&!item.reviewStatus);if(next)setSelectedExecutionId(next.id);},[tab]);
  // Preselecciona el modelo predeterminado cuando cambia el perfil (y con él el motor).
- useEffect(()=>{setModel(selectedProfile?.defaultModel??'');},[selectedProfile?.id,selectedProfile?.defaultModel]);
- useEffect(()=>{const selected=readyItems.find(item=>item.id===selectedEntityId);if(selected)setWorkItemId(selected.id);else if(!readyItems.some(item=>item.id===workItemId))setWorkItemId(readyItems[0]?.id??'');},[readyItems,selectedEntityId,workItemId]);
+ useResetOnChange(`${selectedProfile?.id??''}|${selectedProfile?.defaultModel??''}`,()=>setModel(selectedProfile?.defaultModel??''));
+ // La tarea elegida en el grafo se preselecciona cuando cambia; después el usuario puede elegir otra sin que se revierta.
+ useResetOnChange(selectedEntityId,()=>{if(readyItems.some(item=>item.id===selectedEntityId))setWorkItemId(selectedEntityId!);});
+ useEffect(()=>{if(readyItems.some(item=>item.id===workItemId))return;setWorkItemId(readyItems.find(item=>item.id===selectedEntityId)?.id??readyItems[0]?.id??'');},[readyItems,selectedEntityId,workItemId]);
  useEffect(()=>{const unsubscribeStatus=window.workspaceIpc.events.onExecutionStatusChanged(event=>{if(event.workItemId){void window.workspaceIpc.queries.listExecutions(projectId).then(setExecutions).catch(setError);}});const unsubscribeEvent=window.workspaceIpc.events.onExecutionEventReceived(event=>{if(event.executionId!==selectedExecutionId)return;void window.workspaceIpc.queries.listExecutionEvents(event.executionId).then(setEvents).catch(setError);});return()=>{unsubscribeStatus();unsubscribeEvent();};},[projectId,selectedExecutionId]);
  useEffect(()=>{if(!selectedExecutionId){setEvents([]);return;}let active=true;void window.workspaceIpc.queries.listExecutionEvents(selectedExecutionId).then(records=>{if(active)setEvents(records);}).catch(reason=>{if(active)setError(reason);});return()=>{active=false;};},[selectedExecutionId]);
  useEffect(()=>{const dialog=dialogRef.current;if(!dialog)return;if(pendingApproval&&!dialog.open){dialog.returnValue='';dialog.showModal();}else if(!pendingApproval&&dialog.open)dialog.close();},[pendingApproval]);

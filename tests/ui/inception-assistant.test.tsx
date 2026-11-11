@@ -39,7 +39,7 @@ describe('Asistente de inicio',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Empezar'}));
   await waitFor(()=>expect(client.start).toHaveBeenCalledWith('p',{brief:'Una lista de tareas para la terminal',model:'opus'}));
   const thinking=await screen.findByRole('heading',{name:'Pensando el objetivo…'});
-  expect(document.activeElement).toBe(thinking);
+  await waitFor(()=>expect(document.activeElement).toBe(thinking));
   expect(screen.getByRole('status').textContent).toMatch(/preparando unas pocas preguntas/);
 
   act(()=>emit({status:'WAITING_USER',nextAction:'ANSWER',questions,usage:{...usage2,calls:1,costUsd:0.012}}));
@@ -82,13 +82,13 @@ describe('Asistente de inicio',()=>{
   expect(client.approve).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Sí, crear el plan'}));
   await waitFor(()=>expect(client.approve).toHaveBeenCalledWith('p'));
-  expect(onApplied).toHaveBeenCalled();
+  await waitFor(()=>expect(onApplied).toHaveBeenCalled());
   view.rerender(<InceptionAssistant projectId="p" nodes={applied} onNavigate={onNavigate} onApplied={onApplied}/>);
   expect(await screen.findByRole('heading',{name:'Proyecto listo'})).toBeTruthy();
   expect(currentStep().textContent).toMatch(/Listo/);
   expect(screen.getByText('Ejecuta la primera tarea: Preparar el proyecto')).toBeTruthy();
   expect(screen.getByRole('region',{name:'Documentos creados'})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Ir a la primera tarea'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Ir a la primera tarea'}));
   expect(onNavigate).toHaveBeenCalledWith({view:'agents',workItemId:'t1'});
  });
 
@@ -137,9 +137,9 @@ describe('Asistente de inicio',()=>{
   expect(await screen.findByText('La feature Fundación no tiene tareas.')).toBeTruthy();
   expect(screen.getByRole('alert').textContent).toMatch(/Avisos de la propuesta/);
   expect((screen.getByRole('button',{name:'Aprobar y crear el plan'}) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Pedir otra propuesta'}));
   expect(await screen.findByRole('heading',{name:'Pedir otra propuesta'})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Cambiar mis respuestas'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Cambiar mis respuestas'}));
   expect(await screen.findByRole('heading',{name:'Cambiar tus respuestas'})).toBeTruthy();
   expect((within(screen.getByRole('group',{name:'1. ¿Quién va a usar la app?'})).getByRole('radio',{name:/^Solo yo/}) as HTMLInputElement).checked).toBe(true);
   expect((screen.getByLabelText('Tu respuesta a la pregunta 3') as HTMLInputElement).value).toBe('Algo propio');
@@ -152,7 +152,7 @@ describe('Asistente de inicio',()=>{
   const {client,emit}=setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Idea',repositoryPath:'/home/ana/app',questions,answers,proposal,notes:['Sin base de datos']});
   expect(await screen.findByText('Sin base de datos')).toBeTruthy();
   expect(screen.getByText('Esta propuesta tiene en cuenta lo que pediste')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Pedir otra propuesta'}));
   const title=await screen.findByRole('heading',{name:'Pedir otra propuesta'});
   await waitFor(()=>expect(document.activeElement).toBe(title));
   expect(screen.queryByRole('group',{name:/¿Quién va a usar la app\?/})).toBeNull();
@@ -167,10 +167,10 @@ describe('Asistente de inicio',()=>{
   act(()=>emit({status:'WAITING_USER',nextAction:'APPROVE',notes:['Sin base de datos','Usa Python en lugar de Node']}));
   expect(await screen.findByText('Usa Python en lugar de Node')).toBeTruthy();
   // «Volver a la propuesta» no llama al motor; vacío vuelve a intentarlo con lo mismo.
-  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Pedir otra propuesta'}));
   fireEvent.click(await screen.findByRole('button',{name:'Volver a la propuesta'}));
   expect(await screen.findByRole('heading',{name:proposal.title})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Pedir otra propuesta'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Pedir otra propuesta'}));
   fireEvent.click(await screen.findByRole('button',{name:'Generar otra propuesta'}));
   await waitFor(()=>expect(client.answer).toHaveBeenLastCalledWith('p',answers,''));
  });
@@ -178,7 +178,7 @@ describe('Asistente de inicio',()=>{
  it('«Proyecto listo» opens Agentes with the scaffold task by id, and falls back to its title',async()=>{
   const {onNavigate,view}=setup({stage:'APPLIED',status:'DONE',nextAction:'DONE',proposal:{...proposal,status:'APPLIED'},scaffoldTaskId:'t-real'},applied);
   expect(await screen.findByRole('heading',{name:'Proyecto listo'})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Ir a la primera tarea'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Ir a la primera tarea'}));
   expect(onNavigate).toHaveBeenCalledWith({view:'agents',workItemId:'t-real'});
   view.unmount();
   const fallback=setup({stage:'APPLIED',status:'DONE',nextAction:'DONE',proposal:{...proposal,status:'APPLIED'},scaffoldTaskId:null},applied);
@@ -190,7 +190,7 @@ describe('Asistente de inicio',()=>{
   const {client,emit}=setup({stage:'ASK_GOALS',status:'FAILED',nextAction:'RETRY_QUESTIONS',brief:'Idea',model:'sonnet',error:'connect ECONNREFUSED 127.0.0.1'});
   expect(await screen.findByRole('heading',{name:'No se pudo completar el paso'})).toBeTruthy();
   expect(screen.getByRole('alert').textContent).toMatch(/No se pudo comunicar con el núcleo/);
-  fireEvent.click(screen.getByRole('button',{name:'Reintentar las preguntas'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Reintentar las preguntas'}));
   await waitFor(()=>expect(client.start).toHaveBeenCalledWith('p',{brief:'Idea',model:'sonnet'}));
   act(()=>emit({stage:'PROPOSAL',status:'FAILED',nextAction:'RETRY_PROPOSAL',questions,answers:[{questionId:'q1',answer:''}],error:'El motor devolvió JSON inválido'}));
   fireEvent.click(await screen.findByRole('button',{name:'Reintentar la propuesta'}));
@@ -199,7 +199,7 @@ describe('Asistente de inicio',()=>{
   const confirm=vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
   fireEvent.click(await screen.findByRole('button',{name:'Empezar de nuevo'}));
   expect(client.restart).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button',{name:'Empezar de nuevo'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Empezar de nuevo'}));
   await waitFor(()=>expect(client.restart).toHaveBeenCalledWith('p'));
   expect(confirm).toHaveBeenCalledTimes(2);
   expect(await screen.findByRole('heading',{name:'Cuéntanos tu idea'})).toBeTruthy();

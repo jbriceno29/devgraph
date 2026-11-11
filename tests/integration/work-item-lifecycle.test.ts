@@ -43,7 +43,9 @@ describe('work item lifecycle through the workspace core (Stage 1)',()=>{
   await expect(core.handle({channel:'execution:start',args:[{projectId:project.id,workItemId:'t2',profileId:developer.id}]})).rejects.toThrow('TASK-001 (READY)');
 
   const started=await core.handle({channel:'execution:start',args:[{projectId:project.id,workItemId:'t1',profileId:developer.id}]}) as {id:string;baseBranch:string|null;branchOrWorktree:string};
-  expect(started.baseBranch).toBe('main');
+  // A task without a feature gets its own integration branch, created from the checked-out branch without switching it.
+  expect(started.baseBranch).toBe('feature/task-001-create-schema');
+  expect(execFileSync('git',['branch','--show-current'],{cwd:repo,encoding:'utf8'}).trim()).toBe('main');
   let done:{status:string;initialCommit:string;finalCommit:string|null}|undefined;
   for(let attempt=0;attempt<100&&done?.status!=='COMPLETED';attempt+=1){done=(await core.handle({channel:'execution:list',args:[project.id]}) as Array<{id:string;status:string;initialCommit:string;finalCommit:string|null}>).find(item=>item.id===started.id);await new Promise(resolve=>setTimeout(resolve,30));}
   expect(done!.status).toBe('COMPLETED');

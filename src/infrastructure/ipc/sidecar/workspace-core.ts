@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ProjectWorkspaceStore } from '../../persistence/sqlite/project-workspace-store.js';
 import { GetGraphViewUseCase } from '../../../application/graph/get-graph-view.js';
 import { GetEntityInspectorDetailsUseCase } from '../../../application/graph/get-entity-inspector-details.js';
@@ -150,6 +152,14 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'execution:list_events': return findExecutionService(String(args[0]??'')).listEvents(String(args[0]??''));
     case 'execution:start': {const input=args[0] as StartAgentExecutionInput;return toAgentExecutionDto(await getExecutionService(input.projectId).start(input));}
     case 'execution:cancel': {const executionId=String(args[0]??'');return toAgentExecutionDto(await findExecutionService(executionId).cancel(executionId));}
+    case 'execution:accept': {const executionId=String(args[0]??'');const result=await findExecutionService(executionId).accept(executionId);return {...result,execution:toAgentExecutionDto(result.execution)};}
+    case 'execution:request_changes': {const input=args[0] as import('../../../shared/contracts/agent-view.js').RequestExecutionChangesInput;return toAgentExecutionDto(await findExecutionService(input.executionId).requestChanges(input));}
+    case 'execution:get_detail': {
+     const executionId=String(args[0]??'');const detail=findExecutionService(executionId).detail(executionId);
+     const logPath=join(workspaceRoot,'projects',detail.execution.projectId,'executions',detail.execution.id,'test-output.log');
+     const testLog=existsSync(logPath)?readFileSync(logPath,'utf8').slice(-200_000):null;
+     return {...detail,execution:toAgentExecutionDto(detail.execution),testLog};
+    }
     case 'execution:resolve_approval': {const input=args[0] as {executionId:string;requestId:string;decision:import('../../../domain/agents/models.js').ApprovalDecision};await findExecutionService(input.executionId).resolveApproval(input.executionId,input.requestId,input.decision);return {resolved:true};}
     default: throw new Error(`Unsupported workspace IPC channel: ${channel}`);
    }
@@ -178,4 +188,4 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
 function summarize(project:Project):ProjectSummaryDto{return {id:project.props.id,name:project.props.name,slug:project.props.slug,description:project.props.description??null,currentRevision:project.currentRevision,createdAt:project.props.createdAt,updatedAt:project.props.updatedAt};}
 function toDocumentDto(document:import('../../../application/ports/artifact-management-port.js').ArtifactDocumentRecord):ArtifactDocumentDto {return {id:document.id,projectId:document.projectId,displayKey:document.displayKey,title:document.title,summary:document.summary,entityType:document.entityType,artifactType:document.artifactType,version:document.version,adrNumber:document.adrNumber,relativePath:document.relativePath,contentHash:document.contentHash,syncStatus:document.syncStatus};}
 function toDocumentViewDto(view:import('../../../application/artifacts/artifact-management-service.js').DocumentView):ArtifactDocumentViewDto{return {document:toDocumentDto(view.document),content:view.content};}
-function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt};}
+function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt};}

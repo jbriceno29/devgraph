@@ -30,13 +30,25 @@ export interface AgentExecutionRepositoryPort {
   transitionWorkItem(projectId:string,workItemId:string,to:import('../../domain/work-management/entities.js').WorkItemStatus):number;
   /** Work items this one DEPENDS_ON (direct edges only). */
   listDependencies(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
+  /** Work items that DEPEND_ON this one. */
+  listDependents(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}>;
+  /** Nearest FEATURE ancestor of a work item (following parent links), or null. */
+  findFeatureFor(projectId:string,workItemId:string):{id:string;displayKey:string;title:string}|null;
+  /** Integration branch owned by a feature (or by a work item without a feature). */
+  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null;
+  saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void;
+  listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}>;
   recordFileDiffs(executionId:string,repositoryId:string,diffs:Array<Pick<ExecutionFileDiff,'filePath'|'changeType'|'additions'|'deletions'|'diffPatch'>>):void;
 }
 
 export interface GitIsolationPort {
-  prepare(input:{projectId:string;executionId:string;workItemKey:string;repositoryRoot:string;workspaceRoot:string;requireWorktree:boolean}):Promise<{workingDirectory:string;branchName:string;baseCommit:string;baseBranch:string|null}>;
+  prepare(input:{projectId:string;executionId:string;workItemKey:string;repositoryRoot:string;workspaceRoot:string;requireWorktree:boolean;startPoint?:string}):Promise<{workingDirectory:string;branchName:string;baseCommit:string;baseBranch:string|null}>;
   /** Removes a worktree and branch created by `prepare` that never received agent work. */
   discard(input:{repositoryRoot:string;workspaceRoot:string;workingDirectory:string;branchName:string}):Promise<void>;
+  currentBranch(repositoryRoot:string):Promise<string|null>;
+  branchExists(repositoryRoot:string,branchName:string):Promise<boolean>;
+  createIntegrationBranch(input:{repositoryRoot:string;preferredName:string;sourceRef:string}):Promise<string>;
+  squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
 }
 export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }
 

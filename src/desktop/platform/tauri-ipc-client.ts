@@ -16,6 +16,8 @@ export const workspaceIpc:WorkspaceIpcClient={
   startExecution:input=>invokeCore('execution:start',[input]),
   cancelExecution:executionId=>invokeCore('execution:cancel',[executionId]),
   resolveExecutionApproval:input=>invokeCore('execution:resolve_approval',[input]),
+  acceptExecution:executionId=>invokeCore('execution:accept',[executionId]),
+  requestExecutionChanges:input=>invokeCore('execution:request_changes',[input]),
  },
  queries:{
   listProjects:()=>invokeCore('project:list'),
@@ -30,6 +32,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   listAgentProfiles:projectId=>invokeCore('agent:list_profiles',[projectId]),
   listExecutions:projectId=>invokeCore('execution:list',[projectId]),
   listExecutionEvents:executionId=>invokeCore('execution:list_events',[executionId]),
+  getExecutionDetail:executionId=>invokeCore('execution:get_detail',[executionId]),
  },
  events:{
   onGraphRevisionUpdated(listener){return subscribe('graph:revision_updated',listener);},

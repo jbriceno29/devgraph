@@ -82,6 +82,37 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       .map(row=>({id:row.id,displayKey:row.display_key,title:row.title,status:row.status}));
   }
 
+  listDependents(projectId:string,workItemId:string):Array<{id:string;displayKey:string;title:string;status:string}> {
+    return (this.db.prepare(`SELECT k.id,k.display_key,k.title,k.status FROM graph_edges g JOIN knowledge_entities k ON k.id=g.source_id
+      WHERE g.project_id=? AND g.target_id=? AND g.edge_type='DEPENDS_ON' AND k.entity_type='WORK_ITEM' ORDER BY k.display_key`).all(projectId,workItemId) as Array<{id:string;display_key:string;title:string;status:string}>)
+      .map(row=>({id:row.id,displayKey:row.display_key,title:row.title,status:row.status}));
+  }
+
+  findFeatureFor(projectId:string,workItemId:string):{id:string;displayKey:string;title:string}|null {
+    const lookup=this.db.prepare('SELECT id,entity_type,display_key,title,parent_id FROM knowledge_entities WHERE project_id=? AND id=?');
+    let current=lookup.get(projectId,workItemId) as {id:string;entity_type:string;display_key:string;title:string;parent_id:string|null}|undefined;
+    for(let depth=0;current&&depth<16;depth+=1){
+      if(current.entity_type==='FEATURE')return {id:current.id,displayKey:current.display_key,title:current.title};
+      current=current.parent_id?lookup.get(projectId,current.parent_id) as typeof current:undefined;
+    }
+    return null;
+  }
+
+  getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null {
+    const row=this.db.prepare('SELECT branch_name,source_branch FROM feature_branches WHERE feature_id=?').get(ownerId) as {branch_name:string;source_branch:string}|undefined;
+    return row?{branchName:row.branch_name,sourceBranch:row.source_branch}:null;
+  }
+
+  saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void {
+    this.db.prepare(`INSERT INTO feature_branches(feature_id,project_id,repository_id,branch_name,source_branch,created_at) VALUES(?,?,?,?,?,?)
+      ON CONFLICT(feature_id) DO UPDATE SET branch_name=excluded.branch_name,source_branch=excluded.source_branch`).run(input.ownerId,input.projectId,input.repositoryId,input.branchName,input.sourceBranch,new Date().toISOString());
+  }
+
+  listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}> {
+    return (this.db.prepare('SELECT file_path,change_type,additions,deletions,diff_patch FROM execution_file_diffs WHERE execution_id=? ORDER BY file_path').all(executionId) as Array<{file_path:string;change_type:string;additions:number;deletions:number;diff_patch:string|null}>)
+      .map(row=>({filePath:row.file_path,changeType:row.change_type,additions:row.additions,deletions:row.deletions,diffPatch:row.diff_patch}));
+  }
+
   recordFileDiffs(executionId:string,repositoryId:string,diffs:ExecutionFileDiff[]):void {
     const insert=this.db.prepare(`INSERT INTO execution_file_diffs(id,execution_id,repository_id,file_path,change_type,additions,deletions,diff_patch) VALUES(?,?,?,?,?,?,?,?)`);
     this.db.transaction(()=>{for(const diff of diffs)insert.run(randomUUID(),executionId,repositoryId,diff.filePath,diff.changeType,diff.additions,diff.deletions,diff.diffPatch);}).immediate();
@@ -89,14 +120,14 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
 
   createExecution(execution: AgentExecution): void {
     this.db.prepare(`INSERT INTO agent_executions
-      (id,project_id,work_item_id,profile_id,provider_id,session_id,context_snapshot_id,status,model_used,initial_commit,final_commit,branch_or_worktree,base_branch,test_summary_json,result_summary,started_at,completed_at)
-      VALUES (@id,@projectId,@workItemId,@profileId,@providerId,@sessionId,@contextSnapshotId,@status,@modelUsed,@initialCommit,@finalCommit,@branchOrWorktree,@baseBranch,@testSummary,@resultSummary,@startedAt,@completedAt)`).run({...execution,testSummary:execution.testSummary===null?null:JSON.stringify(execution.testSummary)});
+      (id,project_id,work_item_id,profile_id,provider_id,session_id,context_snapshot_id,status,model_used,initial_commit,final_commit,branch_or_worktree,base_branch,execution_branch,revision_of,review_status,review_note,merged_commit,reviewed_at,test_summary_json,result_summary,started_at,completed_at)
+      VALUES (@id,@projectId,@workItemId,@profileId,@providerId,@sessionId,@contextSnapshotId,@status,@modelUsed,@initialCommit,@finalCommit,@branchOrWorktree,@baseBranch,@executionBranch,@revisionOf,@reviewStatus,@reviewNote,@mergedCommit,@reviewedAt,@testSummary,@resultSummary,@startedAt,@completedAt)`).run(toRow(execution));
   }
 
   updateExecution(execution: AgentExecution): void {
     const result=this.db.prepare(`UPDATE agent_executions SET session_id=@sessionId,context_snapshot_id=@contextSnapshotId,status=@status,model_used=@modelUsed,
-      initial_commit=@initialCommit,final_commit=@finalCommit,branch_or_worktree=@branchOrWorktree,base_branch=@baseBranch,test_summary_json=@testSummary,result_summary=@resultSummary,
-      started_at=@startedAt,completed_at=@completedAt WHERE id=@id`).run({...execution,testSummary:execution.testSummary===null?null:JSON.stringify(execution.testSummary)});
+      initial_commit=@initialCommit,final_commit=@finalCommit,branch_or_worktree=@branchOrWorktree,base_branch=@baseBranch,execution_branch=@executionBranch,revision_of=@revisionOf,review_status=@reviewStatus,review_note=@reviewNote,merged_commit=@mergedCommit,reviewed_at=@reviewedAt,
+      test_summary_json=@testSummary,result_summary=@resultSummary,started_at=@startedAt,completed_at=@completedAt WHERE id=@id`).run(toRow(execution));
     if (result.changes!==1) throw new Error(`AgentExecution not found: ${execution.id}`);
   }
 
@@ -165,11 +196,14 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
 
 interface ProfileRow {id:string;project_id:string;role_key:AgentProfile['roleKey'];name:string;system_instructions:string;default_provider_id:string|null;default_policy_id:string|null;provider_key:AgentProviderId;display_name:string;adapter_version:string;capabilities_json:string;config_json:string|null}
 interface WorkItemRow {id:string;project_id:string;display_key:string;title:string;summary:string;status:string;parent_id:string|null;created_revision:number;updated_revision:number;created_at:string;updated_at:string;work_type:WorkItem['workType'];work_priority:WorkItem['priority'];scope_notes:string|null;acceptance_criteria_json:string;recommended_profile_role:WorkItem['recommendedProfileRole']}
-interface ExecutionRow {id:string;project_id:string;work_item_id:string|null;profile_id:string;provider_id:string;session_id:string|null;context_snapshot_id:string|null;status:ExecutionStatus;model_used:string|null;initial_commit:string;final_commit:string|null;branch_or_worktree:string|null;base_branch:string|null;test_summary_json:string|null;result_summary:string|null;started_at:string|null;completed_at:string|null}
+interface ExecutionRow {id:string;project_id:string;work_item_id:string|null;profile_id:string;provider_id:string;session_id:string|null;context_snapshot_id:string|null;status:ExecutionStatus;model_used:string|null;initial_commit:string;final_commit:string|null;branch_or_worktree:string|null;base_branch:string|null;execution_branch:string|null;revision_of:string|null;review_status:AgentExecution['reviewStatus'];review_note:string|null;merged_commit:string|null;reviewed_at:string|null;test_summary_json:string|null;result_summary:string|null;started_at:string|null;completed_at:string|null}
 interface EventRow {id:string;sequence_no:number;created_at:string;payload_json:string}
 interface PolicyRow {id:string;project_id:string;name:string;writable_paths_json:string;readonly_paths_json:string;denied_paths_json:string;allowed_commands_json:string;auto_approve_scopes_json:string;require_worktree_isolation:number}
 function mapProfile(row:ProfileRow):AgentProfile {return {id:row.id,projectId:row.project_id,roleKey:row.role_key,name:row.name,systemInstructions:row.system_instructions,defaultProviderId:row.default_provider_id,defaultPolicyId:row.default_policy_id};}
 function mapProvider(row:ProfileRow):AgentProvider {let capabilities:AgentProvider['capabilities']=providerDefaults(row.provider_key==='opencode'?'claude-code':row.provider_key).capabilities;try{capabilities=JSON.parse(row.capabilities_json) as AgentProvider['capabilities'];}catch{}return {id:row.default_provider_id??`provider:${row.provider_key}`,providerKey:row.provider_key,displayName:row.display_name,adapterVersion:row.adapter_version,capabilities};}
-function mapExecution(row:ExecutionRow):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,baseBranch:row.base_branch??null,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
+function mapExecution(row:ExecutionRow):AgentExecution {let testSummary:unknown|null=null;try{testSummary=row.test_summary_json?JSON.parse(row.test_summary_json):null;}catch{}return {id:row.id,projectId:row.project_id,workItemId:row.work_item_id,profileId:row.profile_id,providerId:row.provider_id,sessionId:row.session_id,contextSnapshotId:row.context_snapshot_id,status:row.status,modelUsed:row.model_used,initialCommit:row.initial_commit,finalCommit:row.final_commit,branchOrWorktree:row.branch_or_worktree,baseBranch:row.base_branch??null,executionBranch:row.execution_branch??null,revisionOf:row.revision_of??null,reviewStatus:row.review_status??null,reviewNote:row.review_note??null,mergedCommit:row.merged_commit??null,reviewedAt:row.reviewed_at??null,testSummary,resultSummary:row.result_summary,startedAt:row.started_at,completedAt:row.completed_at};}
 function parseCriteria(json:string):AcceptanceCriterion[] {try{const value=JSON.parse(json) as unknown;if(!Array.isArray(value))return[];return value.flatMap((item,index)=>typeof item==='string'?[{id:String(index+1),description:item,verified:false}]:item&&typeof item==='object'&&typeof (item as {description?:unknown}).description==='string'?[{id:String((item as {id?:unknown}).id??index+1),description:(item as {description:string}).description,verified:Boolean((item as {verified?:unknown}).verified)}]:[]);}catch{return[];}}
 function parseArray(json:string):string[]{try{const value=JSON.parse(json) as unknown;return Array.isArray(value)?value.filter((entry):entry is string=>typeof entry==='string'):[];}catch{return[];}}
+function toRow(execution:AgentExecution):Record<string,unknown> {
+  return {...execution,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,testSummary:execution.testSummary===null?null:JSON.stringify(execution.testSummary)};
+}

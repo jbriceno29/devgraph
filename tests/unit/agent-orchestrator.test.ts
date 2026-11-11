@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentOrchestrator, describePolicy } from '../../src/application/execution/agent-orchestrator.js';
+import { AgentOrchestrator, branchSlug, describePolicy } from '../../src/application/execution/agent-orchestrator.js';
 import type { AgentAdapterPort } from '../../src/application/ports/agent-adapter-port.js';
 import type { AgentExecutionRepositoryPort, ExecutionValidatorPort, GitIsolationPort } from '../../src/application/ports/agent-execution-port.js';
 import type { AgentCapabilities, AgentEvent, AgentExecution } from '../../src/domain/agents/models.js';
@@ -11,14 +11,21 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>}={}){
- const task={status:options.taskStatus??'READY' as WorkItemStatus};let revision=1;const emitted:Array<{channel:string;payload:unknown}>=[];
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge']}={}){
+ const workItems=new Map<string,WorkItemStatus>([['task',options.taskStatus??'READY'],...(options.dependents??[]).map(item=>[item.id,item.status as WorkItemStatus] as [string,WorkItemStatus])]);
+ const task={get status(){return workItems.get('task')!;},set status(value:WorkItemStatus){workItems.set('task',value);}};const prompts:string[]=[];let revision=1;const branches=new Map<string,{branchName:string;sourceBranch:string}>();const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
  const events:Array<{executionId:string;event:AgentEvent}>=[];const statuses:string[]=[];
  const repository={
   findWorkItem:()=>({id:'task',displayKey:'TASK-001',status:task.status,title:'Task',summary:'Summary',acceptanceCriteria:[]}),
-  transitionWorkItem:(_projectId:string,_id:string,to:WorkItemStatus)=>{if(!canTransitionWorkItem(task.status,to))throw new Error(`invalid ${task.status}->${to}`);task.status=to;revision+=1;return revision;},
-  listDependencies:()=>options.dependencies??[],
+  transitionWorkItem:(_projectId:string,id:string,to:WorkItemStatus)=>{const from=workItems.get(id)!;if(!canTransitionWorkItem(from,to))throw new Error(`invalid ${from}->${to}`);workItems.set(id,to);revision+=1;return revision;},
+  listDependencies:(_projectId:string,id:string)=>id==='task'?(options.dependencies??[]):(options.dependentDependencies??[]),
+  listDependents:()=>(options.dependents??[]).map(item=>({...item,status:workItems.get(item.id)!})),
+  findFeatureFor:()=>({id:'feature',displayKey:'FEAT-001',title:'Gestión de tareas'}),
+  getIntegrationBranch:(ownerId:string)=>branches.get(ownerId)??null,
+  saveIntegrationBranch:(input:{ownerId:string;branchName:string;sourceBranch:string})=>{branches.set(input.ownerId,{branchName:input.branchName,sourceBranch:input.sourceBranch});},
+  listFileDiffs:()=>[],
+  listEvents:()=>[],
   findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'}}),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
   getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true}),
@@ -28,12 +35,12 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   findExecution:(id:string)=>executions.has(id)?{...executions.get(id)!}:null,
   appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
  } as unknown as AgentExecutionRepositoryPort;
- const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined)} satisfies GitIsolationPort;
+ const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true})))} satisfies GitIsolationPort;
  const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>capabilities,async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
  const validator:ExecutionValidatorPort={validate:options.validate??(async()=>({passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null}))};
  const contextBuilder={build:vi.fn(async()=>{await options.build?.();return {snapshot:{id:'snapshot'},packageText:''};})};
  const orchestrator=new AgentOrchestrator(repository,contextBuilder as never,{append:async()=>undefined},adapter,isolation,validator,'/ws',(channel,payload)=>{emitted.push({channel,payload});if(channel==='execution:status_changed')statuses.push((payload as {status:string}).status);});
- return {orchestrator,repository,isolation,adapter,events,statuses,executions,task,emitted,validator};
+ return {orchestrator,repository,isolation,adapter,events,statuses,executions,task,emitted,validator,workItemStatuses:workItems,prompts};
 }
 
 const start=(orchestrator:AgentOrchestrator)=>orchestrator.start({projectId:'project',workItemId:'task',profileId:'profile'});
@@ -184,5 +191,65 @@ describe('AgentOrchestrator work item lifecycle (Stage 1)',()=>{
   const {orchestrator}=harness({validate:async input=>{message=input.commitMessage;return {passed:true,finalCommit:'abc',resultSummary:'ok',testSummary:null};}});
   const execution=await start(orchestrator);await flush();
   expect(message).toBe(`TASK-001: Task\n\nGraph Workspace execution ${execution.id}`);
+ });
+});
+
+describe('AgentOrchestrator review: accept and request changes (Stage 1.2)',()=>{
+ const completed=async(options:Parameters<typeof harness>[0]={})=>{
+  const h=harness({validate:async()=>({passed:true,finalCommit:'run-commit',resultSummary:'Diff audit passed.',testSummary:null}),...options});
+  const execution=await start(h.orchestrator);await flush();
+  return {...h,execution:h.repository.findExecution(execution.id)!};
+ };
+
+ it('creates the feature integration branch once, from the checked-out branch, and starts runs from it',async()=>{
+  const {orchestrator,isolation}=await completed();
+  expect(isolation.createIntegrationBranch).toHaveBeenCalledWith({repositoryRoot:'/repo',preferredName:'feature/feat-001-gestion-de-tareas',sourceRef:'HEAD'});
+  expect(isolation.prepare).toHaveBeenLastCalledWith(expect.objectContaining({startPoint:'feature/feat-001-gestion-de-tareas'}));
+  expect(branchSlug('FEAT-002','Añadir búsqueda: ¿rápida?')).toBe('feat-002-anadir-busqueda-rapida');
+  void orchestrator;
+ });
+
+ it('squash-merges into the integration branch, marks the task DONE, cleans up and unblocks ready dependents',async()=>{
+  const {orchestrator,isolation,repository,task,execution,workItemStatuses}=await completed({
+   dependents:[{id:'t2',displayKey:'TASK-002',title:'Next',status:'BLOCKED'},{id:'t3',displayKey:'TASK-003',title:'Other',status:'BLOCKED'}],
+  });
+  // t3 also waits for an unfinished task.
+  (repository as unknown as {listDependencies:(p:string,id:string)=>unknown}).listDependencies=(_p:string,id:string)=>id==='t3'?[{id:'x',displayKey:'TASK-009',title:'x',status:'READY'}]:id==='t2'?[{id:'task',displayKey:'TASK-001',title:'Task',status:workItemStatuses.get('task')}]:[];
+  expect(task.status).toBe('IN_REVIEW');
+  const result=await orchestrator.accept(execution.id);
+  expect(isolation.squashMerge).toHaveBeenCalledWith(expect.objectContaining({targetBranch:'main',sourceRef:'run-commit',message:`TASK-001: Task\n\nGraph Workspace execution ${execution.id}`}));
+  expect(result).toMatchObject({merged:true,conflict:null,execution:{reviewStatus:'ACCEPTED',mergedCommit:'merged',branchOrWorktree:null}});
+  expect(isolation.discard).toHaveBeenCalledWith(expect.objectContaining({branchName:'graphdev/task-001-e'}));
+  expect(task.status).toBe('DONE');
+  expect(workItemStatuses.get('t2')).toBe('READY');
+  expect(workItemStatuses.get('t3')).toBe('BLOCKED');
+  await expect(orchestrator.accept(execution.id)).rejects.toThrow('ya fue revisada');
+ });
+
+ it('keeps the task IN_REVIEW and records the conflict when the merge fails',async()=>{
+  const {orchestrator,task,execution,isolation}=await completed({merge:async()=>({ok:false as const,reason:'CONFLICT' as const,detail:'Conflicto al integrar.',conflicts:['src/base.ts']})});
+  const result=await orchestrator.accept(execution.id);
+  expect(result).toMatchObject({merged:false,conflict:{reason:'CONFLICT',files:['src/base.ts']},execution:{reviewStatus:'MERGE_CONFLICT'}});
+  expect(task.status).toBe('IN_REVIEW');expect(isolation.discard).not.toHaveBeenCalled();
+ });
+
+ it('re-runs from the previous commit with the reviewer feedback in the prompt, and supersedes the old run',async()=>{
+  const prompts:string[]=[];
+  const {orchestrator,isolation,repository,task,execution}=await completed({adapter:{async *run(input){prompts.push(input.prompt);yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};}}});
+  const revision=await orchestrator.requestChanges({executionId:execution.id,feedback:'Valida también títulos de más de 200 caracteres.'});
+  expect(isolation.prepare).toHaveBeenLastCalledWith(expect.objectContaining({startPoint:'run-commit'}));
+  expect(revision).toMatchObject({revisionOf:execution.id,baseBranch:'main'});
+  expect(prompts.at(-1)).toContain('# Ajustes solicitados');expect(prompts.at(-1)).toContain('Valida también títulos de más de 200 caracteres.');
+  expect(repository.findExecution(execution.id)).toMatchObject({reviewStatus:'CHANGES_REQUESTED',reviewNote:'Valida también títulos de más de 200 caracteres.',branchOrWorktree:null});
+  await flush();
+  expect(task.status).toBe('IN_REVIEW');
+  await expect(orchestrator.requestChanges({executionId:execution.id,feedback:'otra vez'})).rejects.toThrow('no se haya aceptado ni ajustado');
+ });
+
+ it('refuses to accept or request changes outside of review',async()=>{
+  const {orchestrator,task,execution}=await completed();
+  task.status='BLOCKED';
+  await expect(orchestrator.accept(execution.id)).rejects.toThrow('debe estar en revisión');
+  await expect(orchestrator.requestChanges({executionId:execution.id,feedback:'x'})).rejects.toThrow('debe estar en revisión');
  });
 });

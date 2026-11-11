@@ -126,6 +126,8 @@ Objetivo: H3. El mismo workspace funciona con Claude Code y con Codex.
 
 > **Tercera medición, con correcciones (2026-11-11)** — `docs/benchmarks/2026-11-11-todo-v2-haiku-correcciones.md`. Con convenciones promovidas a reglas de nivel 1 y sin tareas pendientes en la búsqueda, el workspace **empata con el mejor chat en calidad (12/12, convención 9/9) sin intervención humana**, pero sigue gastando ~3,8 veces más tokens sin caché por abrir una sesión por tarea. Siguiente experimento: reutilizar la sesión dentro de una feature como caché.
 
+> **Cuarta medición: sesión por feature (2026-11-11)** — `docs/benchmarks/2026-11-11-todo-v2-haiku-sesion-por-feature.md`. Misma calidad (12/12, 9/9), pero el costo ponderado sube a 839 k (frente a 603 k sin reutilizar y 414 k del chat largo): la sesión acumulada dispara las lecturas de caché. Queda como opción desactivada por defecto. **Conclusión de la Etapa 5 con Claude:** el workspace iguala en calidad al mejor chat y elimina la intervención humana, a ~1,5 veces el costo ponderado del chat largo. H1 en su forma original (mejor resultado o menos costo) no se cumple; la decisión sobre cómo seguir queda en manos del usuario.
+
 Objetivo: decidir con datos, según el criterio de corte de la sección 2.
 
 - **Protocolo:** el mismo conjunto de tareas resuelto de tres formas: (a) Claude Code a mano en una conversación, (b) Graph Workspace con el contexto curado y (c) Graph Workspace en piloto automático. Primero en `todo-app`, después en `graphdev2` mismo.

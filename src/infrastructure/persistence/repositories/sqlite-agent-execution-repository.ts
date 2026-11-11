@@ -165,6 +165,10 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
     }).immediate();
   }
 
+  externalSessionId(sessionId:string):string|null {
+    return (this.db.prepare('SELECT external_session_id FROM agent_sessions WHERE id=?').get(sessionId) as {external_session_id:string|null}|undefined)?.external_session_id??null;
+  }
+
   findTaskOutcome(workItemId:string):TaskOutcome|null {
     const row=this.db.prepare('SELECT * FROM task_outcomes WHERE work_item_id=?').get(workItemId) as {work_item_id:string;project_id:string;execution_id:string;summary:string;files_json:string;checks_json:string;merged_commit:string|null;integration_branch:string|null;created_at:string}|undefined;
     if(!row)return null;

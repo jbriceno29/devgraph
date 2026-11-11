@@ -51,6 +51,8 @@ export interface AgentExecutionRepositoryPort {
    */
   recordTaskOutcome(outcome:TaskOutcome,repositoryId:string):number;
   findTaskOutcome(workItemId:string):TaskOutcome|null;
+  /** Engine-side id of an agent session (what `--resume` takes). */
+  externalSessionId(sessionId:string):string|null;
   listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}>;
   recordFileDiffs(executionId:string,repositoryId:string,diffs:Array<Pick<ExecutionFileDiff,'filePath'|'changeType'|'additions'|'deletions'|'diffPatch'>>):void;
 }

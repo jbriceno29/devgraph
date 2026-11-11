@@ -77,6 +77,8 @@ describe('Claude CLI arguments',()=>{
   expect(args.slice(0,10)).toEqual(['-p','--output-format','stream-json','--verbose','--permission-mode','dontAsk','--permission-prompts','none','--strict-mcp-config','--model']);
   expect(args[10]).toBe('sonnet');
   expect(()=>buildClaudeArgs({model:'sonnet --dangerously-skip-permissions'})).toThrow('Nombre de modelo inválido');
+  expect(buildClaudeArgs({resumeSessionId:'11111111-1111-4111-8111-111111111111'})).toEqual(expect.arrayContaining(['--resume','11111111-1111-4111-8111-111111111111']));
+  expect(()=>buildClaudeArgs({resumeSessionId:'x; rm -rf /'})).toThrow('Id de sesión inválido');
  });
 });
 

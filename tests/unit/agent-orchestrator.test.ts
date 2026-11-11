@@ -11,7 +11,7 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[];maxMinutes?:number}={}){
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[];maxMinutes?:number;connectionConfig?:Record<string,unknown>;capabilities?:Partial<AgentCapabilities>}={}){
  const workItems=new Map<string,WorkItemStatus>([['task',options.taskStatus??'READY'],...(options.dependents??[]).map(item=>[item.id,item.status as WorkItemStatus] as [string,WorkItemStatus])]);
  const task={get status(){return workItems.get('task')!;},set status(value:WorkItemStatus){workItems.set('task',value);}};const prompts:string[]=[];let revision=1;const branches=new Map<string,{branchName:string;sourceBranch:string}>();const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
@@ -30,17 +30,18 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   rejectPendingApprovals:vi.fn(),
   recordTaskOutcome:vi.fn(()=>{revision+=1;return revision;}),
   findTaskOutcome:()=>null,
-  findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'}}),
+  findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'},connectionConfig:options.connectionConfig??{}}),
+  externalSessionId:(sessionId:string)=>sessionId.replace('row-',''),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
   getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true,maxExecutionMinutes:options.maxMinutes??30}),
   listExecutions:()=>[...executions.values()].map(item=>({...item})),
   createExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
   updateExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
   findExecution:(id:string)=>executions.has(id)?{...executions.get(id)!}:null,
-  appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
+  appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});if(event.type==='SESSION_INITIALIZED'&&executions.has(executionId))executions.set(executionId,{...executions.get(executionId)!,sessionId:`row-${event.externalSessionId}`});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
  } as unknown as AgentExecutionRepositoryPort;
  const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true}))),mergeInto:vi.fn(async()=>({ok:true as const,commit:'synced',changed:true})),commitFiles:vi.fn(async()=>[{path:'src/a.ts',status:'ADDED' as const}]),pathsDiffer:vi.fn(async()=>[] as string[]),uncommittedPaths:vi.fn(async()=>[] as string[])} satisfies GitIsolationPort;
- const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>capabilities,async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
+ const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>({...capabilities,...options.capabilities}),async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
  const validator:ExecutionValidatorPort={validate:options.validate??(async()=>({passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null}))};
  const contextBuilder={build:vi.fn(async()=>{await options.build?.();return {snapshot:{id:'snapshot'},packageText:''};})};
  const orchestrator=new AgentOrchestrator(repository,contextBuilder as never,{append:async()=>undefined},adapter,isolation,validator,'/ws',(channel,payload)=>{emitted.push({channel,payload});if(channel==='execution:status_changed')statuses.push((payload as {status:string}).status);});
@@ -281,5 +282,29 @@ describe('AgentOrchestrator robustness (Stage 3.1)',()=>{
   const restarted=harness({seed:[repository.findExecution(execution.id)!],taskStatus:'IN_PROGRESS'});
   restarted.orchestrator.reconcileInterrupted('project');
   expect(restarted.repository.rejectPendingApprovals).toHaveBeenCalledWith(execution.id,expect.stringContaining('interrumpida'));
+ });
+});
+
+describe('AgentOrchestrator session reuse within a feature',()=>{
+ const sessionAdapter=(inputs:Array<{prompt:string;resumeSessionId?:string}>)=>({async *run(input:{prompt:string;resumeSessionId?:string}){inputs.push(input);yield {type:'SESSION_INITIALIZED' as const,timestamp:now(),externalSessionId:input.resumeSessionId??'11111111-1111-4111-8111-111111111111'};yield {type:'EXECUTION_FINISHED' as const,timestamp:now(),summary:'done'};}});
+ it('continues the engine session of the latest accepted run of the same feature',async()=>{
+  const inputs:Array<{prompt:string;resumeSessionId?:string}>=[];
+  const {orchestrator,task}=harness({adapter:sessionAdapter(inputs),capabilities:{supportsResume:true},connectionConfig:{sessionReuse:'feature'},validate:async()=>({passed:true,finalCommit:'c',resultSummary:'ok',testSummary:null})});
+  const first=await start(orchestrator);await flush();
+  expect(inputs[0]!.resumeSessionId).toBeUndefined();
+  await orchestrator.accept(first.id);
+  task.status='READY';
+  await start(orchestrator);await flush();
+  expect(inputs[1]!.resumeSessionId).toBe('11111111-1111-4111-8111-111111111111');
+  expect(inputs[1]!.prompt).toContain('# Sesión reanudada');
+ });
+ it('starts fresh by default, when reuse is disabled, or when the engine cannot resume',async()=>{
+  for(const options of [{capabilities:{supportsResume:true}},{connectionConfig:{sessionReuse:'none'},capabilities:{supportsResume:true}},{connectionConfig:{sessionReuse:'feature'},capabilities:{supportsResume:false}}]){
+   const inputs:Array<{prompt:string;resumeSessionId?:string}>=[];
+   const {orchestrator,task}=harness({adapter:sessionAdapter(inputs),validate:async()=>({passed:true,finalCommit:'c',resultSummary:'ok',testSummary:null}),...options});
+   const first=await start(orchestrator);await flush();await orchestrator.accept(first.id);task.status='READY';
+   await start(orchestrator);await flush();
+   expect(inputs[1]!.resumeSessionId).toBeUndefined();
+  }
  });
 });

@@ -69,7 +69,8 @@ export class AgentOrchestrator {
    this.moveTask(execution,previous?'IN_REVIEW':'READY','IN_PROGRESS');
    if(previous)await this.supersede(previous,input.feedback!.trim(),repositoryRoot);
    const prompt=buildTaskPrompt(profile.systemInstructions,workItem.title,workItem.summary,workItem.acceptanceCriteria.map(item=>item.description),context.packageText,policy,previous?{feedback:input.feedback!.trim(),previousSummary:previous.resultSummary,previousCommit:startPoint}:undefined,input.retryContext);
-   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt,...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
+   const resumeSessionId=this.sessionToResume(input.projectId,workItem.id,profile,previous);
+   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt:resumeSessionId?`${prompt}\n\n# Sesión reanudada\nEsta sesión continúa el trabajo previo de la misma feature, que se hizo en otros directorios. Trabaja solo en el directorio actual: las rutas absolutas de mensajes anteriores ya no son válidas. Si algo de lo anterior contradice el ContextSnapshot de arriba, manda el ContextSnapshot.`:prompt,...(resumeSessionId?{resumeSessionId}:{}),...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
    handedToConsumer=true;
    // A run may not exceed the policy's time limit: past it, the engine is stopped and the task made available again.
    const minutes=Number.isFinite(policy.maxExecutionMinutes)&&policy.maxExecutionMinutes>0?policy.maxExecutionMinutes:30;
@@ -291,6 +292,22 @@ export class AgentOrchestrator {
   * Keeps the WorkItem in step with its execution, only from the expected state: a status the user changed
   * meanwhile is never overwritten. Best effort: a failure here must not break the execution flow.
   */
+ /**
+  * The engine session of the latest accepted run in the same feature, with the same provider — reused as a cache so a
+  * new task does not pay the engine's start-up again. Opt-in with `sessionReuse: 'feature'` in the provider config:
+  * measured on 2026-11-11 it cut uncached input by 13 % but doubled cache reads, a worse cost-weighted trade, so it is off
+  * by default.
+  * Never crosses features or engines: the workspace, not the session, carries context between them.
+  */
+ private sessionToResume(projectId:string,workItemId:string,profile:{provider:{id:string};connectionConfig?:Record<string,unknown>},revisionOf:AgentExecution|null):string|undefined{
+  if(!this.adapter.getCapabilities().supportsResume||profile.connectionConfig?.sessionReuse!=='feature')return undefined;
+  const feature=this.repository.findFeatureFor(projectId,workItemId);
+  const sameFeature=(execution:AgentExecution)=>execution.workItemId!==null&&(execution.workItemId===workItemId||(feature!==null&&this.repository.findFeatureFor(projectId,execution.workItemId)?.id===feature.id));
+  const candidate=revisionOf??this.repository.listExecutions(projectId).filter(execution=>execution.providerId===profile.provider.id&&execution.status==='COMPLETED'&&execution.reviewStatus==='ACCEPTED'&&execution.sessionId&&sameFeature(execution)).sort((a,b)=>(b.completedAt??'').localeCompare(a.completedAt??''))[0];
+  if(!candidate?.sessionId)return undefined;
+  return this.repository.externalSessionId(candidate.sessionId)??undefined;
+ }
+
  /** The integration branch of the task's feature (or of the task itself when it has no feature), created on first use. */
  private async integrationBranchFor(projectId:string,workItem:{id:string;displayKey:string;title:string},repositoryRoot:string,repositoryId:string):Promise<string>{
   const feature=this.repository.findFeatureFor(projectId,workItem.id);

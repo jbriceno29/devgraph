@@ -118,11 +118,15 @@ export class ClaudeCodeAdapter implements AgentAdapterPort {
   }
 }
 
-export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy'>): string[] {
+export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId'>): string[] {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config'];
   if (input.model) {
     if (!MODEL_PATTERN.test(input.model)) throw new Error(`Nombre de modelo inválido: ${input.model}`);
     args.push('--model', input.model);
+  }
+  if (input.resumeSessionId) {
+    if (!/^[0-9a-f-]{36}$/i.test(input.resumeSessionId)) throw new Error(`Id de sesión inválido: ${input.resumeSessionId}`);
+    args.push('--resume', input.resumeSessionId);
   }
   args.push(...buildClaudePermissionArgs(input.policy ?? { writablePaths: [], readonlyPaths: [], deniedPaths: [], allowedCommands: [] }));
   return args;

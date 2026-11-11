@@ -10,6 +10,8 @@ export interface AgentRunInput {
   policy?: AgentRunPolicy;
   /** Provider connection settings (e.g. `authMode`), opaque to the application layer. */
   providerConfig?: Record<string, unknown>;
+  /** Engine session to continue (a cache of earlier work in the same feature); the workspace stays the source of truth. */
+  resumeSessionId?: string;
 }
 
 export interface AgentRunPolicy {

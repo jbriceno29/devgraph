@@ -9,6 +9,7 @@ import { useResetOnChange } from '../use-reset-on-change.js';
 import { QuestionsStep } from './QuestionsStep.js';
 import { ProposalReview, approvalBlockers, taskCount } from './ProposalReview.js';
 import { RepositoryCreated, RepositorySetup } from './RepositorySetup.js';
+import { ReferencesField, ReferencesSummary, type DraftReference } from './ReferencesField.js';
 
 /** Pasado este tiempo trabajando se avisa de que sigue en marcha (no es un error). */
 export const SLOW_AFTER_MS = 120_000;
@@ -50,9 +51,10 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
  </Screen>;
  else if(view.stage==='NOT_STARTED')screen=hasPlan
   ?<Screen heading={heading} eyebrow="Paso 1 de 3" title="Este proyecto ya tiene un plan"><p className="text-sm text-fg-muted">El asistente de inicio es para proyectos vacíos. Para cambiar el plan, describe lo que quieres en Planificar.</p><button type="button" onClick={()=>onNavigate({view:'planning'})} className={`mt-4 min-h-9 text-sm ${primary}`}>Ir a Planificar</button></Screen>
-  :<StartStep projectId={projectId} view={view} heading={heading} busy={busy} repository={repository} onStart={(brief,model)=>void act(ipc=>ipc.start(projectId,{brief,...(model?{model}:{})}))}/>;
+  :<StartStep projectId={projectId} view={view} heading={heading} busy={busy} repository={repository} onStart={(brief,model,references)=>void act(ipc=>ipc.start(projectId,{brief,...(model?{model}:{}),...(references.length?{references:references.map(({key:_key,bytes:_bytes,...input})=>input)}:{})}))}/>;
  else if(view.stage==='ASK_GOALS')screen=<Screen heading={heading} eyebrow="Paso 1 de 3" title="Unas preguntas antes de proponer" intro="Responde lo que tengas claro; en lo demás elige «Decide tú» y el asistente usará la opción recomendada.">
   <Brief text={view.brief}/>
+  <ReferencesSummary references={view.references}/>
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Enviar respuestas" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}>{restartButton}</QuestionsStep>
  </Screen>;
  else if(view.stage==='PROPOSAL'&&mode==='revise')screen=<ReviseStep view={view} heading={heading} busy={busy} onSubmit={notes=>void act(ipc=>ipc.answer(projectId,view.answers,notes))} onChangeAnswers={()=>setMode('answers')} onCancel={()=>setMode('view')}/>;
@@ -93,9 +95,9 @@ function Screen({heading,eyebrow,title,intro,children}:{heading:RefObject<HTMLHe
 }
 const Brief=({text}:{text:string})=>text?<blockquote className="mb-4 border-l-2 border-accent pl-3 text-xs leading-5 text-fg-muted"><span className="font-medium text-fg">Tu idea: </span>{text}</blockquote>:null;
 
-function StartStep({projectId,view,heading,busy,repository,onStart}:{projectId:string;view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;onStart(brief:string,model:string):void}) {
+function StartStep({projectId,view,heading,busy,repository,onStart}:{projectId:string;view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;onStart(brief:string,model:string,references:DraftReference[]):void}) {
  const id=useId();
- const [brief,setBrief]=useState(view.brief),[error,setError]=useState<string|null>(null);
+ const [brief,setBrief]=useState(view.brief),[error,setError]=useState<string|null>(null),[references,setReferences]=useState<DraftReference[]>([]);
  const [models,setModels]=useState<{list:string[];recommended:string|null}>({list:[],recommended:null}),[model,setModel]=useState('');
  useEffect(()=>{let live=true;void window.workspaceIpc.queries.listAgentProfiles(projectId).then(profiles=>{const profile=profiles.find(item=>item.roleKey==='DEVELOPER')??profiles[0];if(!live||!profile)return;setModels({list:profile.availableModels??[],recommended:profile.planningModel??null});setModel(profile.planningModel??profile.availableModels?.[0]??'');}).catch(()=>undefined);return ()=>{live=false;};},[projectId]);
  return <Screen heading={heading} eyebrow="Paso 1 de 3" title="Cuéntanos tu idea">
@@ -104,13 +106,14 @@ function StartStep({projectId,view,heading,busy,repository,onStart}:{projectId:s
    <p>Después propondrá la visión, el stack, las reglas y un plan inicial con sus tareas. Nada se crea hasta que lo apruebes.</p>
    <p>Tarda unos minutos en total, casi todo esperando al motor.</p>
   </div>
-  <form noValidate className="mt-5 space-y-4" onSubmit={event=>{event.preventDefault();if(!brief.trim()){setError('Describe en pocas líneas qué quieres construir.');return;}onStart(brief.trim(),model);}}>
+  <form noValidate className="mt-5 space-y-4" onSubmit={event=>{event.preventDefault();if(!brief.trim()){setError('Describe en pocas líneas qué quieres construir.');return;}onStart(brief.trim(),model,references);}}>
    <div>
     <label htmlFor={`${id}-brief`} className="mb-1 block text-sm font-medium text-fg">¿Qué quieres construir?</label>
     <textarea id={`${id}-brief`} rows={5} maxLength={MAX_BRIEF} value={brief} onChange={event=>{setBrief(event.target.value);setError(null);}} aria-invalid={error?true:undefined} aria-describedby={`${id}-brief-help${error?` ${id}-brief-error`:''}`} placeholder="Por ejemplo: una lista de tareas para la terminal, para uso personal, sin dependencias externas." className={`${control} py-2 text-sm leading-6 ${error?'border-danger':''}`}/>
     <p id={`${id}-brief-help`} className="mt-1 text-[11px] text-fg-subtle">Unas líneas bastan: para quién es, qué problema resuelve y cualquier preferencia (lenguaje, plataforma…). {brief.length}/{MAX_BRIEF}</p>
     {error&&<p id={`${id}-brief-error`} role="alert" className="mt-1 text-xs text-danger">{error}</p>}
    </div>
+   <ReferencesField value={references} onChange={setReferences} disabled={busy}/>
    {models.list.length>0&&<div>
     <label htmlFor={`${id}-model`} className="mb-1 block text-xs font-medium text-fg">Modelo</label>
     <select id={`${id}-model`} value={model} onChange={event=>setModel(event.target.value)} aria-describedby={`${id}-model-help`} className={`${control} max-w-xs`}>{models.list.map(option=><option key={option} value={option}>{option}{option===models.recommended?' (recomendado)':''}</option>)}</select>
@@ -130,10 +133,11 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
  const [now,setNow]=useState(Date.now());
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return ()=>clearInterval(timer);},[]);
  const elapsed=Math.max(0,now-since),slow=elapsed>=SLOW_AFTER_MS,seconds=Math.floor(elapsed/1000);
- const title=proposing?'Preparando la propuesta, puede tardar un minuto':'Pensando el objetivo…';
+ const analysing=!proposing&&view.references.some(item=>item.status!=='TRANSLATED');
+ const title=proposing?'Preparando la propuesta, puede tardar un minuto':analysing?'Analizando tus referencias…':'Pensando el objetivo…';
  return <Screen heading={heading} eyebrow={proposing?'Paso 2 de 3':'Paso 1 de 3'} title={title}>
   <div role="status" aria-live="polite" className="space-y-2 text-sm text-fg-muted">
-   <p>{proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
+   <p>{proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':analysing?'Un modelo está describiendo en texto tus archivos; después el asistente leerá esa descripción junto con tu idea y preparará unas pocas preguntas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
    {slow&&<p className="font-medium text-fg">Sigue trabajando. Algunas respuestas tardan más; no hace falta que esperes aquí.</p>}
   </div>
   <div aria-hidden="true" className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full w-full animate-pulse rounded-full bg-accent/60 motion-reduce:animate-none"/></div>
@@ -144,6 +148,7 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
 function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRevise}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void}) {
  const id=useId(),blockers=approvalBlockers(view),canApprove=view.nextAction==='APPROVE'&&!blockers.length;
  return <Screen heading={heading} eyebrow="Paso 2 de 3" title={view.proposal?.title||'Revisa la propuesta'} intro="Léela con calma: al aprobarla se crean los documentos, la decisión de stack, las reglas y el plan.">
+  <ReferencesSummary references={view.references}/>
   <ProposalReview view={view}/>
   {!view.repositoryPath&&<div className="mt-4 rounded-lg border border-border bg-surface-sunken p-4"><h3 className="mb-2 text-sm font-semibold text-fg">Crear un repositorio nuevo</h3>{repository}</div>}
   {!canApprove&&blockers.length>0&&<ul id={`${id}-blockers`} className="mt-4 list-disc space-y-0.5 pl-5 text-xs text-fg-muted">{blockers.map(item=><li key={item}>{item}</li>)}</ul>}

@@ -203,36 +203,30 @@ Antes de expandir el asistente de inicio, cerrar los 4 ajustes técnicos detecta
 
 ---
 
-### Etapa V1: Referencias (`VISUAL` / `FUNCIONAL` / `CONCEPTUAL`) en el Inicio (Tamaño: S–M — ~0.5 días)
+### Etapa V1: Referencias (`VISUAL` / `FUNCIONAL` / `CONCEPTUAL`) en el Inicio, traducidas a texto por un modelo aparte (Tamaño: M — ~1 día)
 
-1. **Migración `011_inception_visual_exploration.sql`** (la `010` es la de la Etapa 0):
-   ```sql
-   ALTER TABLE project_inception ADD COLUMN references_json TEXT NOT NULL DEFAULT '[]';
-   ALTER TABLE project_inception ADD COLUMN ui_options_json TEXT NOT NULL DEFAULT '[]';
-   ALTER TABLE project_inception ADD COLUMN selected_ui_option_id TEXT DEFAULT NULL;
-   ```
-   Actualizar `src/infrastructure/persistence/sqlite/database.ts` (`USER_VERSION = 11`) y `SqliteInceptionRepository`.
-2. **Contratos (`src/shared/contracts/inception-view.ts` y `ipc-contracts.ts`):**
-   - Definir `InceptionReferenceDto`:
-     ```ts
-     export type ReferenceKind = 'VISUAL' | 'FUNCTIONAL' | 'CONCEPTUAL';
-     export interface InceptionReferenceDto {
-       id: string;
-       name: string;
-       relativePath: string;
-       kind: ReferenceKind;
-       note: string;
-     }
-     ```
-   - Permitir enviar `references?: InceptionReferenceDto[]` en `StartInceptionInput` o añadirlas antes de iniciar.
-3. **Prompts (`src/infrastructure/ai/inception-contract.ts`):**
-   - Incluir el bloque estructurado de referencias en `buildQuestionsPrompt` y `buildProposalPrompt`, instruyendo al modelo a respetar la distinción entre referencia `VISUAL`, `FUNCTIONAL` y `CONCEPTUAL` y a preguntar cualquier comportamiento no confirmado.
-4. **UI (`src/desktop/presentation/inception/InceptionAssistant.tsx`):**
-   - Añadir en `StartStep` la sección opcional para registrar referencias (ruta de imagen/captura/documento o nota de producto similar + selector `Visual / Funcional / Conceptual` + qué conservar o modificar).
+**Estado (2026-11-11): hecha.** Decisión del usuario: el análisis de imágenes y archivos **no lo hace el asistente ni se le da acceso de lectura abierto**; se manda a un modelo que lo traduce a texto, y el asistente trabaja solo con ese texto. Es lo que mantiene el contexto en el workspace y portable entre motores (H3): la traducción se guarda en SQLite y cualquier motor posterior la lee sin ver los archivos.
+
+**Cómo funciona**
+
+1. **Adjuntar.** En el paso «Cuéntanos tu idea», la sección opcional «Referencias» deja elegir hasta 5 archivos (png, jpg, webp, gif, pdf, md, txt, html; 3 MB cada uno, 8 MB en total). Cada uno lleva su tipo (`VISUAL`: cómo debe verse; `FUNCIONAL`: qué debe hacer; `CONCEPTUAL`: solo inspiración) y una nota opcional («qué conservar o evitar»). Las imágenes arrancan como `VISUAL`; el resto, como `FUNCIONAL`. Los archivos viajan al núcleo en base64 (sin plugin de Tauri) y se validan antes de escribir nada: extensión permitida, tamaños, base64 válido y que el contenido sea de verdad lo que dice su extensión.
+2. **Guardar.** Quedan en `projects/<id>/inception/references/ref-<n>.<ext>`: el nombre lo fija la app, nunca el usuario. La migración `011_inception_references.sql` añade `project_inception.references_json` (tipo, nota, estado y traducción de cada una).
+3. **Traducir** (`ReferenceTranslatorPort`, primera implementación `ClaudeReferenceTranslator`). Una sola llamada para todas las pendientes, con `sonnet` (o `haiku`) y **solo la herramienta `Read`**, permitida únicamente dentro de una carpeta temporal que contiene copias renombradas de los archivos y que se borra al terminar. Fuera de esa carpeta el modo sin preguntas deniega la lectura (comprobado con una lectura real de `/etc/hostname`), no hay shell ni herramientas de escritura, y el CLI corre con el aislamiento de configuración de las demás llamadas. La salida es JSON con esquema: resumen, y según el tipo, paleta/tipografía/composición (`VISUAL`), pantallas/acciones/recorridos/estados (`FUNCIONAL`) o ideas (`CONCEPTUAL`), más hasta 3 `openQuestions`.
+4. **Reglas por tipo, hechas cumplir en código** (`normalizeTranslation`): de una referencia `VISUAL` se descartan pantallas y acciones aunque el modelo las liste, de una `CONCEPTUAL` solo queda la idea; todos los campos tienen tope de longitud. Una referencia que el traductor no devuelve, o que no pudo leer, queda `FAILED` con el motivo, y el paso falla nombrándola; el reintento reutiliza los archivos guardados y lo ya traducido.
+5. **Usar.** Los prompts de preguntas y de propuesta reciben el análisis como **datos inertes** entre marcadores (`<<<USER_REFERENCES … USER_REFERENCES>>>`, JSON con `<` y `>` escapados), con la regla de cada tipo: lo visual nunca se toma como requisito, lo funcional genera preguntas por lo ambiguo y requisitos por lo confirmado, lo conceptual es solo inspiración. Las preguntas ya no piden lo que las referencias responden.
+6. **Verlo.** La pantalla de preguntas y la de revisión de la propuesta muestran «Cómo se entendieron tus referencias», con el resumen, los campos del tipo y lo que queda por aclarar, para que el usuario compruebe lo que el modelo entendió antes de apoyarse en ello.
+
+**Verificación.** 40 pruebas nuevas (contrato y normalización, validación de archivos, prompts con intentos de inyección, servicio con traductor falso incluidos fallos y reintentos, traductor real contra un CLI falso que comprueba sus argumentos y su carpeta, e interfaz). Corrida real (2026-11-11): un PNG y un prototipo HTML con una instrucción inyectada en un comentario, `sonnet` traduciendo y `haiku` preguntando: 22 s y 0,037 USD en total; el traductor señaló el comentario como instrucciones dirigidas a quien procese el archivo y lo ignoró, y nada de eso llegó a lo guardado. Un PDF de una página también se tradujo.
+
+**Límites conocidos.** Los PDF dependen de que el CLI tenga `pdftoppm` (poppler) en la máquina; sin él la referencia queda `FAILED` con el motivo (no se probó sin poppler). La traducción no se puede editar a mano: se corrige con las respuestas y las notas. Solo funciona con Claude Code. Un solo traductor por llamada: si una referencia falla, hay que reintentar o empezar de nuevo sin ella.
+
+**Cambio respecto al plan original.** El plan decía registrar rutas y dejar que el motor interpretara las imágenes; las llamadas del asistente corren sin herramientas, así que no podía. La migración `011` solo añade `references_json`; las columnas de la exploración visual (`ui_options_json`, `selected_ui_option_id`) pasan a la migración `012` de la Etapa V2.
 
 ---
 
 ### Etapa V2: Etapa `EXPLORE_UI` y Prototipado Interactivo / Importación (Tamaño: M — ~1 día)
+
+0. **Migración `012_inception_ui_exploration.sql`** con `ui_options_json` y `selected_ui_option_id` en `project_inception` (`USER_VERSION = 12`). Las referencias ya llegan traducidas a texto desde V1: el generador de direcciones visuales las lee de `references_json`, no de los archivos.
 
 1. **Contrato de exploración visual (`src/shared/contracts/inception-view.ts` y `src/application/ports/inception-port.ts`):**
    - Añadir `'EXPLORE_UI'` a `InceptionStage` y `'CHOOSE_UI' | 'RETRY_UI'` a `InceptionNextAction`.

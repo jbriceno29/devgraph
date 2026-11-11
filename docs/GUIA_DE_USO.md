@@ -24,13 +24,25 @@ Tú dices qué quieres construir y apruebas el plan; la aplicación se encarga d
 ## Recorrido completo
 
 1. **Crea el proyecto** con un nombre.
-2. **Abre la vista «Inicio».** Describe en pocas líneas qué quieres construir (hasta 4000 caracteres). El asistente te hará como mucho 5 preguntas con opciones sugeridas; puedes contestar o dejar «decide tú». Las suposiciones del asistente se muestran.
+2. **Abre la vista «Inicio».** Describe en pocas líneas qué quieres construir (hasta 4000 caracteres). El asistente te hará como mucho 5 preguntas con opciones sugeridas; puedes contestar o dejar «decide tú». Las suposiciones del asistente se muestran. Si tienes capturas, bocetos, un prototipo HTML, un PDF o un documento, adjúntalos en «Referencias (opcional)» y di para qué sirve cada uno: **cómo debe verse**, **qué debe hacer** o **solo inspiración** (ver «Referencias» más abajo).
 3. **Conecta una carpeta Git** o crea una nueva desde la propia vista (la ruta debe ser absoluta, y la carpeta no existir o estar vacía). La aprobación necesita un repositorio.
 4. **Revisa la propuesta.** Verás: objetivo, alcance, stack, reglas, comandos de verificación, un ADR con las alternativas consideradas, documentos, requisitos y el plan inicial (una feature «Fundación» con una primera tarea de preparación y el resto de features). ¿Algo no te gusta? Escribe una nota con lo que quieres cambiar y regenera; las notas se acumulan. Si todo está bien, aprueba. Hasta entonces no se crea nada en tu proyecto. Puedes reiniciar el asistente si aún no aprobaste.
 5. **Ejecuta.** En la vista «Agentes», elige una tarea `READY` y pulsa iniciar (puedes elegir el modelo). O abre una feature, sube su autonomía a `PILOT` y actívalo: la aplicación te mostrará un aviso de costo que debes aceptar.
 6. **Revisa y acepta.** Una ejecución completada deja la tarea en `IN_REVIEW`. Ves el diff por archivo, la salida de las pruebas y las acciones que se denegaron. Aceptas o pides ajustes con un motivo. Con `AUTO_ACCEPT` o `PILOT`, esto ocurre solo si la ejecución terminó bien y al menos un comando de verificación pasó.
 7. **Atiende la bandeja de actividad** (vista «Actividad» o el banner de «siguiente paso»): muestra qué necesita tu decisión, qué está en curso y qué pasó. Si la ventana no tiene foco, la aplicación intenta avisarte con una notificación del sistema (puede no mostrarse según tu entorno).
 8. **Integra la feature.** Cuando todas sus tareas están en `DONE`, aparece «Integrar en main» (en la rama base de tu repositorio). Ahí tu código llega a la rama principal.
+
+## Referencias
+
+En el paso de la idea puedes adjuntar hasta 5 archivos (png, jpg, webp, gif, pdf, md, txt o html; 3 MB cada uno). El asistente no ve tus archivos: un modelo aparte los describe en texto y el asistente trabaja con esa descripción. Por eso cada archivo necesita su propósito:
+
+| Propósito | Qué hace el asistente con él |
+| :--- | :--- |
+| **Cómo debe verse** | Toma colores, estilo y orden de la pantalla. Las funciones que aparezcan en la imagen **no** se toman como requisitos. |
+| **Qué debe hacer** | Extrae pantallas, acciones y recorridos como posibles requisitos y te pregunta lo que no queda claro. |
+| **Solo inspiración** | Toma la idea general; no copia la interfaz ni todas sus funciones. |
+
+La nota («qué conservar o evitar») ayuda a afinarlo. Después de analizarlas, la pantalla de preguntas muestra «Cómo se entendieron tus referencias» para que compruebes lo que entendió el modelo; si algo no es así, corrígelo en tus respuestas o en las notas de la propuesta. El análisis cuesta unos centavos y tarda unos segundos. El contenido de los archivos se trata como datos: las instrucciones que contengan se ignoran. Los PDF necesitan `pdftoppm` (paquete `poppler-utils`) instalado; sin él, ese archivo no se podrá analizar y el asistente te lo dirá. Solo funciona con Claude Code.
 
 ## Dónde queda el código
 
@@ -71,6 +83,7 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 | La ejecución se bloquea por un documento | Hay un documento del proyecto con cambios sin commitear hechos fuera de la aplicación; commitéalo. |
 | El piloto no acepta una tarea | Comprueba que la política tenga comandos de verificación; sin ellos nada se acepta solo. |
 | La aprobación del inicio no avanza | Falta el repositorio: conecta uno o crea uno nuevo. |
+| «No se pudo analizar «archivo»…» al empezar | El modelo no pudo leer esa referencia (vacía, dañada o un PDF sin `pdftoppm`). Pulsa «Reintentar» o «Empezar de nuevo» sin ese archivo. |
 | «El inicio del proyecto ya empezó» | Continúa donde lo dejaste, o reinícialo con el botón de reinicio (solo antes de aprobar). El asistente es solo para proyectos sin plan. |
 | No llegan avisos del sistema | Las notificaciones de escritorio dependen de la API web del webview y del permiso; la bandeja de actividad dentro de la aplicación es la vía fiable. |
 

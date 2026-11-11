@@ -43,14 +43,16 @@ import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pil
 import { SqliteActivityRepository } from '../../persistence/repositories/sqlite-activity-repository.js';
 import { ActivityService } from '../../../application/activity/activity-service.js';
 import { ProjectInceptionService } from '../../../application/inception/project-inception-service.js';
-import type { InceptionEnginePort } from '../../../application/ports/inception-port.js';
+import type { InceptionEnginePort, ReferenceTranslatorPort } from '../../../application/ports/inception-port.js';
+import { InceptionReferenceFiles } from '../../filesystem/inception-reference-files.js';
+import { ClaudeReferenceTranslator } from '../../ai/claude-reference-translator.js';
 import { SqliteInceptionRepository } from '../../persistence/repositories/sqlite-inception-repository.js';
 import { ClaudeInceptionEngine } from '../../ai/claude-inception-engine.js';
 import { GitRepositoryInitializer } from '../../git/git-repository-initializer.js';
 import type { InceptionAnswerDto, StartInceptionInput } from '../../../shared/contracts/inception-view.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort}={}) {
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const documentCommitter=new GitDocumentCommitter();
@@ -88,9 +90,17 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   };
   // Built per call, so `inception:get` works with any engine and auth changes apply to the next call.
   const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input)};
+  // The reference translator is its own model call (the only one with a tool: Read, inside a throwaway folder with copies of the files).
+  const translator:ReferenceTranslatorPort=dependencies.referenceTranslator??{translate:input=>{
+   if(agentAdapter.providerId!=='claude-code')throw new Error('El análisis de referencias todavía solo funciona con Claude Code.');
+   const profile=providerConnection(projectId,workspace.database);
+   const cwd=join(workspaceRoot,'projects',projectId);mkdirSync(cwd,{recursive:true});
+   return new ClaudeReferenceTranslator(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription'}).translate(input);
+  }};
   const service=new ProjectInceptionService({projects:workspace.projects,graph:workspace.graph,store:new SqliteInceptionRepository(workspace.database),engine,
    planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>{const result=await getPlanning(projectId).apply(id);return {revision:result.revision,resolvedIds:result.resolvedIds};},reject:id=>{getPlanning(projectId).reject(id);}},
    repositoryPath:id=>workspace.repositories.findPrimaryForProject(id)?.localPath??null,
+   translator,referenceFiles:new InceptionReferenceFiles(join(workspaceRoot,'projects')),
    models:id=>{const profile=providerConnection(id,workspace.database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};},
    emit:(channel,payload)=>emit(channel,payload)});
   inceptions.set(projectId,service);return service;

@@ -27,6 +27,9 @@ const MODEL_PATTERN = /^[A-Za-z0-9._[\]-]{1,64}$/;
  * Proposes ChangeSets with `claude -p --output-format json --json-schema`.
  * Tools are disabled: the planner works only from the graph and ContextSnapshot in the prompt.
  */
+/** Variations of the structured call: the planner and the inception use none (no tools, the planner's folder); the reference translator gives `Read` inside its own folder. */
+export interface StructuredCallOptions { /** Value of `--tools` (default none). */ tools?: string; /** Value of `--allowedTools` (rules that auto-approve calls; with `dontAsk` everything else is denied). */ allowedTools?: string; /** Working directory of the CLI. */ cwd?: string; /** What the call does, for error messages (default: propose changes). */ purpose?: string }
+
 export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
   constructor(private readonly cwd: string, private readonly options: ClaudeChangeSetPlannerOptions = {}) {}
 
@@ -41,7 +44,8 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
    * `extraArgs` go before the model (the inception adds the isolation flags of the agent adapter).
    * `signal` aborts the call: the CLI gets SIGINT, then SIGTERM after the grace period, and the promise rejects with EngineCallCancelledError.
    */
-  async structured(prompt: string, schema: unknown, requestedModel?: string, extraArgs: readonly string[] = [], signal?: AbortSignal): Promise<{ output: unknown; usage: StructuredUsage }> {
+  async structured(prompt: string, schema: unknown, requestedModel?: string, extraArgs: readonly string[] = [], signal?: AbortSignal, options: StructuredCallOptions = {}): Promise<{ output: unknown; usage: StructuredUsage }> {
+    const purpose = options.purpose ?? 'proponer cambios';
     if (signal?.aborted) throw new EngineCallCancelledError();
     const executable = await resolveCliExecutable(claudeCli, this.options.executable ?? 'claude');
     const authMode = this.options.authMode ?? 'subscription';
@@ -52,28 +56,28 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
     }
     const model = requestedModel ?? this.options.defaultModel ?? undefined;
     if (model && !MODEL_PATTERN.test(model)) throw new Error(`Nombre de modelo inválido: ${model}`);
-    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(schema), '--tools', '', '--permission-mode', 'dontAsk', '--strict-mcp-config', '--no-session-persistence', ...extraArgs, ...(model ? ['--model', model] : [])];
-    const stdout = await this.run(executable, args, env, prompt, signal);
+    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(schema), '--tools', options.tools ?? '', ...(options.allowedTools ? ['--allowedTools', options.allowedTools] : []), '--permission-mode', 'dontAsk', '--strict-mcp-config', '--no-session-persistence', ...extraArgs, ...(model ? ['--model', model] : [])];
+    const stdout = await this.run(executable, args, env, prompt, signal, options.cwd ?? this.cwd, purpose);
     let result: Record<string, unknown>;
     try { result = JSON.parse(stdout) as Record<string, unknown>; }
     catch { throw new Error(`Claude Code devolvió una respuesta que no es JSON: ${stdout.slice(0, 300)}`); }
     if (result.is_error === true || result.subtype !== 'success') {
       const detail = typeof result.result === 'string' && result.result ? result.result : String(result.subtype ?? 'error');
-      throw new Error(`Claude Code no pudo proponer cambios: ${detail}`);
+      throw new Error(`Claude Code no pudo ${purpose}: ${detail}`);
     }
     if (result.structured_output === undefined || result.structured_output === null) {
-      throw new Error('Claude Code terminó sin una propuesta estructurada. Reformula la petición o prueba con un modelo más capaz.');
+      throw new Error(options.purpose ? `Claude Code terminó sin un resultado estructurado al ${purpose}. Vuelve a intentarlo o prueba con un modelo más capaz.` : 'Claude Code terminó sin una propuesta estructurada. Reformula la petición o prueba con un modelo más capaz.');
     }
     const usage = (result.usage ?? {}) as Record<string, unknown>, count = (key: string) => typeof usage[key] === 'number' ? usage[key] as number : 0;
     const used = result.modelUsage && typeof result.modelUsage === 'object' ? Object.keys(result.modelUsage as object)[0] ?? null : null;
     return { output: result.structured_output, usage: { inputTokens: count('input_tokens'), outputTokens: count('output_tokens'), cacheReadTokens: count('cache_read_input_tokens'), cacheCreationTokens: count('cache_creation_input_tokens'), costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null, model: used ?? model ?? null } };
   }
 
-  private run(executable: string, args: string[], env: NodeJS.ProcessEnv, prompt: string, abort?: AbortSignal): Promise<string> {
+  private run(executable: string, args: string[], env: NodeJS.ProcessEnv, prompt: string, abort: AbortSignal | undefined, cwd: string, purpose: string): Promise<string> {
     const timeoutMs = this.options.timeoutMs ?? CLAUDE_PLANNER_TIMEOUT_MS, graceMs = this.options.cancelGraceMs ?? 5_000;
     return new Promise((resolve, reject) => {
       if (abort?.aborted) { reject(new EngineCallCancelledError()); return; }
-      const child = spawn(executable, args, { cwd: this.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      const child = spawn(executable, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       let out = '', err = '', timedOut = false, cancelled = false, escalation: ReturnType<typeof setTimeout> | undefined;
       // SIGINT lets the CLI stop cleanly; SIGTERM is the fallback. The fallback timer stays referenced, so a shutting-down core waits for it.
       const stop = () => {
@@ -92,7 +96,7 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
       child.once('close', (code, signal) => {
         cleanup();
         if (cancelled) reject(new EngineCallCancelledError());
-        else if (timedOut) reject(new Error(`Claude Code superó el límite de ${Math.round(timeoutMs / 1000)} s para proponer cambios.`));
+        else if (timedOut) reject(new Error(`Claude Code superó el límite de ${Math.round(timeoutMs / 1000)} s para ${purpose}.`));
         else if (code === 0) resolve(out.trim());
         else reject(new Error(`Claude Code terminó con ${signal ? `la señal ${signal}` : `código ${code}`}: ${(err || out).slice(-4000)}`));
       });

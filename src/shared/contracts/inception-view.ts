@@ -43,11 +43,32 @@ export interface InceptionViewDto {
   notes: string[];
   /** Graph id of the «Fundación» scaffold task once the proposal is applied (null before, or when it could not be resolved). */
   scaffoldTaskId: string | null;
+  /** The attached references and what the translator understood from each (the files themselves never leave the workspace). */
+  references: InceptionReferenceDto[];
   updatedAt: string | null;
 }
 /** Limits of `inception:answer` notes (one change request per regeneration). */
 export const MAX_INCEPTION_NOTE = 2000;
-export interface StartInceptionInput { brief: string; /** Model alias; defaults to the provider's planning model (opus). */ model?: string }
+/**
+ * Reference material the user attaches to the brief (screenshots, sketches, an HTML prototype, a PDF, a document). The assistant never
+ * sees the files: a separate model call translates each one into text, and everything after works with that text. The kind says how to read it:
+ * VISUAL = how the app should look (never a list of requirements), FUNCTIONAL = behaviour and flows wanted, CONCEPTUAL = inspiration only.
+ */
+export type ReferenceKind = 'VISUAL' | 'FUNCTIONAL' | 'CONCEPTUAL';
+export const REFERENCE_KINDS: readonly ReferenceKind[] = ['VISUAL', 'FUNCTIONAL', 'CONCEPTUAL'];
+export const MAX_REFERENCES = 5;
+/** Per file and in total (decoded bytes). */
+export const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
+export const MAX_REFERENCES_TOTAL_BYTES = 8 * 1024 * 1024;
+export const MAX_REFERENCE_NOTE = 500;
+/** Accepted extensions and their media type. Text-like files (md, txt, html) are read as text, never run. */
+export const REFERENCE_FILE_TYPES: Readonly<Record<string, string>> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', md: 'text/markdown', txt: 'text/plain', html: 'text/html' };
+export interface InceptionReferenceInput { name: string; kind: ReferenceKind; /** What to keep or avoid, in the user's words (optional). */ note?: string; /** File content, base64. */ dataBase64: string }
+/** What a translator model understood from a file. Only the fields of the reference's kind are filled; `openQuestions` is for any kind. */
+export interface InceptionReferenceTranslationDto { summary: string; palette: string[]; typography: string; layout: string; screens: string[]; actions: string[]; flows: string[]; states: string[]; ideas: string[]; openQuestions: string[] }
+export type InceptionReferenceStatus = 'PENDING' | 'TRANSLATED' | 'FAILED';
+export interface InceptionReferenceDto { id: string; name: string; kind: ReferenceKind; note: string; mimeType: string; bytes: number; status: InceptionReferenceStatus; error: string | null; translation: InceptionReferenceTranslationDto | null }
+export interface StartInceptionInput { brief: string; /** Model alias; defaults to the provider's planning model (opus). */ model?: string; /** Up to MAX_REFERENCES files. On a retry after a failure, omit them: the ones already stored are reused. */ references?: InceptionReferenceInput[] }
 /** Activity inbox summary of the inception (see ActivitySummaryDto.inception). */
 export interface InceptionActivityDto { stage: InceptionStage; status: InceptionStatus; title: string; detail: string; needsAttention: boolean; changeSetId: string | null; at: string }
 export interface InitializeRepositoryResultDto { projectId: string; localPath: string; initialCommit: string; files: string[] }

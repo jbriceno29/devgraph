@@ -22,7 +22,7 @@ export const proposal:InceptionProposalDto={
  ],
  scaffoldTaskTitle:'Preparar el proyecto',
 };
-export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,updatedAt:null};
+export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,references:[],updatedAt:null};
 export const usage2={calls:2,inputTokens:9000,outputTokens:3000,cacheReadTokens:0,cacheCreationTokens:0,costUsd:0.043};
 
 /** Cliente `inception` falso con estado: start/answer responden WORKING y `emit` simula el aviso del motor.

@@ -1,9 +1,32 @@
 import type { ChangeSetDraft } from './change-set-planning-port.js';
-import type { InceptionAnswerDto, InceptionQuestionDto } from '../../shared/contracts/inception-view.js';
+import type { InceptionAnswerDto, InceptionQuestionDto, InceptionReferenceDto, InceptionReferenceTranslationDto, ReferenceKind } from '../../shared/contracts/inception-view.js';
 
 /** Tokens and cost of one engine call (null fields when the engine does not report them). */
 export interface InceptionEngineUsage { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null; model: string | null }
-export interface InceptionProjectInput { name: string; description: string | null; brief: string; /** PROJECT_ROOT id: parent of modules and target of the ADR's AFFECTS edge. */ rootId: string }
+export interface InceptionProjectInput {
+  name: string; description: string | null; brief: string; /** PROJECT_ROOT id: parent of modules and target of the ADR's AFFECTS edge. */ rootId: string;
+  /** The references already translated to text, as data for the prompts (the engine never sees the files). */
+  references?: Array<{ kind: ReferenceKind; name: string; note: string; translation: InceptionReferenceTranslationDto }>;
+}
+
+/** A stored reference: what the view shows, plus the file inside the project's references folder. */
+export interface InceptionReference extends InceptionReferenceDto { file: string }
+
+/**
+ * Turns reference files (images, PDFs, documents) into structured text with a model of its own, separate from the inception engine.
+ * It reads only the files it is given. Results are per reference: one that could not be read comes back with `error` and no translation.
+ */
+export interface ReferenceTranslatorPort {
+  translate(input: { files: Array<{ id: string; kind: ReferenceKind; note: string; mimeType: string; /** Absolute path of the stored copy. */ path: string }>; model?: string; signal?: AbortSignal }): Promise<{ results: Array<{ id: string; translation: InceptionReferenceTranslationDto | null; error: string | null }>; usage: InceptionEngineUsage | null }>;
+}
+
+/** Where the attached files live (inside the project's workspace folder). `file` is always `ref-<n>.<extension>`. */
+export interface InceptionReferenceFilesPort {
+  save(projectId: string, file: string, content: Buffer): void;
+  pathOf(projectId: string, file: string): string;
+  /** Removes every stored reference of the project (restart, or replacing them). */
+  deleteAll(projectId: string): void;
+}
 
 /**
  * The engine behind each inception gate. `signal` aborts the call (restart or app shutdown): the engine stops its process. Every call is independent (no engine session): the prompt is rebuilt from
@@ -26,6 +49,8 @@ export interface InceptionRecord {
   notes: string[];
   /** The scaffold task's graph id, resolved when the proposal is applied. */
   scaffoldTaskId: string | null;
+  /** Attached references, stored in order (`ref-1`, `ref-2`…). */
+  references: InceptionReference[];
   createdAt: string; updatedAt: string;
 }
 export interface InceptionRepositoryPort {

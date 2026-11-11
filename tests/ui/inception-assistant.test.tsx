@@ -241,3 +241,74 @@ describe('Inicio en el shell',()=>{
   expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tab.id);
  });
 });
+
+describe('Asistente de inicio: referencias',()=>{
+ const PNG=new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1,2,3]);
+ const file=(name:string,bytes:BlobPart[]=[PNG],type='image/png')=>new File(bytes,name,{type});
+ const attach=async(...files:File[])=>{const input=await screen.findByLabelText('Adjuntar archivos') as HTMLInputElement;await act(async()=>{fireEvent.change(input,{target:{files}});});};
+ const translated=(over:Record<string,unknown>={})=>({id:'ref-1',name:'panel.png',kind:'VISUAL' as const,note:'sin sombras',mimeType:'image/png',bytes:11,status:'TRANSLATED' as const,error:null,translation:{summary:'Panel con barra lateral y tarjetas.',palette:['azul #2255ff'],typography:'Sans-serif',layout:'Dos columnas',screens:[],actions:[],flows:[],states:[],ideas:[],openQuestions:['¿Modo oscuro?']},...over});
+
+ it('attaches a file, asks what it is for, and sends it with the brief as base64 (image → visual by default)',async()=>{
+  const {client}=setup();
+  fireEvent.click(await screen.findByText(/Referencias \(opcional\)/));
+  expect(screen.getByText(/no ve tus archivos/)).toBeTruthy();
+  await attach(file('panel.png'),file('flujo.md',['# Flujo\n'],'text/markdown'));
+  const list=await screen.findByRole('list',{name:'Referencias adjuntas'});
+  const items=within(list).getAllByRole('listitem');
+  expect(items).toHaveLength(2);
+  expect((within(items[0]!).getByLabelText('¿Para qué sirve?') as HTMLSelectElement).value).toBe('VISUAL');
+  expect((within(items[1]!).getByLabelText('¿Para qué sirve?') as HTMLSelectElement).value).toBe('FUNCTIONAL');
+  fireEvent.change(within(items[1]!).getByLabelText('¿Para qué sirve?'),{target:{value:'CONCEPTUAL'}});
+  fireEvent.change(within(items[0]!).getByLabelText('Qué conservar o evitar (opcional)'),{target:{value:'sin sombras'}});
+  expect(within(items[0]!).getByText(/no se tomarán como requisitos/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('¿Qué quieres construir?'),{target:{value:'Un panel de tareas'}});
+  fireEvent.click(screen.getByRole('button',{name:'Empezar'}));
+  await waitFor(()=>expect(client.start).toHaveBeenCalledTimes(1));
+  const sent=(client.start as ReturnType<typeof vi.fn>).mock.calls[0]![1] as {brief:string;references:Array<{name:string;kind:string;note:string;dataBase64:string}>};
+  expect(sent.references.map(item=>[item.name,item.kind,item.note])).toEqual([['panel.png','VISUAL','sin sombras'],['flujo.md','CONCEPTUAL','']]);
+  expect([...Buffer.from(sent.references[0]!.dataBase64,'base64')]).toEqual([...PNG]);
+  expect(Buffer.from(sent.references[1]!.dataBase64,'base64').toString()).toBe('# Flujo\n');
+  expect(Object.keys(sent.references[0]!).sort()).toEqual(['dataBase64','kind','name','note']);
+ });
+
+ it('removes a reference, and sends none when none is attached',async()=>{
+  const {client}=setup();
+  fireEvent.click(await screen.findByText(/Referencias \(opcional\)/));
+  await attach(file('panel.png'));
+  fireEvent.click(await screen.findByRole('button',{name:'Quitar panel.png'}));
+  expect(screen.queryByRole('list',{name:'Referencias adjuntas'})).toBeNull();
+  fireEvent.change(screen.getByLabelText('¿Qué quieres construir?'),{target:{value:'Un panel'}});
+  fireEvent.click(screen.getByRole('button',{name:'Empezar'}));
+  await waitFor(()=>expect(client.start).toHaveBeenCalledWith('p',expect.not.objectContaining({references:expect.anything()})));
+ });
+
+ it('refuses unsupported types, big files and more than five, explaining why and attaching nothing',async()=>{
+  setup();
+  fireEvent.click(await screen.findByText(/Referencias \(opcional\)/));
+  await attach(file('virus.exe',['x'],'application/octet-stream'));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/«virus.exe»: tipo no admitido/);
+  await attach(file('enorme.png',[new Uint8Array(3*1024*1024+1)]));
+  await waitFor(()=>expect(screen.getByRole('alert').textContent).toMatch(/«enorme.png» pesa más de 3 MB/));
+  await attach(...Array.from({length:6},(_,index)=>file(`p${index}.png`)));
+  await waitFor(()=>expect(screen.getByRole('alert').textContent).toMatch(/como mucho 5 referencias/));
+  expect(screen.queryByRole('list',{name:'Referencias adjuntas'})).toBeNull();
+ });
+
+ it('says that it is analysing the references while the first call works',async()=>{
+  setup({stage:'ASK_GOALS',status:'WORKING',nextAction:'WAIT',brief:'Un panel',references:[translated({status:'PENDING',translation:null})]});
+  expect(await screen.findByRole('heading',{name:'Analizando tus referencias…'})).toBeTruthy();
+  expect(screen.getByRole('status').textContent).toMatch(/Un modelo está describiendo en texto tus archivos/);
+ });
+
+ it('shows what the translator understood, so the user can check it, and a failed reference with its reason',async()=>{
+  setup({stage:'ASK_GOALS',status:'WAITING_USER',nextAction:'ANSWER',brief:'Un panel',questions,references:[translated(),translated({id:'ref-2',name:'roto.pdf',kind:'FUNCTIONAL',note:'',status:'FAILED',error:'El archivo está vacío.',translation:null})]});
+  const summary=await screen.findByText(/Cómo se entendieron tus referencias \(2\)/);
+  fireEvent.click(summary);
+  const details=summary.closest('details')!;
+  expect(within(details).getByText(/Panel con barra lateral y tarjetas\./)).toBeTruthy();
+  expect(details.textContent).toMatch(/Cómo debe verse/);
+  expect(details.textContent).toMatch(/Colores:.*azul #2255ff/);
+  expect(details.textContent).toMatch(/Por aclarar:.*¿Modo oscuro\?/);
+  expect(details.textContent).toMatch(/No se pudo analizar: El archivo está vacío\./);
+ });
+});

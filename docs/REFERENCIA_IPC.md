@@ -57,10 +57,10 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
-| `inception:start` ⛓ | Inicia el asistente con una descripción; responde al instante con estado `WORKING`. |
+| `inception:start` ⛓ | Inicia el asistente con una descripción y, opcionalmente, hasta 5 `references` (`{name, kind: VISUAL\|FUNCTIONAL\|CONCEPTUAL, note?, dataBase64}`); responde al instante con estado `WORKING`. Un modelo aparte traduce las referencias a texto antes de preguntar. Sin `references` en un reintento tras un fallo, reutiliza las ya guardadas. |
 | `inception:answer` ⛓ | Guarda las respuestas y pide la propuesta; en la fase de propuesta la regenera, con `notes` opcionales (hasta 2000 caracteres) que indican qué cambiar. |
 | `inception:approve` ⛓ | Aplica el ChangeSet de la propuesta (exige un repositorio principal). |
-| `inception:restart` ⛓ | Olvida preguntas, respuestas y propuesta pendiente y detiene la llamada en curso; se rechaza una vez aplicada. |
+| `inception:restart` ⛓ | Olvida preguntas, respuestas, referencias (borra sus archivos) y propuesta pendiente, y detiene la llamada en curso; se rechaza una vez aplicada. |
 
 ## Consultas (solo lectura)
 

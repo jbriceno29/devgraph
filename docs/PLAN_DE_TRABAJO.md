@@ -3,6 +3,37 @@
 Fecha: 2026-11-10 · Rama: `feat/claude-code`
 Sustituye como plan vigente a `docs/PLAN_MIGRACION_CLAUDE.md`, que queda como registro de las Fases 0 a 3 y de lo confirmado sobre el CLI de Claude Code.
 
+## 0. Estado de un vistazo
+
+Actualizado: 2026-11-11 (rama `feat/claude-code`). Los commits son los de `git log`; las fechas, las del commit.
+
+| Etapa | Estado | Commits (fecha) |
+| :--- | :--- | :--- |
+| Preparación: Etapa 7 original, validador endurecido, adaptador de Claude Code, planificador con Claude (D1–D5) | Hecha | `d1f57a5`, `68e0c2d`, `2a90857`, `a1c493b`, `8a4c3d4`, `296c23b`, `41dc81e` (2026-11-10) |
+| 1. Cerrar el ciclo (worktree por tarea, rama por feature, aceptar, pedir ajustes, D6) | Hecha (núcleo y UI) | `6d65cb4`, `2dda1c0`, `6298377`, `1aefc8f` (2026-11-10) |
+| 2. Memoria que fluye (`TaskOutcome`, evidencia en el grafo, contexto) | Hecha | `31eb39b` (2026-11-10); convenciones como reglas de nivel 1 en `da677b2` |
+| 3. Piloto automático (autonomía por feature, reintentos, pausa por uso, robustez) | Hecha, incluidas las decisiones automáticas del agente | `a95ec03`, `6b710c6` (2026-11-10); política de decisiones en `665cae5` (2026-11-11) |
+| 5. Demostración y medición (mediciones 1–6) | Hecha con Claude; decisión del usuario tomada (apostar por autonomía y trazabilidad). Repetición de la agrupación **en curso** | `5ecb8ee`, `5c97bc3`, `da677b2`, `2d3decc` (2026-11-10/11), `2c9c0fc` (2026-11-11) |
+| 6. Grafo vivo | Hecha, salvo el camino crítico | `ca96fca` (2026-11-10) |
+| Aislamiento entre lanzamientos (contexto leído del commit de partida, CLI sin configuración personal) | Hecha | `15f7831` (2026-11-11) |
+| Interfaz renovada (barra lateral, bandeja de actividad, siguiente paso, tema claro/oscuro en todos los paneles) | Hecha | `34aecf0`, `8be2e46` (2026-11-11) |
+| Asistente de inicio de proyecto («Inicio») | Hecha (MVP); ver `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md` | `2618db4`, `d90e76a`, `67e5ec8` (2026-11-11) |
+| Ramas con dependencias entre features e «Integrar en main» | Hecha | `f82a470`, `67e5ec8` (2026-11-11) |
+| Pruebas de UI deterministas | Hecha | `cd351b5` (2026-11-11) |
+| 4. Portabilidad entre motores (Codex) | **Pendiente.** Los adaptadores de Codex siguen en el código sin cablear | — |
+
+**Pendiente, de forma explícita:**
+
+- Etapa 4: reconectar `CodexAgentAdapter` y `CodexChangeSetPlanner` con el contrato actual y medir H3 (necesita cuota de Codex).
+- Agrupar tareas pequeñas dentro del piloto (hoy solo existe como escenario de medición, `scripts/benchmark/todo-v2-agrupado`) y repetir la medición antes de citar cifras finales.
+- Recortar el prompt de contexto de la tarea (la sexta medición lo identifica como la mayor parte del costo evitable).
+- Notificaciones de escritorio fiables: hoy usan la API web `Notification`, sin plugin de Tauri.
+- Camino crítico de la feature en el grafo.
+- Medir si las instrucciones extra del prompt para proponer cambios al plan alteran el costo ponderado.
+- Que el planificador de ChangeSets use el aislamiento de configuración del CLI (hoy solo lo usan las ejecuciones).
+- Del asistente de inicio: modo brownfield (`repository:scan`) y el resto de lo que la propuesta deja fuera.
+
+
 ## 1. Visión
 
 Graph Workspace sigue **una línea de trabajo, no una conversación**. El proyecto vive como un grafo (módulos, features, requisitos, tareas, decisiones, documentos y código) dentro del workspace: SQLite más Markdown versionado en el repositorio. Cada tarea se abre con el contexto justo para cerrarla, se cierra con evidencia verificable y deja lo aprendido en el grafo para las tareas que dependen de ella.
@@ -36,7 +67,9 @@ El proyecto tiene sentido solo si resuelve algo que hoy le duele a trabajar con 
 
 ## 4. Estado actual
 
-Hecho en la rama `feat/claude-code` (detalle en `docs/PLAN_MIGRACION_CLAUDE.md`):
+> Esta sección describía el punto de partida de la rama (2026-11-10). El estado actual está en la tabla de la sección 0; lo siguiente se conserva como contexto.
+
+Punto de partida, en la rama `feat/claude-code` (detalle en `docs/PLAN_MIGRACION_CLAUDE.md`):
 
 - Etapa 7 (worktrees, auditoría de sandbox, aprobaciones) commiteada.
 - Validador endurecido (Git fijado al directorio de administración, symlinks, secretos fuera del parche) y D2, D3.
@@ -45,7 +78,7 @@ Hecho en la rama `feat/claude-code` (detalle en `docs/PLAN_MIGRACION_CLAUDE.md`)
 - La política de ejecución viaja en el prompt.
 - `ClaudeChangeSetPlanner` y D1 (IPC concurrente, timeouts por canal, log del sidecar).
 
-Lo que falta para que la app aporte algo que el motor solo no aporta: el ciclo no se cierra (los resultados se quedan en el worktree), el grafo no aprende de las ejecuciones, la operación requiere tocar la base de datos y no hay autonomía.
+Lo que faltaba entonces para que la app aportara algo que el motor solo no aporta: el ciclo no se cerraba, el grafo no aprendía de las ejecuciones, la operación requería tocar la base de datos y no había autonomía. Las Etapas 1 a 3 lo resolvieron.
 
 ## 5. Etapas
 
@@ -88,7 +121,7 @@ Objetivo: H2. Lo que se aprende al cerrar una tarea llega a las siguientes sin h
 
 ### Etapa 3: Piloto automático (L)
 
-> **Estado (2026-11-10): hecha, salvo las decisiones automáticas sobre ChangeSets.** Robustez (`a95ec03`): tiempo máximo por ejecución configurable en la política, D7 (el motor se detiene si falla el consumo o al cerrar la app), aprobaciones pendientes cerradas al reconciliar, y el host reinicia el núcleo si muere. Autonomía por feature (manual, auto-aceptar, piloto) con aviso de costo obligatorio, autenticación por proveedor (suscripción primero, clave de API como segunda opción) y un piloto que recorre las tareas READY, acepta solo con auditoría y comprobaciones en verde, reintenta con el error como contexto (el último intento con el modelo de escalado), se pausa al acercarse al límite de uso y avisa con el motivo cuando necesita al usuario. **H4 probada en real** sobre el proyecto `todo-app` de la app (Claude `haiku`): el piloto cerró la feature FEAT-001 (TASK-001 y TASK-002, con dependencia) sin intervención en 41 s, con 13/13 pruebas en la rama de la feature.
+> **Estado (2026-11-10): hecha, salvo las decisiones automáticas sobre ChangeSets (que se completaron el 2026-11-11, ver «Decisiones del agente» en la Etapa 6).** Robustez (`a95ec03`): tiempo máximo por ejecución configurable en la política, D7 (el motor se detiene si falla el consumo o al cerrar la app), aprobaciones pendientes cerradas al reconciliar, y el host reinicia el núcleo si muere. Autonomía por feature (manual, auto-aceptar, piloto) con aviso de costo obligatorio, autenticación por proveedor (suscripción primero, clave de API como segunda opción) y un piloto que recorre las tareas READY, acepta solo con auditoría y comprobaciones en verde, reintenta con el error como contexto (el último intento con el modelo de escalado), se pausa al acercarse al límite de uso y avisa con el motivo cuando necesita al usuario. **H4 probada en real** sobre el proyecto `todo-app` de la app (Claude `haiku`): el piloto cerró la feature FEAT-001 (TASK-001 y TASK-002, con dependencia) sin intervención en 41 s, con 13/13 pruebas en la rama de la feature.
 >
 > Pendiente: ChangeSets propuestos por el propio agente tras una ejecución y su clasificación según la política de decisiones del proyecto. Hoy ninguna ejecución propone cambios al plan, así que no hay decisiones que automatizar; se abordará cuando el agente pueda declararlos (por ejemplo, a partir del apartado "Pendiente" de su resumen de cierre).
 
@@ -98,7 +131,7 @@ Objetivo: H4. El usuario deja de ser orquestador.
 - **Aviso de costo antes de activar `piloto`:** la app explica que el piloto encadena muchas ejecuciones, muestra el uso actual de la ventana de límite y cuántas tareas quedan en la feature, y recuerda que con suscripción se pausará al acercarse al límite. Recomienda clave de API del proveedor para uso intensivo.
 - **Autenticación por proveedor:** primera opción, la suscripción del usuario (con pausas por límite); segunda opción, clave de API del proveedor para la autonomía. Se configura por proveedor (Claude Code, Codex) y la app indica cuál está activa en cada ejecución.
 - **Ejecutor de feature:** recorre las tareas de una feature en orden de dependencias; ejecuta la siguiente `READY`; si las puertas pasan, acepta y continúa.
-- **Reintentos con contexto:** si falla, reintenta con el error, el diff y la salida de las pruebas como contexto, hasta un máximo (por defecto 2); el último reintento puede usar un modelo más capaz.
+- **Reintentos con contexto:** si falla, reintenta con el error, el diff y la salida de las pruebas como contexto, hasta un máximo (diseño original: 2; el valor por defecto implementado es 3 intentos por tarea, `DEFAULT_AUTONOMY.maxAttempts`); el último reintento puede usar un modelo más capaz.
 - **Escalado al usuario** solo cuando: fallos repetidos, una acción que la política no permite (con "Permitir y reintentar"), una decisión de arquitectura propuesta por el agente, un conflicto de merge o un límite de uso.
 - **Decisiones automáticas según la política del proyecto:** cada proyecto define qué decisiones son importantes y deben esperar al usuario. Valores por defecto, derivados del grafo y de los niveles de autoridad: crear o cambiar un ADR, cambiar reglas del proyecto, tocar lo que una decisión aceptada fija, salirse del alcance de la feature en curso, borrar entidades o archivos, y cambiar dependencias del proyecto (`package.json` y similares). El resto (nuevas tareas o requisitos dentro de la feature, documentación de lo hecho) se aplica solo en nivel `piloto`. El agente puede además marcar una propuesta como importante, pero nunca puede rebajar una que la política marca como tal.
 - **Presupuesto:** pausa automática cuando `rate_limit_event` supera un umbral configurable (por defecto 85 %) y reanudación al renovarse la ventana; tope de ejecuciones por sesión de piloto.
@@ -155,9 +188,9 @@ Va al final a propósito: ayuda a entender el proyecto, pero no es lo que demues
 
 > **Mediciones 5 y 6 (2026-11-11):** el tope de turnos (`--max-turns`, columna `max_turns`, desactivado por defecto) no ahorra: nunca se alcanza. El arranque del CLI cuesta solo ~4 % del total; el 40 % es el prompt de la tarea, que crece con cada tarea cerrada, y el 51 % el trabajo. Agrupar tareas pequeñas (6 ejecuciones en vez de 13) bajó el costo ponderado de 591 k a 334 k (−43 %, por debajo del chat largo con 414 k) con 32/33 pruebas y convención 8/9, en una sola corrida. Informes en `docs/benchmarks/`. Siguiente en costo: agrupación en el piloto (opción) y recortar el prompt de contexto.
 
-> **Inicio de proyecto y ramas (2026-11-11):** asistente de inicio (preguntas, propuesta única con visión, stack, reglas y plan, aprobación, notas para regenerar, cancelación real del motor), `repository:initialize`, rama de cada feature con el trabajo de sus dependencias, `feature:integrate` con botón, y bandeja de actividad. Verificado con haiku real (propuesta en Python al pedirlo con una nota, ~0,035 USD). Estado de la suite: las pruebas de UI tienen fallos intermitentes bajo carga (distintas cada vez); se endurecen aparte.
+> **Inicio de proyecto y ramas (2026-11-11):** asistente de inicio (preguntas, propuesta única con visión, stack, reglas y plan, aprobación, notas para regenerar, cancelación real del motor), `repository:initialize`, rama de cada feature con el trabajo de sus dependencias, `feature:integrate` con botón, y bandeja de actividad. Verificado con haiku real (propuesta en Python al pedirlo con una nota, ~0,035 USD). Las pruebas de UI tenían fallos intermitentes bajo carga; se hicieron deterministas en `cd351b5`.
 
-> **Interfaz y orquestador (2026-11-11):** bandeja de actividad (`activity:list`), tema claro/oscuro (tokens con contraste AA verificado) y shell con barra lateral, árbol, atajos y "siguiente paso". Falta migrar los demás paneles al tema (lotes C a G, ver `src/desktop/theme/MIGRACION.md`). El usuario aceptó las 8 decisiones de `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md` (asistente de inicio de proyecto con 2 aprobaciones, estado en tabla propia, `PROJECT_FOUNDATION` siempre pregunta, scaffold por el agente, sin `npm install`, opus en objetivo y stack, reiniciar `todo-app`, antes de Codex).
+> **Interfaz y orquestador (2026-11-11):** bandeja de actividad (`activity:list`), tema claro/oscuro (tokens con contraste AA verificado) y shell con barra lateral, árbol, atajos y "siguiente paso". Los demás paneles se migraron al tema después, en `8be2e46` (ver `src/desktop/theme/MIGRACION.md`). El usuario aceptó las 8 decisiones de `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md` (asistente de inicio de proyecto con 2 aprobaciones, estado en tabla propia, `PROJECT_FOUNDATION` siempre pregunta, scaffold por el agente, sin `npm install`, opus en objetivo y stack, reiniciar `todo-app`, antes de Codex).
 
 ## 6. Orden y dependencias
 
@@ -191,3 +224,9 @@ Tomadas (2026-11-10):
 3. **Decisiones importantes:** las define la política de cada proyecto, con valores por defecto derivados del grafo (ver Etapa 3). El agente puede marcar más, nunca menos.
 
 4. **Rama que recibe el trabajo aceptado: una rama por feature** (por ejemplo `feature/gestion-tareas`), creada desde la rama activa al empezar la feature. Cada tarea aceptada se integra ahí con squash; al terminar la feature, el usuario la revisa completa y la fusiona a su rama principal. Así el trabajo autónomo queda separado hasta su revisión y descartarlo es borrar una rama.
+
+Tomadas (2026-11-11):
+
+5. **Apostar por la autonomía y la trazabilidad** tras las mediciones 1–4 (ver la Etapa 5): se acepta un sobrecosto de ~1,5× en tokens a cambio de calidad igual a la del mejor chat, cero intervención humana y decisiones registradas.
+6. **Asistente de inicio de proyecto**, con las ocho decisiones de `docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md`: MVP de 2 aprobaciones, estado en tabla propia, `PROJECT_FOUNDATION` siempre pregunta, scaffold como primera tarea del plan, sin `npm install`, `opus` para objetivo y stack, reinicio de `todo-app` y prioridad antes de la Etapa 4 (Codex).
+7. **El tope de turnos (`--max-turns`) queda desactivado por defecto** y la reutilización de sesión por feature queda desactivada: ninguna ahorró costo en la medición (ver mediciones 4 y 5).

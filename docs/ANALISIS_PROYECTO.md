@@ -1,3 +1,5 @@
+> **Documento histórico (análisis del 2026-11-10).** Describe el estado del proyecto antes de la migración a Claude Code y de las Etapas 1 a 6; sus defectos y huecos se resolvieron o se reorganizaron. El estado vigente está en `docs/PLAN_DE_TRABAJO.md` (tabla de la sección 0) y el README.
+
 # Análisis del proyecto Graph Workspace (`graphdev2`)
 
 Fecha del análisis: 2026-11-10

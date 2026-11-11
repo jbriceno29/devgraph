@@ -1,6 +1,56 @@
-# Propuesta: orquestador de inicio («asistente de proyecto»)
+# Orquestador de inicio («asistente de proyecto»): Implementada (MVP)
 
-Fecha: 2026-11-11 · Rama: `feat/claude-code` · Estado: propuesta, sin implementar.
+Fecha: 2026-11-11 · Rama: `feat/claude-code` · Estado: **Implementada (MVP)**. El diseño original (secciones 1 a 6) se conserva como contexto; la sección 0 resume lo que existe hoy y en qué se apartó del diseño.
+
+## 0. Estado implementado
+
+### Decisiones aceptadas por el usuario (2026-11-11)
+
+Las ocho de la sección 6, resueltas así:
+
+1. **Puertas:** MVP de **2 aprobaciones** (preguntas de objetivo y alcance; después una sola propuesta con todo). Etapas de código: `ASK_GOALS` → `PROPOSAL` → `APPLIED`.
+2. **Estado:** tabla propia **`project_inception`** (migración 008).
+3. **`PROJECT_FOUNDATION`:** categoría de decisión que **siempre pregunta** y no es configurable (`normalizeDecisionPolicy` rechaza configurarla).
+4. **Scaffold:** lo hace el agente como **primera tarea** de la feature «Fundación» del plan.
+5. **Dependencias:** el scaffold **no ejecuta `npm install`** ni scripts de paquetes ni generadores; `buildFoundationPlan` añade esa regla y un criterio de aceptación a la tarea.
+6. **Modelo:** **`opus`** (el modelo de planificación del proveedor) para las dos llamadas; se puede elegir otro alias disponible al iniciar.
+7. **`todo-app`:** se **reinicia** con el asistente, en lugar de usarse como caso brownfield.
+8. **Prioridad:** **antes de la Etapa 4** (Codex).
+
+### Qué se implementó
+
+| Pieza | Dónde | Notas |
+| :--- | :--- | :--- |
+| Servicio de inicio | `src/application/inception/project-inception-service.ts` | Las llamadas al motor corren en segundo plano: el IPC responde al instante con estado `WORKING` y `inception:updated` avisa del final. Cada llamada es independiente (sin sesión del motor). |
+| Plan determinista | `src/application/inception/foundation-plan.ts` | Convierte el borrador del motor: solo creaciones, módulos bajo la raíz, tareas planas, «Fundación» como prerrequisito de las demás features, dependencias de features reflejadas en tareas, scaffold `READY` y el resto `BLOCKED`. Lo que falta se lista como `problems`. |
+| Motor | `src/infrastructure/ai/claude-inception-engine.ts`, `inception-contract.ts` | `claude -p --json-schema`, sin herramientas ni sesión y con el aislamiento de configuración del CLI. |
+| Operación `SET_PROJECT_PROFILE` | dominio de `ChangeSet` | Fija objetivo, alcance, stack, reglas y verificación; clasifica como `PROJECT_FOUNDATION`. El perfil entra al contexto como regla de nivel 1. |
+| `repository:initialize` | `src/infrastructure/git/git-repository-initializer.ts` | Ruta absoluta sin `..`, carpeta inexistente o vacía, `git init --template= -b main` (sin hooks), git sin configuración del sistema ni global, sin remotos, sin borrar nada; escribe `README.md`, `.gitignore` y `docs/` y hace el commit inicial. |
+| Canales IPC | `inception:get`, `inception:start`, `inception:answer`, `inception:approve`, `inception:restart`, `repository:initialize`; evento `inception:updated` | Ver `docs/REFERENCIA_IPC.md`. |
+| UI | `src/desktop/presentation/inception/` (`InceptionAssistant`, `QuestionsStep`, `ProposalReview`, `RepositorySetup`, `use-inception`) | Vista «Inicio»; el estado vacío y el «siguiente paso» llevan a ella. La bandeja de actividad muestra la fase pendiente (`ActivitySummaryDto.inception`). |
+| Estado | tabla `project_inception`; `projects.out_of_scope_json` | Migración 008. |
+
+### Añadido después del MVP
+
+- **Notas al regenerar:** `inception:answer` acepta `notes` (hasta 2000 caracteres) cuando se revisa una propuesta; se guardan (`notes_json`; se conservan las últimas 5) y cada regeneración las aplica todas.
+- **`scaffoldTaskId`:** al aplicar la propuesta se guarda el id de grafo de la tarea de scaffold para que la interfaz pueda llevar a ella.
+- **Cancelación real:** `inception:restart` y el cierre de la app abortan la llamada en curso: el CLI recibe SIGINT y, pasado un periodo de gracia, SIGTERM.
+- **Migración 009:** `project_inception.notes_json`, `project_inception.scaffold_task_id` y `feature_branches.integrated_at` (esta última sirve al botón «Integrar en main»).
+- **Ramas de features con dependencias** y `feature:integrate` (commit `f82a470`, `67e5ec8`), para que lo que «Fundación» deja en su rama llegue a las features que dependen de ella.
+
+### Lo que no se hizo (límites actuales)
+
+- **Solo Claude Code:** el contrato del motor de inicio (`InceptionEnginePort`) existe, pero no hay implementación para Codex.
+- **Sin modo brownfield:** no existe `repository:scan` ni escaneo de repositorios existentes; el asistente solo funciona sobre un proyecto sin plan (si ya hay features o tareas, `inception:start` lo rechaza).
+- **Dos puertas, no cuatro:** convenciones y política de ejecución no son etapas separadas; salen en la propuesta única.
+- **SIGKILL del sidecar:** si el proceso del núcleo muere por SIGKILL no hay oportunidad de detener la llamada del motor en curso (por verificar si queda un proceso huérfano).
+- **Prueba real:** se verificó con `haiku` real (propuesta en Python al pedirlo con una nota, ~0,035 USD, según el plan de trabajo); la prueba prevista con `sonnet`/`opus` y el piloto cerrando Fundación y una feature no está registrada.
+
+---
+
+## Diseño original (contexto)
+
+Lo que sigue es el texto de la propuesta tal como se escribió; las secciones 3 y 4 describen un alcance mayor que el MVP.
 
 ## 1. Problema
 
@@ -102,7 +152,7 @@ Con eso, `todo-app` habría tenido objetivo, stack e idioma fijos, y FEAT-002 ha
 
 **Qué NO hacer todavía:** remotos, plantillas con scripts, re-planificar solo un proyecto existente, agentes ARCHITECT o REVIEWER separados, escanear código fuente y un chat libre en la capa 3.
 
-## 6. Decisiones que necesito del usuario
+## 6. Decisiones que se pidieron al usuario (resueltas: ver sección 0)
 
 1. **Puertas:** ¿el MVP con 2 puertas (recomendado) o las 4 etapas separadas?
 2. **Estado:** ¿una tabla `project_inception` (recomendado) o deducido solo de los artefactos?

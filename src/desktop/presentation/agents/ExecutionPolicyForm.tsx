@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ExecutionPolicyDto } from '../../../shared/contracts/agent-view.js';
+import { errorText } from '../errors.js';
+import { control, primary } from '../ui.js';
 
 type Field = 'writablePaths' | 'readonlyPaths' | 'deniedPaths' | 'allowedCommands';
 const fields: Array<{ key: Field; label: string; hint: string }> = [
@@ -38,7 +40,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
     let current = true;
     void window.workspaceIpc.queries.getExecutionPolicy(projectId)
       .then(policy => { if (current) { setValues(toText(policy)); setMinutes(String(policy.maxExecutionMinutes ?? 30)); setTurns(String(policy.maxTurns ?? 0)); loadDecisions(policy); } })
-      .catch(reason => { if (current) setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); });
+      .catch(reason => { if (current) setMessage({ tone: 'error', text: errorText(reason) }); });
     return () => { current = false; };
   }, [projectId]);
 
@@ -62,46 +64,46 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
       });
       setValues(toText(saved)); setTurns(String(saved.maxTurns ?? 0)); loadDecisions(saved);
       setMessage({ tone: 'ok', text: saved.allowedCommands.length ? 'Política guardada.' : 'Política guardada. Sin comandos de verificación, las ejecuciones no se prueban automáticamente.' });
-    } catch (reason) { setMessage({ tone: 'error', text: reason instanceof Error ? reason.message : String(reason) }); }
+    } catch (reason) { setMessage({ tone: 'error', text: errorText(reason) }); }
     finally { setBusy(false); }
   };
 
-  return <details className="rounded-xl border border-slate-800 bg-slate-900/30">
-    <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-300">Política de ejecución</summary>
-    <div className="space-y-3 border-t border-slate-800 p-4">
-      {!values ? <p className="text-xs text-slate-500">Cargando…</p> : fields.map(field => <div key={field.key}>
-        <label htmlFor={`policy-${field.key}`} className="mb-1 block text-xs text-slate-400">{field.label}</label>
-        <textarea id={`policy-${field.key}`} value={values[field.key]} onChange={event => setValues({ ...values, [field.key]: event.target.value })} rows={field.key === 'writablePaths' ? 4 : 2} className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[11px] text-slate-100 focus-visible:outline-2 focus-visible:outline-cyan-400" />
-        <p className="mt-0.5 text-[10px] text-slate-600">{field.hint}</p>
+  return <section aria-labelledby="policy-heading" className="rounded-xl border border-border">
+    <div className="border-b border-border px-4 py-3"><h3 id="policy-heading" className="text-xs font-semibold text-fg">Política de ejecución</h3><p className="mt-0.5 text-[11px] text-fg-muted">Qué puede tocar el agente y cómo se verifica su trabajo. Se aplica dentro del motor y se vuelve a auditar al terminar.</p></div>
+    <div className="space-y-3 p-4">
+      {!values ? (message?.tone !== 'error' && <p className="text-xs text-fg-muted">Cargando…</p>) : fields.map(field => <div key={field.key}>
+        <label htmlFor={`policy-${field.key}`} className="mb-1 block text-xs text-fg-muted">{field.label}</label>
+        <textarea id={`policy-${field.key}`} aria-describedby={`policy-${field.key}-hint`} value={values[field.key]} onChange={event => setValues({ ...values, [field.key]: event.target.value })} rows={field.key === 'writablePaths' ? 4 : 2} spellCheck={false} className={`${control} resize-y py-2 font-mono`} />
+        <p id={`policy-${field.key}-hint`} className="mt-0.5 text-[11px] text-fg-subtle">{field.hint}</p>
       </div>)}
-      {values && <div>
-        <label htmlFor="policy-max-minutes" className="mb-1 block text-xs text-slate-400">Tiempo máximo por ejecución (minutos)</label>
-        <input id="policy-max-minutes" type="number" min={1} max={240} value={minutes} onChange={event => setMinutes(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
-      </div>}
-      {values && <div>
-        <label htmlFor="policy-max-turns" className="mb-1 block text-xs text-slate-400">Tope de turnos por ejecución</label>
-        <input id="policy-max-turns" type="number" min={0} max={1000} step={1} value={turns} onChange={event => setTurns(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
-        <p className="mt-0.5 text-[10px] text-slate-600">Limita la exploración del agente (lecturas, búsquedas, comandos). 0 = sin límite. Al alcanzarlo la ejecución falla y el piloto reintenta con ese motivo.</p>
-      </div>}
-      {values && <fieldset className="space-y-2 rounded-lg border border-slate-800 p-3">
-        <legend className="px-1 text-xs font-semibold text-slate-300">Decisiones del agente</legend>
-        <p className="text-[10px] text-slate-500">Al cerrar una tarea el agente puede proponer cambios al plan. Elige cuáles se aplican solos y cuáles te pregunta.</p>
+      {values && <div className="grid gap-3 sm:grid-cols-2"><div>
+        <label htmlFor="policy-max-minutes" className="mb-1 block text-xs text-fg-muted">Tiempo máximo por ejecución (minutos)</label>
+        <input id="policy-max-minutes" type="number" min={1} max={240} value={minutes} onChange={event => setMinutes(event.target.value)} className={`${control} max-w-28`} />
+      </div>
+      <div>
+        <label htmlFor="policy-max-turns" className="mb-1 block text-xs text-fg-muted">Tope de turnos por ejecución</label>
+        <input id="policy-max-turns" aria-describedby="policy-max-turns-hint" type="number" min={0} max={1000} step={1} value={turns} onChange={event => setTurns(event.target.value)} className={`${control} max-w-28`} />
+      </div>
+      <p id="policy-max-turns-hint" className="text-[11px] text-fg-subtle sm:col-span-2">Turnos: limita la exploración del agente (lecturas, búsquedas, comandos). 0 = sin límite. Al alcanzarlo la ejecución falla y el piloto reintenta con ese motivo.</p></div>}
+      {values && <fieldset className="space-y-2 rounded-lg border border-border p-3">
+        <legend className="px-1 text-xs font-semibold text-fg">Decisiones del agente</legend>
+        <p className="text-[11px] text-fg-muted">Al cerrar una tarea el agente puede proponer cambios al plan. Elige cuáles se aplican solos y cuáles te pregunta.</p>
         {decisionCategories.map(item => <div key={item.category} className="flex items-center justify-between gap-3">
-          <label htmlFor={`decision-${item.category}`} className="text-xs text-slate-400">{item.label}</label>
-          <select id={`decision-${item.category}`} value={rules[item.category]} onChange={event => setRules({ ...rules, [item.category]: event.target.value as 'AUTO' | 'ASK' })} className="min-h-9 shrink-0 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100">
+          <label htmlFor={`decision-${item.category}`} className="text-xs text-fg-muted">{item.label}</label>
+          <select id={`decision-${item.category}`} value={rules[item.category]} onChange={event => setRules({ ...rules, [item.category]: event.target.value as 'AUTO' | 'ASK' })} className={`${control} w-auto shrink-0`}>
             <option value="AUTO">Automático</option>
             <option value="ASK">Preguntar</option>
           </select>
         </div>)}
         <div>
-          <label htmlFor="decision-max-auto-tasks" className="mb-1 block text-xs text-slate-400">Máximo de tareas automáticas por feature</label>
-          <input id="decision-max-auto-tasks" type="number" min={0} max={50} step={1} value={maxAutoTasks} onChange={event => setMaxAutoTasks(event.target.value)} className="min-h-9 w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs text-slate-100" />
+          <label htmlFor="decision-max-auto-tasks" className="mb-1 block text-xs text-fg-muted">Máximo de tareas automáticas por feature</label>
+          <input id="decision-max-auto-tasks" type="number" min={0} max={50} step={1} value={maxAutoTasks} onChange={event => setMaxAutoTasks(event.target.value)} className={`${control} max-w-28`} />
         </div>
       </fieldset>}
-      <button type="button" onClick={() => void save()} disabled={busy || !values} className="min-h-9 w-full rounded-lg border border-slate-600 px-3 text-xs text-slate-200 hover:border-slate-400 disabled:opacity-50">Guardar política</button>
-      {message && <p role={message.tone === 'error' ? 'alert' : 'status'} className={`text-xs ${message.tone === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}>{message.text}</p>}
+      <button type="button" onClick={() => void save()} disabled={busy || !values} className={`min-h-9 w-full text-xs ${primary}`}>Guardar política</button>
+      {message && <p role={message.tone === 'error' ? 'alert' : 'status'} className={`text-xs ${message.tone === 'error' ? 'text-danger' : 'text-success'}`}>{message.text}</p>}
     </div>
-  </details>;
+  </section>;
 }
 
 function toText(policy: ExecutionPolicyDto): Record<Field, string> {

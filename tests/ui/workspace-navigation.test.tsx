@@ -11,7 +11,7 @@ async function open(){render(<WorkspaceNavigationProvider><WorkspaceShell/></Wor
 it('updates navigation focus and inspector immediately when a graph node is selected',async()=>{
  const client=installShellIpc(nodes);await open();
  fireEvent.click(screen.getByRole('tab',{name:/Grafo/}));
- fireEvent.click(await screen.findByRole('button',{name:'FEATURE: Feature work'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Feature: Feature work'}));
  await waitFor(()=>expect(client.queries.getEntityInspectorDetails).toHaveBeenLastCalledWith('feature'));
  expect(screen.getByRole('heading',{name:'Feature work'})).toBeTruthy();
  expect(screen.getByText('Summary for feature')).toBeTruthy();

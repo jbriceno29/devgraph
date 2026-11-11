@@ -17,6 +17,9 @@ const pairs:[string,string,number][]=[
  ...nodeTypes.flatMap(type=>[[`node-${type}-stroke`,`node-${type}-fill`,4.5],['node-fg',`node-${type}-fill`,4.5]] as [string,string,number][]),
  ['node-ghost-stroke','node-ghost-fill',4.5],['node-selected','surface',3],['edge-label','surface',4.5],['edge-cross','surface',3],
  ...[1,2,3,4,5].map(tier=>[`tier-${tier}`,'surface',3] as [string,string,number]),
+ // Piloto automático y flujo de contexto: texto sobre las superficies, su fondo suave y la tarjeta de feature del grafo; borde como elemento gráfico.
+ ...['pilot','context'].flatMap(name=>[...surfaces,`${name}-soft`].map(bg=>[name,bg,4.5] as [string,string,number])),
+ ['pilot','node-feature-fill',4.5],['pilot-border','pilot-soft',1.5],['context-border','context-soft',1.5],
 ];
 
 describe('tokens de tema',()=>{

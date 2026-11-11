@@ -35,3 +35,11 @@ Notas: los recuentos de texto incluyen variantes con prefijo (`hover:text-slate-
 - **`.markdown-preview`, `::selection` y `.approval-dialog::backdrop` en `styles.css`**: hex fijos; pasar a `var(--fg-muted)`, `var(--fg)`, `var(--border)`, `var(--surface-sunken)`, `var(--accent)`, `var(--accent-soft)`.
 - **Clases construidas con template strings** (``className={`…${cond?'a':'b'}`}``, 8 en WorkspaceShell, ExecutionReview, DocumentsPanel ×3, ExecutionPolicyForm, GraphCanvas, PlanningWorkspace): un codemod por regex debe revisar ambas ramas de cada ternario; no suponer que la clase completa está en un literal.
 - **Mapas de clases por estado** (p. ej. objetos `{DONE:'text-emerald-…'}`): migrar a `text-status-*` para que coincidan con el grafo.
+
+## Estado tras la migración de presentation/** (2026-11-11)
+
+- Sin clases `slate-/cyan-/emerald-/rose-/amber-/violet-/pink-` ni hex en JSX o `styles.css`. El lienzo SVG usa `var(--node-*)`, `var(--status-*)`, `var(--tier-*)`, `var(--edge*)` vía `style`.
+- Tokens nuevos (ambos temas, AA comprobado en `tests/unit/theme-contrast.test.ts`): `--pilot`, `--pilot-soft`, `--pilot-border` (piloto automático) y `--context`, `--context-soft`, `--context-border` (flujo de contexto del grafo). Clases: `text-pilot`, `bg-pilot-soft`, `border-pilot-border`, `text-context`…
+- Clases compartidas en `presentation/ui.ts` (`focusRing`, `control`, `primary` = único botón primario `bg-accent`, `secondary`, `danger`); textos en `presentation/labels.ts`; errores legibles en `presentation/errors.tsx`.
+- Foco: regla base `:focus-visible` con `var(--accent)` en `styles.css`.
+- Excepciones que quedan: `index.html` (`<meta name="theme-color">` exige un color literal; coincide con `--surface` de cada tema) y el `focus:outline-none` del `<h1 tabIndex=-1>` del shell (destino de foco programático, no interactivo).

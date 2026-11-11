@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DocumentsPanel } from '../../src/desktop/presentation/documents/DocumentsPanel.js';
+import { DocumentsPanel, normalizeRepositoryPath, validateRepositoryPath } from '../../src/desktop/presentation/documents/DocumentsPanel.js';
+import { readableError } from '../../src/desktop/presentation/errors.js';
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto } from '../../src/shared/contracts/artifact-view.js';
 import type { WorkspaceIpcClient, WorkspaceIpcEvents } from '../../src/shared/contracts/ipc-contracts.js';
 
@@ -29,4 +30,28 @@ it('renders a safe Markdown preview, saves through typed IPC, and reflects watch
  currentView={...view,document:{...artifactRecord,syncStatus:'DRIFTED'}};
  await act(async()=>{onSync?.({projectId:'p',documentId:'doc-1',relativePath:'docs/PRD.md',syncStatus:'DRIFTED'});});
  expect((await screen.findAllByText('Cambio externo')).length).toBeGreaterThan(0);
+});
+
+it('guides the repository path by hand (no folder picker installed): help, validation and a readable error',async()=>{
+ const configureRepository=vi.fn(async()=>{throw new Error('Error: fatal: not a git repository (or any of the parent directories): .git');});
+ Object.defineProperty(window,'workspaceIpc',{configurable:true,value:{commands:{configureRepository},queries:{getRepositoryPath:vi.fn(async()=>null),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn()},events:{onArtifactSyncStatusChanged:vi.fn(()=>()=>{})}}});
+ render(<DocumentsPanel projectId="p" nodes={[]}/>);
+ const input=await screen.findByLabelText('Ruta local del repositorio');
+ expect(input.getAttribute('aria-describedby')).toContain('repository-path-help');expect(screen.getByText(/Windows: C:/)).toBeTruthy();
+ fireEvent.change(input,{target:{value:'proyectos/tienda'}});fireEvent.click(screen.getByRole('button',{name:'Conectar repositorio'}));
+ expect((await screen.findByRole('alert')).textContent).toContain('absoluta');expect(input.getAttribute('aria-invalid')).toBe('true');expect(configureRepository).not.toHaveBeenCalled();
+ fireEvent.change(input,{target:{value:' "/home/ana/tienda/.git/" '}});fireEvent.click(screen.getByRole('button',{name:'Conectar repositorio'}));
+ await waitFor(()=>expect(configureRepository).toHaveBeenCalledWith('p','/home/ana/tienda'));
+ const alert=await screen.findByRole('alert');
+ expect(alert.textContent).toContain('La carpeta no es un repositorio Git');expect(alert.querySelector('details')!.textContent).toContain('fatal: not a git repository');
+});
+
+it('normalizes and validates repository paths and translates raw errors',()=>{
+ expect(normalizeRepositoryPath('  /srv/repo/  ')).toBe('/srv/repo');expect(normalizeRepositoryPath('C:\\code\\app\\.git')).toBe('C:\\code\\app');
+ expect(validateRepositoryPath('/srv/repo')).toBeNull();expect(validateRepositoryPath('C:\\code\\app')).toBeNull();
+ expect(validateRepositoryPath('~/repo')).toContain('«~»');expect(validateRepositoryPath('https://github.com/a/b')).toContain('URL');expect(validateRepositoryPath('')).toContain('Escribe');
+ expect(readableError(new Error('ENOENT: no such file or directory, open x'))).toEqual({message:'No se encontró la carpeta o el archivo indicado.',detail:'ENOENT: no such file or directory, open x'});
+ expect(readableError('TASK-001 depende de tareas sin terminar.')).toEqual({message:'TASK-001 depende de tareas sin terminar.',detail:null});
+ expect(readableError({message:'timed out after 30s'}).message).toContain('tardó demasiado');
+ expect(readableError(undefined).message).toContain('Algo salió mal');
 });

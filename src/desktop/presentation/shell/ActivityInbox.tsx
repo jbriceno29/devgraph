@@ -47,9 +47,20 @@ export function useActivity(projectId: string): { summary: ActivitySummaryDto | 
   return { summary, loading, error, reload };
 }
 
-/** Project activity inbox: what needs the user, what is running, and what happened lately. */
-export function ActivityInbox({ projectId, onNavigate }: { projectId: string; onNavigate(target: ActivityNavigation): void }) {
+interface InboxProps { projectId: string; onNavigate(target: ActivityNavigation): void; summary?: ActivitySummaryDto | null; loading?: boolean; error?: string | null }
+
+/** Project activity inbox: what needs the user, what is running, and what happened lately.
+ *  Si recibe `summary` (aunque sea null mientras carga) no consulta nada: el shell ya tiene la actividad y se evita la doble consulta. */
+export function ActivityInbox(props: InboxProps) {
+  return props.summary !== undefined ? <InboxView {...props} summary={props.summary} loading={props.loading ?? props.summary === null} error={props.error ?? null}/> : <LoadingInbox {...props}/>;
+}
+
+function LoadingInbox({ projectId, onNavigate }: InboxProps) {
   const { summary, loading, error } = useActivity(projectId);
+  return <InboxView projectId={projectId} onNavigate={onNavigate} summary={summary} loading={loading} error={error}/>;
+}
+
+function InboxView({ onNavigate, summary, loading, error }: InboxProps & { summary: ActivitySummaryDto | null; loading: boolean; error: string | null }) {
   const items = summary?.items ?? [];
   const attention = items.filter(item => item.needsAttention);
   const running = items.filter(item => !item.needsAttention && item.kind === 'TASK_RUNNING');

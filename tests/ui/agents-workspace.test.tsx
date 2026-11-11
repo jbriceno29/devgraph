@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { cleanup,fireEvent,render,screen,waitFor,within } from '@testing-library/react';
 import { afterEach,expect,it,vi } from 'vitest';
 import type { WorkspaceIpcClient } from '../../src/shared/contracts/ipc-contracts.js';
 import type { AgentExecutionDto,AgentEventRecordDto,AgentProfileDto } from '../../src/shared/contracts/agent-view.js';
@@ -21,9 +21,9 @@ it('starts the selected READY WorkItem with a DEVELOPER profile and shows persis
  await waitFor(()=>expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('sonnet'));
  fireEvent.click(screen.getByRole('button',{name:'Iniciar ejecución · Claude Code CLI'}));
  await waitFor(()=>expect(ipc.commands.startExecution).toHaveBeenCalledWith({projectId:'project',workItemId:'task-ready',profileId:'developer',model:'sonnet'}));
- expect(await screen.findByText(/ContextSnapshot:/)).toBeTruthy();
+ expect(await screen.findByText('preparado')).toBeTruthy();expect(document.body.textContent).not.toContain('ContextSnapshot');
  expect(await screen.findByText(/command_execution: npm test/i)).toBeTruthy();
- expect(screen.getByRole('status').textContent).toContain('RUNNING');
+ expect(screen.getByRole('status').textContent).toContain('TASK-001 · En marcha');
 });
 
 it('preselects the default model and sends the one the user picks',async()=>{
@@ -55,6 +55,7 @@ it('explains when no READY WorkItems are available',async()=>{
  await screen.findByRole('heading',{name:'Monitor de tareas'});
  expect((screen.getByLabelText('Tarea lista') as HTMLSelectElement).disabled).toBe(true);
  expect((screen.getByRole('button',{name:'Iniciar ejecución · Claude Code CLI'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.getByText('No hay tareas listas para ejecutar').parentElement!.textContent).toMatch(/Grafo.*«Lista»/);
 });
 
 it('shows a named approval dialog and sends rejection when it closes',async()=>{
@@ -64,4 +65,30 @@ it('shows a named approval dialog and sends rejection when it closes',async()=>{
  const dialog=await screen.findByRole('dialog',{name:'Aprobación requerida'});expect(dialog.getAttribute('open')).not.toBeNull();
  (dialog as HTMLDialogElement).returnValue='reject';dialog.removeAttribute('open');fireEvent(dialog,new Event('close'));
  await waitFor(()=>expect(ipc.commands.resolveExecutionApproval).toHaveBeenCalledWith({executionId:'execution-1',requestId:'approval-123',decision:{approved:false,reason:'Aprobación rechazada o diálogo cerrado.'}}));
+});
+
+it('splits Ejecutar, Revisión, Piloto and Ajustes into accessible tabs, with policy and auth apart from launching',async()=>{
+ const ipc=client();Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
+ render(<AgentsWorkspace projectId="project" nodes={[{id:'task-ready',key:'TASK-001',type:'WORK_ITEM',label:'Task',status:'READY'}]} selectedEntityId={null}/>);
+ const list=await screen.findByRole('tablist',{name:'Secciones de Agentes'});
+ const tabs=within(list).getAllByRole('tab');expect(tabs.map(tab=>tab.textContent)).toEqual(['Ejecutar','Revisión','Piloto','Ajustes']);
+ expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tabs[0]!.id);
+ expect(screen.queryByLabelText('Rutas escribibles')).toBeNull();expect(screen.queryByText(/Capacidades/)).toBeNull();
+ fireEvent.keyDown(tabs[0]!,{key:'End'});expect(document.activeElement).toBe(tabs[3]);
+ expect(await screen.findByLabelText('Rutas escribibles')).toBeTruthy();
+ expect(screen.getByText('Capacidades de Claude Code CLI')).toBeTruthy();expect(document.body.textContent).not.toContain('Codex');
+ expect(screen.queryByRole('button',{name:/Iniciar ejecución/})).toBeNull();
+ fireEvent.keyDown(tabs[3]!,{key:'ArrowRight'});expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
+});
+
+it('opens the execution that comes from the inbox, on Revisión when it already finished',async()=>{
+ const ipc=client();const done={...execution,id:'execution-2',status:'COMPLETED' as const};
+ ipc.queries.listExecutions=vi.fn(async()=>[execution,done]);
+ ipc.queries.getExecutionDetail=vi.fn(async()=>({execution:done,taskStatus:'IN_REVIEW',files:[],testLog:null,deniedActions:[],canAccept:true,canRequestChanges:false}));
+ Object.defineProperty(window,'workspaceIpc',{configurable:true,value:ipc});
+ render(<AgentsWorkspace projectId="project" nodes={[{id:'task-ready',key:'TASK-001',type:'WORK_ITEM',label:'Task',status:'IN_REVIEW'}]} selectedEntityId="task-ready" selectedExecutionId="execution-2"/>);
+ await waitFor(()=>expect(screen.getByRole('tab',{name:/Revisión/}).getAttribute('aria-selected')).toBe('true'));
+ expect((screen.getByLabelText('Ejecución') as HTMLSelectElement).value).toBe('execution-2');
+ expect(await screen.findByRole('button',{name:/Aceptar e integrar/})).toBeTruthy();
+ expect(ipc.queries.getExecutionDetail).toHaveBeenCalledWith('execution-2');
 });

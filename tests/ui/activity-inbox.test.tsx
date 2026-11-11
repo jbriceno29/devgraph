@@ -66,6 +66,17 @@ describe('ActivityInbox',()=>{
   expect(stops).toHaveBeenCalledTimes(3);
  });
 
+ it('uses the summary it receives instead of asking the core again',async()=>{
+  const {value}=ipc(full);const onNavigate=vi.fn();
+  const view=render(<ActivityInbox projectId="p" onNavigate={onNavigate} summary={null}/>);
+  expect(screen.getByText('Cargando actividad…')).toBeTruthy();
+  view.rerender(<ActivityInbox projectId="p" onNavigate={onNavigate} summary={full} loading={false} error={null}/>);
+  expect(screen.getByText('Propuesta de cambios al plan: Validación')).toBeTruthy();
+  view.rerender(<ActivityInbox projectId="p" onNavigate={onNavigate} summary={full} loading={false} error="sin base de datos"/>);
+  expect(screen.getByRole('alert').textContent).toContain('sin base de datos');
+  expect(value.queries.getActivity).not.toHaveBeenCalled();
+ });
+
  it('works without the workspace bridge',async()=>{
   render(<ActivityInbox projectId="p" onNavigate={()=>undefined}/>);
   expect(await screen.findByText(/Todo al día/)).toBeTruthy();

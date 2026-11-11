@@ -18,7 +18,7 @@ it('prepares and displays the selected feature ContextSnapshot and recalculates 
  Object.defineProperty(window,'workspaceIpc',{configurable:true,value:client});render(<WorkspaceNavigationProvider><WorkspaceShell/></WorkspaceNavigationProvider>);
  await waitFor(()=>expect(client.queries.listProjects).toHaveBeenCalled());fireEvent.click(screen.getByRole('button',{name:/Context Project/}));fireEvent.click(await screen.findByRole('tab',{name:/Grafo/}));
  await waitFor(()=>expect(preview).toHaveBeenCalledWith({projectId:'p',focusEntityId:'feature',maxAllowedTokens:32000}));expect(await screen.findByText('2 incluidas · 1 excluidas')).toBeTruthy();
- fireEvent.click(screen.getByText('Ver fuentes incluidas (2)'));expect(await screen.findByText('docs/recovery-spec.md')).toBeTruthy();fireEvent.click(screen.getByText('Fuentes excluidas (1)'));expect(await screen.findByText(/docs\/PRD.md/)).toBeTruthy();
- fireEvent.click(screen.getByText('Presupuesto y paquete sellado'));const budget=screen.getByLabelText('Presupuesto máximo de tokens');fireEvent.change(budget,{target:{value:'100'}});fireEvent.click(screen.getByRole('button',{name:'Recalcular'}));
+ fireEvent.click(screen.getByText('Ver fuentes incluidas (2)'));expect(await screen.findByText('docs/recovery-spec.md')).toBeTruthy();fireEvent.click(screen.getByText('Fuentes excluidas (1)'));expect(await screen.findByText(/docs\/PRD.md · nivel 5 · no cabe en el presupuesto/)).toBeTruthy();expect(screen.getByTitle('Nivel de autoridad 1 · reglas y convenciones')).toBeTruthy();expect(screen.queryByText(/^N1$/)).toBeNull();
+ fireEvent.click(screen.getByText('Presupuesto y texto del contexto'));const budget=screen.getByLabelText('Presupuesto máximo de tokens');fireEvent.change(budget,{target:{value:'100'}});fireEvent.click(screen.getByRole('button',{name:'Recalcular'}));
  await waitFor(()=>expect(preview).toHaveBeenLastCalledWith({projectId:'p',focusEntityId:'feature',maxAllowedTokens:100}));
 });

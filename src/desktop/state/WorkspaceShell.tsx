@@ -44,30 +44,30 @@ function ProjectShell({workspace}:{workspace:WorkspaceLoadedStateDto}) {
  const state=useWorkspaceNavigation();
  const {projects,inspector,selectedEntityId,error}=state;
  const projectId=workspace.project.id,nodes=workspace.graph.nodes;
- const [view,setView]=useState<ShellView>('activity');
+ const [view,setView]=useState<ShellView>('activity'),[focus,setFocus]=useState<{changeSetId?:string|null;executionId?:string|null}>({});
  const heading=useRef<HTMLHeadingElement>(null);
  const activity=useActivity(projectId);
  const step=useMemo(()=>nextStep(workspace.graph,activity.summary),[workspace.graph,activity.summary]);
  const hasFeatures=nodes.some(node=>node.type==='FEATURE'&&node.status!=='ARCHIVED');
  useEffect(()=>{setView('activity');},[projectId]);
  /** Cambia de vista (y selecciona lo indicado) desde la bandeja, el banner o un atajo; lleva el foco al título. */
- const go=useCallback((target:ShellTarget)=>{if(target.workItemId)void state.selectEntity(target.workItemId);setView(target.view);requestAnimationFrame(()=>heading.current?.focus());},[state.selectEntity]);
+ const go=useCallback((target:ShellTarget)=>{if(target.workItemId)void state.selectEntity(target.workItemId);setFocus({changeSetId:target.changeSetId??null,executionId:target.executionId??null});setView(target.view);requestAnimationFrame(()=>heading.current?.focus());},[state.selectEntity]);
  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(!(event.metaKey||event.ctrlKey)||event.altKey||event.shiftKey)return;const index=Number(event.key)-1;const target=VIEWS[index];if(!target)return;event.preventDefault();go({view:target.id});};window.addEventListener('keydown',onKey);return ()=>window.removeEventListener('keydown',onKey);},[go]);
  const info=viewInfo(view);
  const changeStatus=async(status:string)=>{if(!inspector)return;await window.workspaceIpc.commands.setWorkItemStatus(projectId,inspector.entity.id,status);await state.refreshGraph();await state.selectEntity(inspector.entity.id);};
  const content=view==='activity'?<div className="mx-auto min-h-0 w-full max-w-4xl space-y-4 overflow-y-auto">
    {hasFeatures?<NextStepBanner step={step} onGo={go}/>:<EmptyProject projectName={workspace.project.name} onPlan={()=>go({view:'planning'})}/>}
-   {(hasFeatures||(activity.summary?.items.length??0)>0)&&<ActivityInbox projectId={projectId} onNavigate={go}/>}
+   {(hasFeatures||(activity.summary?.items.length??0)>0)&&<ActivityInbox projectId={projectId} onNavigate={go} summary={activity.summary} loading={activity.loading} error={activity.error}/>}
   </div>
   :view==='graph'?<div className="flex min-h-0 flex-1 flex-col gap-4">
    <NextStepBanner step={step} onGo={go}/>
-   <div className="flex min-h-0 min-w-0 flex-1 gap-4"><GraphCanvas projectId={projectId} nodes={nodes} edges={workspace.graph.edges} selectedId={selectedEntityId} onSelect={id=>void state.selectEntity(id)} onFilter={(nodeTypes:KnowledgeEntityType[],edgeTypes:GraphEdgeType[])=>void state.refreshGraph({entityTypes:nodeTypes,edgeTypes})}/><ContextualInspector details={inspector} onChangeStatus={changeStatus} contextPackage={state.contextPackage} contextLoading={state.contextLoading} contextError={state.contextError} onRefreshContext={state.refreshContext}/></div>
+   <div className="flex min-h-0 min-w-0 flex-1 gap-4"><GraphCanvas projectId={projectId} nodes={nodes} edges={workspace.graph.edges} selectedId={selectedEntityId} onSelect={id=>void state.selectEntity(id)} onFilter={(nodeTypes:KnowledgeEntityType[],edgeTypes:GraphEdgeType[])=>void state.refreshGraph({entityTypes:nodeTypes,edgeTypes})}/><ContextualInspector details={inspector} onChangeStatus={changeStatus} onOpenAgents={(workItemId,executionId)=>go({view:'agents',workItemId,executionId:executionId??null})} nodes={nodes} contextPackage={state.contextPackage} contextLoading={state.contextLoading} contextError={state.contextError} onRefreshContext={state.refreshContext}/></div>
   </div>
-  :view==='planning'?<PlanningWorkspace/>
-  :view==='agents'?<AgentsWorkspace projectId={projectId} nodes={nodes} selectedEntityId={selectedEntityId}/>
+  :view==='planning'?<PlanningWorkspace changeSetId={focus.changeSetId??null}/>
+  :view==='agents'?<AgentsWorkspace projectId={projectId} nodes={nodes} selectedEntityId={selectedEntityId} selectedExecutionId={focus.executionId??null}/>
   :<DocumentsPanel projectId={projectId} nodes={nodes}/>;
  return <div className="flex h-screen min-h-0 bg-surface text-fg">
-  <Sidebar projects={projects} activeProject={workspace.project} onOpenProject={id=>void state.openProject(id)} onRefreshProjects={()=>void state.refreshProjects()} view={view} onSelectView={next=>setView(next)} attentionCount={activity.summary?.attentionCount??0} nodes={nodes} selectedId={selectedEntityId} onSelectNode={id=>{void state.selectEntity(id);if(view==='activity'||view==='documents')setView('graph');}}/>
+  <Sidebar projects={projects} activeProject={workspace.project} onOpenProject={id=>void state.openProject(id)} onRefreshProjects={()=>void state.refreshProjects()} view={view} onSelectView={next=>{setFocus({});setView(next);}} attentionCount={activity.summary?.attentionCount??0} nodes={nodes} selectedId={selectedEntityId} onSelectNode={id=>{void state.selectEntity(id);if(view==='activity'||view==='documents')setView('graph');}}/>
   <main className="flex min-w-0 flex-1 flex-col">
    <header className="shrink-0 border-b border-border px-6 py-4">
     <nav aria-label="Ruta"><ol className="flex items-center gap-1.5 text-xs text-fg-subtle"><li>{workspace.project.name}</li><li aria-hidden="true">›</li><li aria-current="page" className="text-fg-muted">{info.label}</li></ol></nav>

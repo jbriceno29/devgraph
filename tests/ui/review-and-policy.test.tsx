@@ -133,6 +133,27 @@ describe('Inspector status control',()=>{
   await waitFor(()=>expect(onChange).toHaveBeenCalledWith('READY'));
   expect((await screen.findByRole('alert')).textContent).toContain('depende de tareas sin terminar');
  });
+ it('speaks plain Spanish: no ids, readable attributes, relations and status options',()=>{
+  const uuid='0d5b6c1e-1111-4222-8333-444455556666';
+  const info:EntityInspectorDto={entity:{id:uuid,key:'TASK-001',type:'WORK_ITEM',label:'Task',status:'DRAFT',summary:'',parentId:'feat'},attributes:{entity_id:uuid,featureId:'feat',acceptance_criteria:['Valida títulos','Guarda'],meta:{owner:'Ana',urgent:true}},relationships:[{id:'r',sourceId:'t0',sourceLabel:'Preparar base',targetId:uuid,targetLabel:'Task',type:'DEPENDS_ON',direction:'INCOMING',provenance:'USER'}],executionHistory:[{id:uuid,status:'COMPLETED',startedAt:'2026-11-10T10:00:00Z',completedAt:'2026-11-10T10:05:00Z',resultSummary:'Listo.'}],allowedStatusChanges:['READY']};
+  const {container}=render(<ContextualInspector details={info} nodes={[{id:'feat',key:'FEAT-001',type:'FEATURE',label:'Gestión de tareas',status:'DRAFT'}]} contextPackage={null} contextLoading={false} contextError={null} onRefreshContext={vi.fn()} onChangeStatus={vi.fn()}/>);
+  expect(container.textContent).not.toContain(uuid);expect(container.textContent).not.toMatch(/WORK_ITEM|DEPENDS|COMPLETED|[{}"]/);
+  expect(screen.getByText('Pertenece a').nextElementSibling?.textContent).toBe('Gestión de tareas');
+  expect(screen.getByText('Criterios de aceptación')).toBeTruthy();expect(screen.getByText('Valida títulos')).toBeTruthy();expect(container.textContent).toContain('Urgent: Sí');
+  expect(screen.getByText('Requerida por')).toBeTruthy();expect(screen.getByText('Terminada')).toBeTruthy();
+  expect([...(screen.getByLabelText('Nuevo estado') as HTMLSelectElement).options].map(option=>option.textContent)).toEqual(['Lista']);
+  expect(screen.getByRole('complementary',{name:'Inspector'}).className).toContain('clamp(');
+ });
+ it('offers the next step for a task only when the shell provides it',()=>{
+  const onOpenAgents=vi.fn();
+  const {rerender}=render(<ContextualInspector details={details('READY',[])} contextPackage={null} contextLoading={false} contextError={null} onRefreshContext={vi.fn()}/>);
+  expect(screen.queryByRole('button',{name:'Ejecutar esta tarea'})).toBeNull();
+  rerender(<ContextualInspector details={details('READY',[])} contextPackage={null} contextLoading={false} contextError={null} onRefreshContext={vi.fn()} onOpenAgents={onOpenAgents}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Ejecutar esta tarea'}));expect(onOpenAgents).toHaveBeenLastCalledWith('t1');
+  const review={...details('IN_REVIEW',[]),executionHistory:[{id:'old',status:'FAILED',startedAt:'2026-11-09T10:00:00Z',completedAt:null,resultSummary:null},{id:'new',status:'COMPLETED',startedAt:'2026-11-10T10:00:00Z',completedAt:null,resultSummary:null}]};
+  rerender(<ContextualInspector details={review} contextPackage={null} contextLoading={false} contextError={null} onRefreshContext={vi.fn()} onOpenAgents={onOpenAgents}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Revisar resultado'}));expect(onOpenAgents).toHaveBeenLastCalledWith('t1','new');
+ });
  it('explains why an execution-owned status cannot be changed by hand',()=>{
   render(<ContextualInspector details={details('IN_PROGRESS',[])} contextPackage={null} contextLoading={false} contextError={null} onRefreshContext={vi.fn()} onChangeStatus={vi.fn()}/>);
   expect(screen.getByText('Hay una ejecución en curso; el estado lo controla la ejecución.')).toBeTruthy();

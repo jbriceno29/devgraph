@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeaturePilotPanel } from '../../src/desktop/presentation/agents/FeaturePilotPanel.js';
+import { EngineAuthForm } from '../../src/desktop/presentation/agents/EngineAuthForm.js';
 import type { FeaturePilotDto } from '../../src/shared/contracts/agent-view.js';
 
 afterEach(cleanup);
@@ -58,10 +59,15 @@ describe('FeaturePilotPanel',()=>{
   expect(log.textContent).not.toContain('PLAN CHANGED');
  });
 
- it('only offers the API key when the app was started with one',async()=>{
-  ipc();
+ it('only offers the API key when the app was started with one (in Ajustes, not in the pilot)',async()=>{
+  const client=ipc();
   render(<FeaturePilotPanel projectId="p" nodes={nodes}/>);
+  await screen.findByRole('button',{name:'Iniciar piloto'});expect(screen.queryByLabelText('Autenticación del motor')).toBeNull();
+  cleanup();
+  render(<EngineAuthForm projectId="p" nodes={nodes}/>);
   const option=(await screen.findByRole('option',{name:/Clave de API/})) as HTMLOptionElement;
   expect(option.disabled).toBe(true);expect(option.textContent).toContain('ANTHROPIC_API_KEY');
+  fireEvent.change(screen.getByLabelText('Autenticación del motor'),{target:{value:'api_key'}});
+  await waitFor(()=>expect(client.commands.setAuthMode).toHaveBeenCalledWith('p','api_key'));
  });
 });

@@ -11,7 +11,7 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge']}={}){
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[]}={}){
  const workItems=new Map<string,WorkItemStatus>([['task',options.taskStatus??'READY'],...(options.dependents??[]).map(item=>[item.id,item.status as WorkItemStatus] as [string,WorkItemStatus])]);
  const task={get status(){return workItems.get('task')!;},set status(value:WorkItemStatus){workItems.set('task',value);}};const prompts:string[]=[];let revision=1;const branches=new Map<string,{branchName:string;sourceBranch:string}>();const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
@@ -26,6 +26,7 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   saveIntegrationBranch:(input:{ownerId:string;branchName:string;sourceBranch:string})=>{branches.set(input.ownerId,{branchName:input.branchName,sourceBranch:input.sourceBranch});},
   listFileDiffs:()=>[],
   listEvents:()=>[],
+  listDocumentPaths:()=>options.documents??[],
   findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'}}),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
   getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true}),
@@ -35,7 +36,7 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   findExecution:(id:string)=>executions.has(id)?{...executions.get(id)!}:null,
   appendEvent:(executionId:string,event:AgentEvent)=>{events.push({executionId,event});return {id:String(events.length),sequenceNo:events.length,createdAt:now()};},
  } as unknown as AgentExecutionRepositoryPort;
- const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true})))} satisfies GitIsolationPort;
+ const isolation={prepare:vi.fn(async()=>({workingDirectory:'/ws/projects/p/worktrees/e',branchName:'graphdev/task-001-e',baseCommit:'base',baseBranch:'main'})),discard:vi.fn(async()=>undefined),currentBranch:vi.fn(async()=>'main'),branchExists:vi.fn(async()=>true),createIntegrationBranch:vi.fn(async(input:{preferredName:string})=>input.preferredName),squashMerge:vi.fn(options.merge??(async()=>({ok:true as const,commit:'merged',changed:true}))),mergeInto:vi.fn(async()=>({ok:true as const,commit:'synced',changed:true})),pathsDiffer:vi.fn(async()=>[] as string[]),uncommittedPaths:vi.fn(async()=>[] as string[])} satisfies GitIsolationPort;
  const adapter:AgentAdapterPort={providerId:'codex',getCapabilities:()=>capabilities,async *run(){yield {type:'EXECUTION_FINISHED',timestamp:now(),summary:'done'};},cancel:vi.fn(async()=>undefined),respondToApproval:vi.fn(async()=>undefined),...options.adapter} as AgentAdapterPort;
  const validator:ExecutionValidatorPort={validate:options.validate??(async()=>({passed:true,finalCommit:'base',resultSummary:'ok',testSummary:null}))};
  const contextBuilder={build:vi.fn(async()=>{await options.build?.();return {snapshot:{id:'snapshot'},packageText:''};})};

@@ -1,3 +1,4 @@
+import type { DocumentCommitPort } from '../ports/document-commit-port.js';
 import type { ProjectRepositoryPort } from '../ports/project-repository-port.js';
 import type { ArtifactRepositoryPort, ArtifactDocumentRecord, RepositoryLocationRepositoryPort, AtomicMarkdownFilePort, ArtifactSyncStatusChangedEvent } from '../ports/artifact-management-port.js';
 import type { KnowledgeGraphRepositoryPort } from '../ports/knowledge-graph-repository-port.js';
@@ -18,6 +19,7 @@ export class ArtifactManagementService {
     private readonly repositories:RepositoryLocationRepositoryPort,
     private readonly files:AtomicMarkdownFilePort,
     private readonly onSyncEvent:ArtifactManagementEventListener=()=>undefined,
+    private readonly committer?:DocumentCommitPort,
   ){}
 
   async configureRepository(projectId:string,path:string):Promise<{projectId:string;localPath:string}> {
@@ -104,6 +106,7 @@ export class ArtifactManagementService {
       await this.files.removeMarkdown(location.localPath,relativePath).catch(()=>undefined);
       throw error;
     }
+    await this.committer?.commit(location.localPath,[relativePath],`docs(graph): ${displayKey} ${title}`);
     return {document:this.requireDocument(entityId),content};
   }
 
@@ -123,6 +126,7 @@ export class ArtifactManagementService {
     const adrFields=document.entityType==='DECISION_RECORD'?parseDecisionRecord(content):undefined;
     this.documents.updateDocumentContent(document.id,written.contentHash,'SYNCED',content,adrFields??undefined);
     const updated=this.requireDocument(documentId);
+    await this.committer?.commit(location.localPath,[document.relativePath],`docs(graph): ${updated.displayKey} ${updated.title}`);
     this.emit(updated,'SYNCED');
     return {document:updated,content};
   }

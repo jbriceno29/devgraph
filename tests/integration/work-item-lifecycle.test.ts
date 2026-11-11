@@ -76,7 +76,8 @@ describe('operating without touching the database (Stage 1.3)',()=>{
   const set=(id:string,status:string)=>core.handle({channel:'workitem:set_status',args:[project.id,id,status]});
   const inspector=async(id:string)=>core.handle({channel:'entity:get_inspector_details',args:[id]}) as Promise<{entity:{status:string};allowedStatusChanges?:string[]}>;
 
-  expect((await inspector('t1')).allowedStatusChanges).toEqual(['READY','ARCHIVED']);
+  expect((await inspector('t1')).allowedStatusChanges).toEqual(['READY','BLOCKED','ARCHIVED']);
+  expect(await set('t2','BLOCKED')).toMatchObject({status:'BLOCKED'});
   expect((await inspector(opened.selectedEntityId)).allowedStatusChanges).toBeUndefined();
   await expect(set('t2','READY')).rejects.toThrow('TASK-001 (DRAFT)');
   await expect(set('t1','DONE')).rejects.toThrow('a mano');

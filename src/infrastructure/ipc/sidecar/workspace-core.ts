@@ -32,23 +32,25 @@ import type { AgentExecution } from '../../../domain/agents/models.js';
 import type { StartAgentExecutionInput } from '../../../shared/contracts/agent-view.js';
 import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-port.js';
 import { GitIsolationService } from '../../git/git-isolation-service.js';
+import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
 export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
+ const documentCommitter=new GitDocumentCommitter();
  const watchers=new Map<string,ArtifactWatcherService>();
  // Claude Code is the wired engine; CodexAgentAdapter stays in the codebase, unwired, until Claude is proven (migration plan, section 3).
  const agentAdapter=dependencies.agentAdapter??new ClaudeCodeAdapter();
  const executionServices=new Map<string,AgentOrchestrator>();
  const getManagement=(projectId:string)=>{
   const workspace=store.openProject(projectId);
-  return new ArtifactManagementService(workspace.projects,workspace.graph,workspace.artifacts,workspace.repositories,files,event=>emit('artifact:sync_status_changed',event as ArtifactSyncStatusChangedEvent));
+  return new ArtifactManagementService(workspace.projects,workspace.graph,workspace.artifacts,workspace.repositories,files,event=>emit('artifact:sync_status_changed',event as ArtifactSyncStatusChangedEvent),documentCommitter);
  };
  const getPlanning=(projectId:string)=>{
   const workspace=store.openProject(projectId),path=workspace.repositories.findPrimaryForProject(projectId)?.localPath??process.cwd();
-  return new ChangeSetPlanningService(workspace.projects,workspace.graph,new SqliteChangeSetRepository(workspace.database),plannerFor(projectId,workspace.database,path),new SqliteChangeSetApplier(workspace.database,new TransactionalMarkdownFileStore(),workspace.repositories),id=>store.openProject(id).repositories.findPrimaryForProject(id)?.localPath??null);
+  return new ChangeSetPlanningService(workspace.projects,workspace.graph,new SqliteChangeSetRepository(workspace.database),plannerFor(projectId,workspace.database,path),new SqliteChangeSetApplier(workspace.database,new TransactionalMarkdownFileStore(),workspace.repositories,documentCommitter),id=>store.openProject(id).repositories.findPrimaryForProject(id)?.localPath??null);
  };
  // The planner follows the wired engine, with the provider's planning model and auth mode.
  const providerConnection=(projectId:string,database:ConstructorParameters<typeof SqliteAgentExecutionRepository>[0])=>new SqliteAgentExecutionRepository(database,agentAdapter.providerId).listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER');
@@ -65,6 +67,12 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
   const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload));
   executionServices.set(projectId,service);return service;
+ };
+ // Repairs leftovers of an interrupted ChangeSet apply before the watcher starts reporting on docs/.
+ const recoverDocuments=async(projectId:string)=>{
+  const management=getManagement(projectId),root=management.repositoryPath(projectId);if(!root)return;
+  const known=new Map(management.list(projectId).map(document=>[document.relativePath,document.contentHash]));
+  await new TransactionalMarkdownFileStore().recoverInterruptedWrites(root,known).catch(()=>undefined);
  };
  const startWatcher=async(projectId:string)=>{
   const management=getManagement(projectId),repositoryPath=management.repositoryPath(projectId);
@@ -84,6 +92,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'project:open': {
      const id=String(args[0]??'');const workspace=store.openProject(id);const project=workspace.projects.findById(id)!;
+     await recoverDocuments(id);
      await startWatcher(id);
      getExecutionService(id).reconcileInterrupted(id);
      const graph=new GetGraphViewUseCase(workspace.projects,workspace.graph).execute(id);
@@ -106,6 +115,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'repository:configure': {
      const projectId=String(args[0]??''),localPath=String(args[1]??'');
      const configured=await getManagement(projectId).configureRepository(projectId,localPath);
+     await recoverDocuments(projectId);
      await startWatcher(projectId);
      return configured;
     }

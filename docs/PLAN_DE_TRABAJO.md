@@ -53,6 +53,10 @@ Tamaños: S = horas, M = ~1 día, L = varios días.
 
 ### Etapa 1: Cerrar el ciclo (L)
 
+> **Estado (2026-11-10): hecha a nivel del núcleo y de la UI**, en cuatro entregas (`6d65cb4`, `2dda1c0`, `6298377` y la de D6). Prueba real con Claude `haiku` sobre una copia de `todo-app`, usando solo los canales de la app: propuesta de ChangeSet validada y aplicada, documento commiteado en `main`, el agente leyó la especificación en su worktree, TASK-001 ejecutada, aceptada con squash en `feature/feat-001-crear-y-consultar-tareas` y en `DONE`, y TASK-002 desbloqueada sola. Pendiente: recorrerlo haciendo clic en la ventana de la app.
+>
+> Ajustes respecto a lo previsto: se permite `DRAFT → BLOCKED` (una tarea planificada que espera a otra) e `IN_PROGRESS → READY` (una ejecución que falla devuelve la tarea). La rama de una feature se pone al día con la rama del usuario (merge) cuando le faltan documentos. Los documentos que escribe la app (ChangeSets y documentos creados o guardados desde la app) se commitean solos; los editados fuera de la app sin commitear bloquean la ejecución con un mensaje claro.
+
 Objetivo: una tarea pasa de `READY` a `DONE` desde la app, con el código en la rama del usuario.
 
 - Estados coordinados: `READY → IN_PROGRESS` al iniciar, `→ IN_REVIEW` al completar, `→ DONE` al aceptar; al pasar a `DONE`, recalcular `BLOCKED`/`READY` de las tareas con `DEPENDS_ON`. `start()` exige que las dependencias estén en `DONE`.

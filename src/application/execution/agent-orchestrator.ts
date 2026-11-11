@@ -47,6 +47,7 @@ export class AgentOrchestrator {
 
   // A run starts from its feature's integration branch; a revision starts from the commit it adjusts.
   const startPoint=previous?(previous.finalCommit??previous.initialCommit):await this.integrationBranchFor(input.projectId,workItem,repositoryRoot,repositoryId);
+  if(!previous)await this.syncDocuments(input.projectId,repositoryRoot,startPoint);
   const now=new Date().toISOString();
   let execution:AgentExecution={id:randomUUID(),projectId:input.projectId,workItemId:workItem.id,profileId:profile.id,providerId:profile.provider.id,sessionId:null,contextSnapshotId:null,status:'QUEUED',modelUsed:requestedModel??null,initialCommit:'PENDING_ISOLATION',finalCommit:null,branchOrWorktree:null,baseBranch:null,executionBranch:null,revisionOf:previous?.id??null,testSummary:null,resultSummary:null,startedAt:null,completedAt:null};
   this.repository.createExecution(execution);this.publishStatus(execution);
@@ -253,6 +254,22 @@ export class AgentOrchestrator {
   const branchName=await this.isolation.createIntegrationBranch({repositoryRoot,preferredName:`feature/${branchSlug(owner.displayKey,owner.title)}`,sourceRef:'HEAD'});
   this.repository.saveIntegrationBranch({ownerId:owner.id,projectId,repositoryId,branchName,sourceBranch:sourceBranch??'HEAD'});
   return branchName;
+ }
+
+ /**
+  * The agent must find the graph's documents in its worktree (D6): they must be committed in the user's branch,
+  * and the integration branch is brought up to date with that branch when its copies are missing or stale.
+  */
+ private async syncDocuments(projectId:string,repositoryRoot:string,integrationBranch:string):Promise<void>{
+  const paths=this.repository.listDocumentPaths(projectId);
+  if(!paths.length)return;
+  const dirty=await this.isolation.uncommittedPaths(repositoryRoot,paths);
+  if(dirty.length)throw new Error(`Hay documentos del grafo sin commitear: ${dirty.join(', ')}. Guárdalos desde la app o commitéalos para que el agente los vea.`);
+  const stale=await this.isolation.pathsDiffer(repositoryRoot,integrationBranch,'HEAD',paths);
+  if(!stale.length)return;
+  const current=await this.isolation.currentBranch(repositoryRoot)??'HEAD';
+  const result=await this.isolation.mergeInto({repositoryRoot,workspaceRoot:this.workspaceRoot,projectId,targetBranch:integrationBranch,sourceRef:'HEAD',message:`Actualiza ${integrationBranch} con los documentos de ${current}`});
+  if(!result.ok)throw new Error(`No se pudo poner al día ${integrationBranch} con los documentos (${stale.join(', ')}): ${result.detail}`);
  }
 
  /** Marks a run as superseded by a revision and drops its worktree; its commit lives on in the revision's branch. */

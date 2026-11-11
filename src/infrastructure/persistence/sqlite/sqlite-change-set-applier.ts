@@ -4,9 +4,10 @@ import type { KnowledgeEntity } from '../../../domain/graph/knowledge-entity.js'
 import type { ChangeSetApplyPort,StagedMarkdownFile,TransactionalMarkdownFilePort } from '../../../application/ports/change-set-planning-port.js';
 import type { RepositoryLocationRepositoryPort } from '../../../application/ports/artifact-management-port.js';
 import type { SqliteDatabase } from './database.js';
+import type { DocumentCommitPort } from '../../../application/ports/document-commit-port.js';
 
 export class SqliteChangeSetApplier implements ChangeSetApplyPort {
- constructor(private readonly db:SqliteDatabase,private readonly files:TransactionalMarkdownFilePort,private readonly repositories:RepositoryLocationRepositoryPort){}
+ constructor(private readonly db:SqliteDatabase,private readonly files:TransactionalMarkdownFilePort,private readonly repositories:RepositoryLocationRepositoryPort,private readonly committer?:DocumentCommitPort){}
  async apply(changeSet:ChangeSet,repositoryRoot:string|null):Promise<{revision:number;resolvedIds:Record<string,string>}>{
   const now=new Date().toISOString(),revision=changeSet.baseGraphRevision+1,ids:Record<string,string>={},files:StagedMarkdownFile[]=[];
   for(const op of changeSet.operations)if(op.type==='UPSERT_ARTIFACT'||op.type==='CREATE_DECISION_RECORD'){
@@ -16,6 +17,9 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
   }
   if(files.length&&!repositoryRoot)throw new Error('Configura el repositorio Git para aplicar cambios con documentos Markdown.');
   const repo=files.length?this.repositories.findPrimaryForProject(changeSet.projectId):null;if(files.length&&!repo)throw new Error('No hay repositorio configurado para guardar los documentos.');
+  // Never overwrite documents the user has changed and not committed (D6).
+  const paths=files.map(file=>file.relativePath);
+  if(paths.length&&this.committer&&repositoryRoot){const dirty=await this.committer.uncommitted(repositoryRoot,paths);if(dirty.length)throw new Error(`No se aplicó el cambio: ${dirty.join(', ')} tiene cambios sin commitear. Commitéalos o descártalos y vuelve a aplicar.`);}
   const commit=()=>this.db.transaction(()=>{
    const row=this.db.prepare('SELECT current_revision FROM projects WHERE id=?').get(changeSet.projectId) as {current_revision:number}|undefined;if(!row)throw new Error('Proyecto no encontrado.');if(row.current_revision!==changeSet.baseGraphRevision)throw new Error('REVISION_CONFLICT: el grafo cambió antes de aplicar.');
    const resolve=(id:string|undefined|null):string|null=>id==null?null:ids[id]??id;
@@ -30,7 +34,10 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
    this.db.prepare('UPDATE projects SET current_revision=?,updated_at=? WHERE id=?').run(revision,now,changeSet.projectId);
    this.db.prepare(`UPDATE change_sets SET status='APPLIED',applied_graph_revision=?,applied_at=? WHERE id=?`).run(revision,now,changeSet.id);
   }).immediate();
-  await this.files.applyAtomically(repositoryRoot??'',files,commit);return {revision,resolvedIds:ids};
+  await this.files.applyAtomically(repositoryRoot??'',files,commit);
+  // Commit the written documents so executions, which start from Git, see them (D6). A failure is reported at execution start.
+  if(paths.length&&this.committer&&repositoryRoot)await this.committer.commit(repositoryRoot,paths,`docs(graph): ${changeSet.title} [changeset ${changeSet.id}]`);
+  return {revision,resolvedIds:ids};
  }
  private insertCreate(op:Extract<ChangeOperation,{type:'CREATE_MODULE'|'CREATE_FEATURE'|'CREATE_REQUIREMENT'|'CREATE_WORK_ITEM'|'CREATE_DECISION_RECORD'|'UPSERT_ARTIFACT'}>,changeSet:ChangeSet,resolve:(id:string|undefined|null)=>string|null,revision:number,now:string,repositoryId:string|null,ids:Record<string,string>,files:StagedMarkdownFile[]):void{
   const entityId='tempId'in op&&op.tempId?randomUUID():randomUUID();if('tempId'in op&&op.tempId)ids[op.tempId]=entityId;

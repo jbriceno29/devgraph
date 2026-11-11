@@ -38,6 +38,8 @@ export interface AgentExecutionRepositoryPort {
   /** Integration branch owned by a feature (or by a work item without a feature). */
   getIntegrationBranch(ownerId:string):{branchName:string;sourceBranch:string}|null;
   saveIntegrationBranch(input:{ownerId:string;projectId:string;repositoryId:string;branchName:string;sourceBranch:string}):void;
+  /** Repository paths of the project's Markdown documents (artifacts and decision records). */
+  listDocumentPaths(projectId:string):string[];
   listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}>;
   recordFileDiffs(executionId:string,repositoryId:string,diffs:Array<Pick<ExecutionFileDiff,'filePath'|'changeType'|'additions'|'deletions'|'diffPatch'>>):void;
 }
@@ -49,6 +51,9 @@ export interface GitIsolationPort {
   currentBranch(repositoryRoot:string):Promise<string|null>;
   branchExists(repositoryRoot:string,branchName:string):Promise<boolean>;
   createIntegrationBranch(input:{repositoryRoot:string;preferredName:string;sourceRef:string}):Promise<string>;
+  mergeInto(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
+  uncommittedPaths(repositoryRoot:string,paths:string[]):Promise<string[]>;
+  pathsDiffer(repositoryRoot:string,leftRef:string,rightRef:string,paths:string[]):Promise<string[]>;
   squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
 }
 export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }

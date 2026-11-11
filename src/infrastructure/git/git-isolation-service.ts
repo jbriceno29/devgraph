@@ -65,8 +65,35 @@ export class GitIsolationService implements GitIsolationPort {
   * Refuses when the target branch is checked out somewhere (updating it would desynchronize that working tree).
   */
  async squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<SquashMergeResult> {
+  return this.integrate(input,'squash');
+ }
+
+ /** Brings `targetBranch` up to date with `sourceRef` through a merge commit (used to sync a feature branch with the user's branch). */
+ async mergeInto(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<SquashMergeResult> {
+  return this.integrate(input,'merge');
+ }
+
+ /** Paths among `paths` with uncommitted changes in the user's checkout (modified, deleted or untracked). */
+ async uncommittedPaths(repositoryRoot:string,paths:string[]):Promise<string[]> {
+  if(!paths.length)return [];
+  const records=(await git(await realpath(repositoryRoot),['--literal-pathspecs','status','--porcelain=v1','-z','--untracked-files=all','--',...paths])).split('\0').filter(Boolean);
+  const dirty:string[]=[];
+  for(let index=0;index<records.length;index+=1){const record=records[index]!;dirty.push(record.slice(3));if(record[0]==='R'||record[0]==='C')index+=1;}
+  return [...new Set(dirty)].sort();
+ }
+
+ /** Paths whose content differs between two refs (including paths missing from one of them). */
+ async pathsDiffer(repositoryRoot:string,leftRef:string,rightRef:string,paths:string[]):Promise<string[]> {
+  if(!paths.length)return [];
+  const output=await git(await realpath(repositoryRoot),['--literal-pathspecs','diff','--name-only','-z',leftRef,rightRef,'--',...paths]);
+  return output.split('\0').filter(Boolean).sort();
+ }
+
+ private async integrate(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string},mode:'squash'|'merge'):Promise<SquashMergeResult> {
   if(!uuid.test(input.projectId))throw new Error('Invalid project id for merge.');
   const repositoryRoot=await realpath(input.repositoryRoot);
+  // Resolve the source in the user's repository: inside the throwaway worktree, HEAD would be the target itself.
+  const sourceCommit=(await git(repositoryRoot,['rev-parse','--verify',`${input.sourceRef}^{commit}`])).trim();
   const checkedOut=checkedOutPath(await git(repositoryRoot,['worktree','list','--porcelain']),input.targetBranch);
   if(checkedOut)return {ok:false,reason:'CHECKED_OUT',detail:`La rama ${input.targetBranch} está abierta en ${checkedOut}. Cambia de rama allí para poder integrar.`,conflicts:[]};
   const directory=join(input.workspaceRoot,'projects',input.projectId,'merges',randomUUID());
@@ -74,7 +101,16 @@ export class GitIsolationService implements GitIsolationPort {
   await git(repositoryRoot,['worktree','add','--quiet',directory,input.targetBranch]);
   const run=(args:string[])=>git(directory,['-c','core.fsmonitor=false','-c',`core.hooksPath=${join(directory,'.graphdev-no-hooks')}`,...args]);
   try{
-   try{await run(['merge','--squash','--no-commit',input.sourceRef]);}
+   if(mode==='merge'){
+    const identity=await run(['config','user.email']).then(value=>value.trim()?[]:['-c','user.name=Graph Workspace','-c','user.email=graph-workspace@localhost'],()=>['-c','user.name=Graph Workspace','-c','user.email=graph-workspace@localhost']);
+    try{await run([...identity,'merge','--no-ff','--no-verify','--quiet','-m',input.message,sourceCommit]);}
+    catch(error){
+     const conflicts=(await run(['diff','--name-only','--diff-filter=U']).catch(()=>'')).split('\n').filter(Boolean);
+     return {ok:false,reason:'CONFLICT',detail:conflicts.length?`Conflicto al poner al día ${input.targetBranch}.`:`No se pudo poner al día ${input.targetBranch}: ${error instanceof Error?error.message:String(error)}`,conflicts};
+    }
+    return {ok:true,commit:(await run(['rev-parse','HEAD'])).trim(),changed:true};
+   }
+   try{await run(['merge','--squash','--no-commit',sourceCommit]);}
    catch(error){
     const conflicts=(await run(['diff','--name-only','--diff-filter=U']).catch(()=>'')).split('\n').filter(Boolean);
     return {ok:false,reason:'CONFLICT',detail:conflicts.length?`Conflicto al integrar en ${input.targetBranch}.`:`No se pudo integrar en ${input.targetBranch}: ${error instanceof Error?error.message:String(error)}`,conflicts};

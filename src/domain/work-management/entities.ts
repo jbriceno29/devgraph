@@ -8,7 +8,7 @@ export type WorkItemType = 'TASK'|'BUG'|'SPIKE'|'IMPROVEMENT';
 export type WorkItemStatus = 'DRAFT'|'READY'|'BLOCKED'|'IN_PROGRESS'|'IN_REVIEW'|'DONE'|'ARCHIVED';
 export interface WorkItem extends KnowledgeEntity { entityType: 'WORK_ITEM'; workType: WorkItemType; priority: 'LOW'|'MEDIUM'|'HIGH'|'CRITICAL'; scopeNotes: string | null; acceptanceCriteria: AcceptanceCriterion[]; recommendedProfileRole: 'PLANNER'|'ARCHITECT'|'DEVELOPER'|'REVIEWER'|'KNOWLEDGE_MANAGER'|null }
 export interface Milestone extends KnowledgeEntity { entityType: 'MILESTONE'; versionTag: string; objectives: string[]; targetDate: string | null; completedAt: string | null }
-const transitions: Readonly<Record<WorkItemStatus, readonly WorkItemStatus[]>> = { DRAFT:['READY','ARCHIVED'], READY:['BLOCKED','IN_PROGRESS','ARCHIVED'], BLOCKED:['READY','ARCHIVED'], IN_PROGRESS:['READY','BLOCKED','IN_REVIEW','ARCHIVED'], IN_REVIEW:['DONE','IN_PROGRESS','BLOCKED','ARCHIVED'], DONE:['ARCHIVED'], ARCHIVED:[] };
+const transitions: Readonly<Record<WorkItemStatus, readonly WorkItemStatus[]>> = { DRAFT:['READY','BLOCKED','ARCHIVED'], READY:['BLOCKED','IN_PROGRESS','ARCHIVED'], BLOCKED:['READY','ARCHIVED'], IN_PROGRESS:['READY','BLOCKED','IN_REVIEW','ARCHIVED'], IN_REVIEW:['DONE','IN_PROGRESS','BLOCKED','ARCHIVED'], DONE:['ARCHIVED'], ARCHIVED:[] };
 export function canTransitionWorkItem(from: WorkItemStatus, to: WorkItemStatus): boolean { return transitions[from].includes(to); }
 export function transitionWorkItem<T extends WorkItem>(item: T, to: WorkItemStatus): T {
   if (!canTransitionWorkItem(item.status as WorkItemStatus, to)) throw new Error(`Invalid WorkItem transition: ${item.status} -> ${to}`);

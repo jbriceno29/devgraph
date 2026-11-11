@@ -114,6 +114,11 @@ export class SqliteAgentExecutionRepository implements AgentExecutionRepositoryP
       ON CONFLICT(feature_id) DO UPDATE SET branch_name=excluded.branch_name,source_branch=excluded.source_branch`).run(input.ownerId,input.projectId,input.repositoryId,input.branchName,input.sourceBranch,new Date().toISOString());
   }
 
+  listDocumentPaths(projectId:string):string[] {
+    return (this.db.prepare(`SELECT a.relative_path AS path FROM artifacts a JOIN knowledge_entities e ON e.id=a.entity_id WHERE e.project_id=?
+      UNION SELECT d.relative_path FROM decision_records d JOIN knowledge_entities e ON e.id=d.entity_id WHERE e.project_id=? ORDER BY 1`).all(projectId,projectId) as Array<{path:string}>).map(row=>row.path);
+  }
+
   listFileDiffs(executionId:string):Array<{filePath:string;changeType:string;additions:number;deletions:number;diffPatch:string|null}> {
     return (this.db.prepare('SELECT file_path,change_type,additions,deletions,diff_patch FROM execution_file_diffs WHERE execution_id=? ORDER BY file_path').all(executionId) as Array<{file_path:string;change_type:string;additions:number;deletions:number;diff_patch:string|null}>)
       .map(row=>({filePath:row.file_path,changeType:row.change_type,additions:row.additions,deletions:row.deletions,diffPatch:row.diff_patch}));

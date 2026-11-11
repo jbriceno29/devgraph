@@ -65,7 +65,7 @@ describe('ExecutionPolicyForm',()=>{
   expect((screen.getByLabelText('Rutas escribibles') as HTMLTextAreaElement).value).toBe('src/**\ntests/**');
   fireEvent.change(commands,{target:{value:'node --test\n\n  npm run lint  '}});
   fireEvent.click(screen.getByRole('button',{name:'Guardar política'}));
-  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint']}));
+  await waitFor(()=>expect(client.commands.updateExecutionPolicy).toHaveBeenCalledWith('p',{writablePaths:['src/**','tests/**'],readonlyPaths:[],deniedPaths:['.env*'],allowedCommands:['node --test','npm run lint'],maxExecutionMinutes:30}));
   expect((await screen.findByRole('status')).textContent).toBe('Política guardada.');
  });
 

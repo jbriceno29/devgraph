@@ -45,7 +45,7 @@ describe('opening an existing project',()=>{
   const created=store.createProject({name:'Legacy',slug:'legacy'});store.closeAll();
   const filename=join(root,'projects',created.id,'workspace.sqlite');
   // Downgrade to what the previous app version left on disk: schema 001 only, user_version 1.
-  const legacy=new Database(filename);legacy.exec('DROP TABLE feature_branches');for(const column of ['base_branch','execution_branch','revision_of','review_status','review_note','merged_commit','reviewed_at'])legacy.exec(`ALTER TABLE agent_executions DROP COLUMN ${column}`);legacy.pragma('user_version = 1');legacy.close();
+  const legacy=new Database(filename);for(const table of ['pilot_events','pilot_runs','feature_autonomy','task_outcomes','feature_branches'])legacy.exec(`DROP TABLE ${table}`);legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_execution_minutes');for(const column of ['base_branch','execution_branch','revision_of','review_status','review_note','merged_commit','reviewed_at'])legacy.exec(`ALTER TABLE agent_executions DROP COLUMN ${column}`);legacy.pragma('user_version = 1');legacy.close();
   const reopened=new ProjectWorkspaceStore(root);
   expect(reopened.listProjects().map(project=>project.name)).toEqual(['Legacy']);
   const workspace=reopened.openProject(created.id);

@@ -8,7 +8,7 @@ import type { AutonomyPolicy } from '../../src/domain/governance/models.js';
 
 const roots:string[]=[];
 afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
-const policy:AutonomyPolicy={id:'policy',projectId:'11111111-1111-4111-8111-111111111111',name:'test',writablePaths:['src/**'],readonlyPaths:['docs/adr/**'],deniedPaths:['.env*'],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true};
+const policy:AutonomyPolicy={id:'policy',projectId:'11111111-1111-4111-8111-111111111111',name:'test',writablePaths:['src/**'],readonlyPaths:['docs/adr/**'],deniedPaths:['.env*'],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true,maxExecutionMinutes:30};
 
 describe('ExecutionValidator',()=>{
  it('fails and reverts denied paths while preserving an audit patch and log',async()=>{

@@ -11,7 +11,7 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,10));
 
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve};}
 
-function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[]}={}){
+function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:ExecutionValidatorPort['validate'];build?:()=>Promise<unknown>;seed?:AgentExecution[];taskStatus?:WorkItemStatus;dependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;dependents?:Array<{id:string;displayKey:string;title:string;status:string}>;dependentDependencies?:Array<{id:string;displayKey:string;title:string;status:string}>;merge?:GitIsolationPort['squashMerge'];documents?:string[];maxMinutes?:number}={}){
  const workItems=new Map<string,WorkItemStatus>([['task',options.taskStatus??'READY'],...(options.dependents??[]).map(item=>[item.id,item.status as WorkItemStatus] as [string,WorkItemStatus])]);
  const task={get status(){return workItems.get('task')!;},set status(value:WorkItemStatus){workItems.set('task',value);}};const prompts:string[]=[];let revision=1;const branches=new Map<string,{branchName:string;sourceBranch:string}>();const emitted:Array<{channel:string;payload:unknown}>=[];
  const executions=new Map<string,AgentExecution>((options.seed??[]).map(item=>[item.id,item]));
@@ -27,11 +27,12 @@ function harness(options:{adapter?:Partial<AgentAdapterPort>;validate?:Execution
   listFileDiffs:()=>[],
   listEvents:()=>[],
   listDocumentPaths:()=>options.documents??[],
+  rejectPendingApprovals:vi.fn(),
   recordTaskOutcome:vi.fn(()=>{revision+=1;return revision;}),
   findTaskOutcome:()=>null,
   findProfile:()=>({id:'profile',roleKey:'DEVELOPER',systemInstructions:'',provider:{id:'provider',providerKey:'codex'}}),
   getRepositoryRoot:()=>'/repo',getRepositoryId:()=>'repo-id',
-  getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true}),
+  getAutonomyPolicy:()=>({id:'policy',projectId:'project',name:'p',writablePaths:[],readonlyPaths:[],deniedPaths:[],allowedCommands:[],autoApproveScopes:[],requireWorktreeIsolation:true,maxExecutionMinutes:options.maxMinutes??30}),
   listExecutions:()=>[...executions.values()].map(item=>({...item})),
   createExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
   updateExecution:(execution:AgentExecution)=>{executions.set(execution.id,{...execution});},
@@ -254,5 +255,31 @@ describe('AgentOrchestrator review: accept and request changes (Stage 1.2)',()=>
   task.status='BLOCKED';
   await expect(orchestrator.accept(execution.id)).rejects.toThrow('debe estar en revisión');
   await expect(orchestrator.requestChanges({executionId:execution.id,feedback:'x'})).rejects.toThrow('debe estar en revisión');
+ });
+});
+
+describe('AgentOrchestrator robustness (Stage 3.1)',()=>{
+ const hanging={async *run(){yield {type:'SESSION_INITIALIZED' as const,timestamp:now(),externalSessionId:'s'};await new Promise(()=>undefined);}};
+ it('stops a run that exceeds the policy time limit and makes the task available again',async()=>{
+  const {orchestrator,repository,adapter,task}=harness({adapter:hanging,maxMinutes:0.001});
+  const execution=await start(orchestrator);
+  await new Promise(resolve=>setTimeout(resolve,150));
+  expect(repository.findExecution(execution.id)).toMatchObject({status:'FAILED',resultSummary:expect.stringContaining('tiempo máximo')});
+  expect(adapter.cancel).toHaveBeenCalledWith(execution.id);expect(task.status).toBe('READY');
+ });
+ it('stops the engine when consuming its events fails (D7)',async()=>{
+  const {orchestrator,repository,adapter}=harness({adapter:{async *run(){yield {type:'APPROVAL_REQUIRED' as const,timestamp:now(),requestId:'r1',actionType:'COMMAND' as const,target:'rm -rf /'};await new Promise(()=>undefined);}}});
+  const execution=await start(orchestrator);await flush();
+  expect(repository.findExecution(execution.id)!.status).toBe('FAILED');
+  expect(adapter.cancel).toHaveBeenCalledWith(execution.id);
+ });
+ it('stops running engines on shutdown and closes approvals of interrupted runs',async()=>{
+  const {orchestrator,adapter,repository}=harness({adapter:hanging});
+  const execution=await start(orchestrator);await flush();
+  orchestrator.shutdown();
+  expect(adapter.cancel).toHaveBeenCalledWith(execution.id);
+  const restarted=harness({seed:[repository.findExecution(execution.id)!],taskStatus:'IN_PROGRESS'});
+  restarted.orchestrator.reconcileInterrupted('project');
+  expect(restarted.repository.rejectPendingApprovals).toHaveBeenCalledWith(execution.id,expect.stringContaining('interrumpida'));
  });
 });

@@ -167,6 +167,10 @@ impl SidecarClient {
         }
     }
 
+    pub fn is_alive(&self) -> bool {
+        self.alive.load(Ordering::SeqCst)
+    }
+
     fn forget(&self, id: &str) {
         if let Ok(mut map) = self.pending.lock() {
             map.remove(id);
@@ -182,13 +186,50 @@ impl Drop for SidecarClient {
     }
 }
 
+type SidecarFactory = Box<dyn Fn() -> Result<SidecarClient, String> + Send + Sync>;
+
+/**
+ * Keeps one live core. If it died, the next request starts a new one instead of failing until the app restarts;
+ * the request that was in flight when it died still fails (it may have had effects), only later ones are served.
+ * Interrupted executions are reconciled by the new core when the project is opened.
+ */
+pub struct RestartingSidecar {
+    factory: SidecarFactory,
+    client: Mutex<Arc<SidecarClient>>,
+    restarts: AtomicU64,
+}
+
+impl RestartingSidecar {
+    pub fn new(factory: SidecarFactory) -> Result<Self, String> {
+        let client = Arc::new(factory()?);
+        Ok(Self { factory, client: Mutex::new(client), restarts: AtomicU64::new(0) })
+    }
+
+    fn live_client(&self) -> Result<Arc<SidecarClient>, String> {
+        let mut guard = self.client.lock().map_err(|_| "Workspace sidecar lock was poisoned".to_string())?;
+        if !guard.is_alive() {
+            *guard = Arc::new((self.factory)()?);
+            self.restarts.fetch_add(1, Ordering::SeqCst);
+        }
+        Ok(guard.clone())
+    }
+
+    pub fn request(&self, request: WorkspaceRequest) -> Result<Value, String> {
+        self.live_client()?.request(request)
+    }
+
+    pub fn restarts(&self) -> u64 {
+        self.restarts.load(Ordering::SeqCst)
+    }
+}
+
 #[derive(Clone)]
-struct SidecarState(Arc<SidecarClient>);
+struct SidecarState(Arc<RestartingSidecar>);
 
 #[tauri::command]
 async fn workspace_request(sidecar: State<'_, SidecarState>, request: WorkspaceRequest) -> Result<Value, String> {
-    let client = sidecar.inner().0.clone();
-    tauri::async_runtime::spawn_blocking(move || client.request(request))
+    let sidecar = sidecar.inner().0.clone();
+    tauri::async_runtime::spawn_blocking(move || sidecar.request(request))
         .await
         .map_err(|error| format!("Workspace request worker failed: {error}"))?
 }
@@ -209,18 +250,21 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<SidecarState, String> {
     if !script.is_file() {
         return Err(format!("Workspace core is missing at {}. Run the Tauri development/build command so the TypeScript core is compiled.", script.display()));
     }
-    let mut command = Command::new(&program);
-    command.arg(&script).current_dir(&working_directory).env("GRAPHDEV_WORKSPACE_ROOT", &workspace_root);
     let event_app = app.clone();
-    let client = SidecarClient::spawn(
-        command,
-        move |channel, payload| {
-            let _ = event_app.emit(&channel, payload);
-        },
-        Some(workspace_root.join("logs").join("sidecar.log")),
-    )
-    .map_err(|error| format!("{error} ({program})"))?;
-    Ok(SidecarState(Arc::new(client)))
+    let factory: SidecarFactory = Box::new(move || {
+        let mut command = Command::new(&program);
+        command.arg(&script).current_dir(&working_directory).env("GRAPHDEV_WORKSPACE_ROOT", &workspace_root);
+        let emitter = event_app.clone();
+        SidecarClient::spawn(
+            command,
+            move |channel, payload| {
+                let _ = emitter.emit(&channel, payload);
+            },
+            Some(workspace_root.join("logs").join("sidecar.log")),
+        )
+        .map_err(|error| format!("{error} ({program})"))
+    });
+    Ok(SidecarState(Arc::new(RestartingSidecar::new(factory)?)))
 }
 
 pub fn run() {
@@ -329,6 +373,21 @@ rl.on('line',line=>{const {id,request}=JSON.parse(line);const c=request.channel;
         assert!(started.elapsed() < Duration::from_secs(5));
         thread::sleep(Duration::from_millis(100));
         assert!(client.request(request("fast")).unwrap_err().contains("se detuvo"));
+    }
+
+    #[test]
+    fn a_dead_core_is_restarted_on_the_next_request() {
+        let sidecar = RestartingSidecar::new(Box::new(|| {
+            let mut command = Command::new("node");
+            command.arg("-e").arg(FAKE_CORE);
+            SidecarClient::spawn(command, |_, _| {}, None)
+        }))
+        .unwrap();
+        assert_eq!(sidecar.request(request("fast")).unwrap(), "fast");
+        assert!(sidecar.request(request("die")).is_err());
+        thread::sleep(Duration::from_millis(150));
+        assert_eq!(sidecar.request(request("fast")).unwrap(), "fast");
+        assert_eq!(sidecar.restarts(), 1);
     }
 
     #[test]

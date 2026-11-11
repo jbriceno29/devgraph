@@ -19,7 +19,9 @@ export interface AgentExecutionRepositoryPort {
   getRepositoryRoot(projectId: string): string | null;
   getRepositoryId(projectId:string):string|null;
   getAutonomyPolicy(projectId:string,profileId:string):AutonomyPolicy;
-  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>):void;
+  updateAutonomyPolicy(policyId:string,fields:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'>):void;
+  /** Closes approval requests left PENDING by an execution that will never resume. */
+  rejectPendingApprovals(executionId:string,note:string):void;
   createExecution(execution: AgentExecution): void;
   updateExecution(execution: AgentExecution): void;
   findExecution(executionId: string): AgentExecution | null;

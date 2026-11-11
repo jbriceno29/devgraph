@@ -12,6 +12,7 @@ const terminalStatuses=new Set<ExecutionStatus>(['COMPLETED','FAILED','CANCELLED
 export class AgentOrchestrator {
  private readonly active=new Set<string>();
  private readonly accepting=new Set<string>();
+ private readonly deadlines=new Map<string,ReturnType<typeof setTimeout>>();
  private readonly governance:GovernanceInterceptor;
  constructor(private readonly repository:AgentExecutionRepositoryPort,private readonly contextBuilder:AgentContextBuilderPort,private readonly eventLog:ExecutionEventLogPort,private readonly adapter:AgentAdapterPort,private readonly isolation:GitIsolationPort,private readonly validator:ExecutionValidatorPort,private readonly workspaceRoot:string,private readonly emit:ExecutionEventSink=()=>undefined){this.governance=new GovernanceInterceptor(repository,adapter,(execution,event)=>this.persistAndEmit(execution,event),execution=>this.publishStatus(execution));}
 
@@ -67,7 +68,11 @@ export class AgentOrchestrator {
    if(previous)await this.supersede(previous,input.feedback!.trim(),repositoryRoot);
    const prompt=buildTaskPrompt(profile.systemInstructions,workItem.title,workItem.summary,workItem.acceptanceCriteria.map(item=>item.description),context.packageText,policy,previous?{feedback:input.feedback!.trim(),previousSummary:previous.resultSummary,previousCommit:startPoint}:undefined);
    const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt,...(requestedModel?{model:requestedModel}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
-   handedToConsumer=true;void this.consume(execution,stream);
+   handedToConsumer=true;
+   // A run may not exceed the policy's time limit: past it, the engine is stopped and the task made available again.
+   const minutes=Number.isFinite(policy.maxExecutionMinutes)&&policy.maxExecutionMinutes>0?policy.maxExecutionMinutes:30;
+   const deadline=setTimeout(()=>void this.expire(execution.id,minutes),minutes*60_000);deadline.unref?.();this.deadlines.set(execution.id,deadline);
+   void this.consume(execution,stream);
    return execution;
   }catch(error){
    const current=this.repository.findExecution(execution.id);if(!current||terminalStatuses.has(current.status))return isolated?await this.discardIsolation(current??execution,repositoryRoot,isolated):current??execution;
@@ -77,6 +82,25 @@ export class AgentOrchestrator {
    // The agent never ran, so the worktree holds nothing worth reviewing.
    return isolated?await this.discardIsolation(execution,repositoryRoot,isolated):execution;
   }finally{if(!handedToConsumer)this.active.delete(execution.id);}
+ }
+
+ /** Stops every engine this process runs (app shutdown). The records are reconciled as interrupted on the next open. */
+ shutdown():void{
+  for(const executionId of this.active){this.governance.cancel(executionId);void this.adapter.cancel(executionId).catch(()=>undefined);}
+  for(const deadline of this.deadlines.values())clearTimeout(deadline);
+  this.deadlines.clear();
+ }
+
+ private async expire(executionId:string,minutes:number):Promise<void>{
+  this.deadlines.delete(executionId);
+  const execution=this.repository.findExecution(executionId);
+  if(!execution||!this.active.has(executionId)||terminalStatuses.has(execution.status))return;
+  const errorMessage=`La ejecución superó el tiempo máximo de ${minutes} min y se detuvo.`;
+  await this.persistAndEmit(execution,{type:'EXECUTION_FAILED',timestamp:new Date().toISOString(),errorCode:'EXECUTION_TIMEOUT',errorMessage,isRecoverable:true}).catch(()=>undefined);
+  const failed={...transitionExecution(execution,'FAILED'),resultSummary:errorMessage,completedAt:new Date().toISOString()};
+  this.repository.updateExecution(failed);this.publishStatus(failed);this.moveTask(failed,'IN_PROGRESS','READY');
+  this.governance.cancel(executionId);
+  await this.adapter.cancel(executionId).catch(()=>undefined);
  }
 
  /** Manual status change from the inspector. Execution-owned statuses are refused; READY requires its dependencies DONE. */
@@ -98,14 +122,16 @@ export class AgentOrchestrator {
  taskOutcome(workItemId:string){return this.repository.findTaskOutcome(workItemId);}
 
  /** Execution policy of the project's DEVELOPER profile (paths and verification commands). */
- getPolicy(projectId:string):Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>{
+ getPolicy(projectId:string):Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'|'maxExecutionMinutes'>{
   const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
-  return {writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands};
+  return {writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands,maxExecutionMinutes:policy.maxExecutionMinutes};
  }
 
- updatePolicy(projectId:string,input:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>){
+ updatePolicy(projectId:string,input:Pick<AutonomyPolicy,'writablePaths'|'readonlyPaths'|'deniedPaths'|'allowedCommands'>&{maxExecutionMinutes?:number}){
   const policy=this.repository.getAutonomyPolicy(projectId,this.developerProfileId(projectId));
-  const clean={writablePaths:cleanPatterns(input.writablePaths,'escribible'),readonlyPaths:cleanPatterns(input.readonlyPaths,'de solo lectura'),deniedPaths:cleanPatterns(input.deniedPaths,'prohibida'),allowedCommands:cleanCommands(input.allowedCommands)};
+  const minutes=input.maxExecutionMinutes??policy.maxExecutionMinutes;
+  if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw new Error('El tiempo máximo por ejecución debe ser un número entero de minutos entre 1 y 240.');
+  const clean={writablePaths:cleanPatterns(input.writablePaths,'escribible'),readonlyPaths:cleanPatterns(input.readonlyPaths,'de solo lectura'),deniedPaths:cleanPatterns(input.deniedPaths,'prohibida'),allowedCommands:cleanCommands(input.allowedCommands),maxExecutionMinutes:minutes};
   this.repository.updateAutonomyPolicy(policy.id,clean);
   return clean;
  }
@@ -194,7 +220,9 @@ export class AgentOrchestrator {
    const event:AgentEvent={type:'EXECUTION_FAILED',timestamp:new Date().toISOString(),errorCode:'EXECUTION_INTERRUPTED',errorMessage,isRecoverable:true};
    this.repository.appendEvent(execution.id,event);this.emit('execution:event_received',{executionId:execution.id,event});
    const failed={...transitionExecution(execution,'FAILED'),resultSummary:errorMessage,completedAt:new Date().toISOString()};
-   this.repository.updateExecution(failed);this.publishStatus(failed);this.moveTask(failed,'IN_PROGRESS','READY');interrupted.push(failed);
+   this.repository.updateExecution(failed);this.publishStatus(failed);this.moveTask(failed,'IN_PROGRESS','READY');
+   try{this.repository.rejectPendingApprovals(execution.id,'Ejecución interrumpida antes de resolver la aprobación.');}catch{/* nothing pending */}
+   interrupted.push(failed);
   }
   return interrupted;
  }
@@ -237,9 +265,12 @@ export class AgentOrchestrator {
      this.moveTask(result,'IN_PROGRESS','READY');
     }
    }catch{/* left non-terminal on purpose; see above */}
+   // D7: whatever broke the consumer, the engine must not keep running unsupervised.
+   await this.adapter.cancel(execution.id).catch(()=>undefined);
   }finally{
    this.active.delete(execution.id);
    this.governance.cancel(execution.id);
+   const deadline=this.deadlines.get(execution.id);if(deadline){clearTimeout(deadline);this.deadlines.delete(execution.id);}
   }
  }
 

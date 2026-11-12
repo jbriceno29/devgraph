@@ -62,10 +62,12 @@ export class GitFeatureConflicts implements FeatureConflictGitPort {
   }): Promise<{ commit: string; conflicts: string[] }> {
     if (!uuid.test(input.projectId)) throw new Error('Invalid project id for merge.');
     const repositoryRoot = await realpath(input.repositoryRoot);
-    const worktrees = await git(repositoryRoot, ['worktree', 'list', '--porcelain']);
-    if (worktrees.split('\n').includes(`branch refs/heads/${input.branch}`))
+    const openIn = await checkedOutIn(repositoryRoot, input.branch);
+    if (openIn)
       throw new Error(
-        `La rama ${input.branch} está abierta en una carpeta; cambia de rama allí y vuelve a intentarlo.`,
+        openIn === repositoryRoot
+          ? `Tu repositorio (${openIn}) tiene abierta la rama ${input.branch}. Cambia a otra rama (por ejemplo, git checkout main) y vuelve a intentarlo: la app no mueve una rama que tienes abierta.`
+          : `La rama ${input.branch} está abierta en ${openIn}. Cambia de rama allí y vuelve a intentarlo.`,
       );
     const before = (await git(repositoryRoot, ['rev-parse', '--verify', `refs/heads/${input.branch}^{commit}`])).trim();
     const directory = join(input.workspaceRoot, 'projects', input.projectId, 'merges', randomUUID());
@@ -88,4 +90,14 @@ export class GitFeatureConflicts implements FeatureConflictGitPort {
       await git(repositoryRoot, ['worktree', 'prune']).catch(() => undefined);
     }
   }
+}
+
+/** The folder where `branch` is checked out (the user's repository or another worktree), or null. */
+async function checkedOutIn(repositoryRoot: string, branch: string): Promise<string | null> {
+  let folder: string | null = null;
+  for (const line of (await git(repositoryRoot, ['worktree', 'list', '--porcelain'])).split('\n')) {
+    if (line.startsWith('worktree ')) folder = line.slice('worktree '.length);
+    else if (line === `branch refs/heads/${branch}` && folder) return realpath(folder).catch(() => folder);
+  }
+  return null;
 }

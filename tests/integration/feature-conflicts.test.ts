@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { realpathSync } from 'node:fs';
 import type {
   FeatureConflictsDto,
   ResolveFeatureConflictsResultDto,
@@ -92,5 +93,25 @@ describe('conflictos entre features (plan UX, F0b)', () => {
     await expect(resolve('fb')).rejects.toThrow(/no tiene rama de integración/);
     await integrate('fa');
     await expect(resolve('fa')).rejects.toThrow(/no hubo conflictos/);
+  });
+
+  it('refuses to move a feature branch the user has checked out, naming the folder', async () => {
+    const { core, projectId, repo, git, runAndAccept, integrate } = await setup(sameFile());
+    await runAndAccept('a1');
+    await runAndAccept('b1');
+    await integrate('fa');
+    const branch = 'feature/feat-002-prioridad';
+    const tip = git('rev-parse', branch).trim();
+    git('checkout', '--quiet', branch);
+    await expect(core.handle({ channel: 'feature:resolve_conflicts', args: [projectId, 'fb'] })).rejects.toThrow(
+      `Tu repositorio (${realpathSync(repo)}) tiene abierta la rama ${branch}. Cambia a otra rama`,
+    );
+    expect(git('rev-parse', branch).trim()).toBe(tip);
+    git('checkout', '--quiet', 'main');
+    await expect(core.handle({ channel: 'feature:resolve_conflicts', args: [projectId, 'fb'] })).resolves.toMatchObject(
+      {
+        files: ['src/tasks.js'],
+      },
+    );
   });
 });

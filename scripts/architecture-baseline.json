@@ -6,9 +6,6 @@
     "src/modules/context/application/graph-traversal.ts": 133,
     "src/modules/context/application/hybrid-retrieval.ts": 12,
     "src/modules/inception/application/foundation-plan.ts": 99,
-    "src/modules/planning/application/change-set-planning-service.ts": 23,
-    "src/modules/planning/application/changeset-validator.ts": 107,
-    "src/modules/planning/application/ui-spec-update.ts": 1,
     "src/desktop/presentation/FolderField.tsx": 31,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 505,
     "src/desktop/presentation/agents/EngineAuthForm.tsx": 21,
@@ -38,8 +35,6 @@
     "src/desktop/state/WorkspaceShell.tsx": 183,
     "src/desktop/state/project-create-form.tsx": 161,
     "src/desktop/state/workspace-navigation-context.tsx": 107,
-    "src/modules/planning/infrastructure/change-set-planning-contract.ts": 104,
-    "src/modules/planning/infrastructure/claude-change-set-planner.ts": 36,
     "src/modules/projects/infrastructure/repository-scanner.ts": 143,
     "src/modules/documents/infrastructure/transactional-markdown-file-store.ts": 18,
     "src/modules/activity/infrastructure/sqlite-activity-repository.ts": 120

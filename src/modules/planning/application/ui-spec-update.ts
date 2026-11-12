@@ -56,24 +56,32 @@ export function applyUiSpecPlan(
       ? upsert.entityId
       : (upsert.tempId ?? null)
     : spec.entityId;
-  if (target) {
-    const touched = [
-      ...ops.filter((op): op is Op<'CREATE_FEATURE'> => op.type === 'CREATE_FEATURE').map(op => op.tempId),
-      ...ops.flatMap(op => (op.type === 'CREATE_WORK_ITEM' && graph.features?.has(op.parentId) ? [op.parentId] : [])),
-    ];
-    for (const feature of new Set(touched)) {
-      if (target === spec.entityId && graph.linked?.has(feature)) continue;
-      if (
-        !ops.some(
-          op =>
-            op.type === 'CREATE_RELATIONSHIP' &&
-            op.edgeType === 'DOCUMENTED_BY' &&
-            op.sourceId === feature &&
-            op.targetId === target,
-        )
-      )
-        ops.push({ type: 'CREATE_RELATIONSHIP', sourceId: feature, targetId: target, edgeType: 'DOCUMENTED_BY' });
-    }
-  }
+  if (target) linkFeatures(ops, target, spec.entityId, graph);
   return { operations: ops, problems };
+}
+
+/** Every feature the plan creates or adds tasks to is DOCUMENTED_BY the specification (once, unless already linked). */
+function linkFeatures(
+  ops: ChangeOperation[],
+  target: string,
+  existingId: string | null,
+  graph: { features?: ReadonlySet<string>; linked?: ReadonlySet<string> },
+): void {
+  const touched = [
+    ...ops.filter((op): op is Op<'CREATE_FEATURE'> => op.type === 'CREATE_FEATURE').map(op => op.tempId),
+    ...ops.flatMap(op => (op.type === 'CREATE_WORK_ITEM' && graph.features?.has(op.parentId) ? [op.parentId] : [])),
+  ];
+  for (const feature of new Set(touched)) {
+    if (target === existingId && graph.linked?.has(feature)) continue;
+    if (
+      !ops.some(
+        op =>
+          op.type === 'CREATE_RELATIONSHIP' &&
+          op.edgeType === 'DOCUMENTED_BY' &&
+          op.sourceId === feature &&
+          op.targetId === target,
+      )
+    )
+      ops.push({ type: 'CREATE_RELATIONSHIP', sourceId: feature, targetId: target, edgeType: 'DOCUMENTED_BY' });
+  }
 }

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { runCli } from './claude-cli-call.js';
 import type { ChangeSetDraft, ChangeSetPlannerPort } from '../application/ports/change-set-planning-port.js';
 import {
   type PlannerInput,
@@ -94,22 +94,7 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
     }
     const model = requestedModel ?? this.options.defaultModel ?? undefined;
     if (model && !MODEL_PATTERN.test(model)) throw new Error(`Nombre de modelo inválido: ${model}`);
-    const args = [
-      '-p',
-      '--output-format',
-      'json',
-      '--json-schema',
-      JSON.stringify(schema),
-      '--tools',
-      options.tools ?? '',
-      ...(options.allowedTools ? ['--allowedTools', options.allowedTools] : []),
-      '--permission-mode',
-      'dontAsk',
-      '--strict-mcp-config',
-      '--no-session-persistence',
-      ...extraArgs,
-      ...(model ? ['--model', model] : []),
-    ];
+    const args = structuredArgs(schema, options, extraArgs, model);
     const stdout = await this.run(
       executable,
       args,
@@ -120,41 +105,7 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
       purpose,
       options.timeoutMs,
     );
-    let result: Record<string, unknown>;
-    try {
-      result = JSON.parse(stdout) as Record<string, unknown>;
-    } catch {
-      throw new Error(`Claude Code devolvió una respuesta que no es JSON: ${stdout.slice(0, 300)}`);
-    }
-    if (result.is_error === true || result.subtype !== 'success') {
-      const detail =
-        typeof result.result === 'string' && result.result ? result.result : String(result.subtype ?? 'error');
-      throw new Error(`Claude Code no pudo ${purpose}: ${detail}`);
-    }
-    if (result.structured_output === undefined || result.structured_output === null) {
-      throw new Error(
-        options.purpose
-          ? `Claude Code terminó sin un resultado estructurado al ${purpose}. Vuelve a intentarlo o prueba con un modelo más capaz.`
-          : 'Claude Code terminó sin una propuesta estructurada. Reformula la petición o prueba con un modelo más capaz.',
-      );
-    }
-    const usage = (result.usage ?? {}) as Record<string, unknown>,
-      count = (key: string) => (typeof usage[key] === 'number' ? (usage[key] as number) : 0);
-    const used =
-      result.modelUsage && typeof result.modelUsage === 'object'
-        ? (Object.keys(result.modelUsage as object)[0] ?? null)
-        : null;
-    return {
-      output: result.structured_output,
-      usage: {
-        inputTokens: count('input_tokens'),
-        outputTokens: count('output_tokens'),
-        cacheReadTokens: count('cache_read_input_tokens'),
-        cacheCreationTokens: count('cache_creation_input_tokens'),
-        costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
-        model: used ?? model ?? null,
-      },
-    };
+    return parseStructured(stdout, purpose, options, model);
   }
 
   private run(
@@ -167,68 +118,84 @@ export class ClaudeChangeSetPlanner implements ChangeSetPlannerPort {
     purpose: string,
     timeoutOverride?: number,
   ): Promise<string> {
-    const timeoutMs = timeoutOverride ?? this.options.timeoutMs ?? CLAUDE_PLANNER_TIMEOUT_MS,
-      graceMs = this.options.cancelGraceMs ?? 5_000;
-    return new Promise((resolve, reject) => {
-      if (abort?.aborted) {
-        reject(new EngineCallCancelledError());
-        return;
-      }
-      const child = spawn(executable, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-      let out = '',
-        err = '',
-        timedOut = false,
-        cancelled = false,
-        escalation: ReturnType<typeof setTimeout> | undefined;
-      // SIGINT lets the CLI stop cleanly; SIGTERM is the fallback. The fallback timer stays referenced, so a shutting-down core waits for it.
-      const stop = () => {
-        if (child.exitCode !== null || child.signalCode !== null || escalation) return;
-        child.kill('SIGINT');
-        escalation = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-        }, graceMs);
-      };
-      const onAbort = () => {
-        cancelled = true;
-        stop();
-      };
-      abort?.addEventListener('abort', onAbort, { once: true });
-      const timer = setTimeout(() => {
-        timedOut = true;
-        stop();
-      }, timeoutMs);
-      const cleanup = () => {
-        clearTimeout(timer);
-        clearTimeout(escalation);
-        abort?.removeEventListener('abort', onAbort);
-      };
-      child.stdout.setEncoding('utf8').on('data', chunk => {
-        out += chunk;
-      });
-      child.stderr.setEncoding('utf8').on('data', chunk => {
-        err += chunk;
-      });
-      child.once('error', error => {
-        cleanup();
-        reject(new Error(`No se pudo iniciar Claude Code (${executable}): ${error.message}`));
-      });
-      child.stdin.on('error', error => {
-        if ((error as NodeJS.ErrnoException).code !== 'EPIPE') err += `\n${error.message}`;
-      });
-      child.once('close', (code, signal) => {
-        cleanup();
-        if (cancelled) reject(new EngineCallCancelledError());
-        else if (timedOut)
-          reject(new Error(`Claude Code superó el límite de ${Math.round(timeoutMs / 1000)} s para ${purpose}.`));
-        else if (code === 0) resolve(out.trim());
-        else
-          reject(
-            new Error(
-              `Claude Code terminó con ${signal ? `la señal ${signal}` : `código ${code}`}: ${(err || out).slice(-4000)}`,
-            ),
-          );
-      });
-      child.stdin.end(prompt);
+    return runCli({
+      executable,
+      args,
+      env,
+      prompt,
+      abort,
+      cwd,
+      purpose,
+      timeoutMs: timeoutOverride ?? this.options.timeoutMs ?? CLAUDE_PLANNER_TIMEOUT_MS,
+      graceMs: this.options.cancelGraceMs ?? 5_000,
     });
   }
+}
+
+function structuredArgs(
+  schema: unknown,
+  options: StructuredCallOptions,
+  extraArgs: readonly string[],
+  model: string | undefined,
+): string[] {
+  return [
+    '-p',
+    '--output-format',
+    'json',
+    '--json-schema',
+    JSON.stringify(schema),
+    '--tools',
+    options.tools ?? '',
+    ...(options.allowedTools ? ['--allowedTools', options.allowedTools] : []),
+    '--permission-mode',
+    'dontAsk',
+    '--strict-mcp-config',
+    '--no-session-persistence',
+    ...extraArgs,
+    ...(model ? ['--model', model] : []),
+  ];
+}
+
+/** The CLI's JSON result: its structured output and usage, or the error the CLI reported in Spanish. */
+function parseStructured(
+  stdout: string,
+  purpose: string,
+  options: StructuredCallOptions,
+  model: string | undefined,
+): { output: unknown; usage: StructuredUsage } {
+  let result: Record<string, unknown>;
+  try {
+    result = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Claude Code devolvió una respuesta que no es JSON: ${stdout.slice(0, 300)}`);
+  }
+  if (result.is_error === true || result.subtype !== 'success') {
+    const detail =
+      typeof result.result === 'string' && result.result ? result.result : String(result.subtype ?? 'error');
+    throw new Error(`Claude Code no pudo ${purpose}: ${detail}`);
+  }
+  if (result.structured_output === undefined || result.structured_output === null) {
+    throw new Error(
+      options.purpose
+        ? `Claude Code terminó sin un resultado estructurado al ${purpose}. Vuelve a intentarlo o prueba con un modelo más capaz.`
+        : 'Claude Code terminó sin una propuesta estructurada. Reformula la petición o prueba con un modelo más capaz.',
+    );
+  }
+  const usage = (result.usage ?? {}) as Record<string, unknown>,
+    count = (key: string) => (typeof usage[key] === 'number' ? (usage[key] as number) : 0);
+  const used =
+    result.modelUsage && typeof result.modelUsage === 'object'
+      ? (Object.keys(result.modelUsage as object)[0] ?? null)
+      : null;
+  return {
+    output: result.structured_output,
+    usage: {
+      inputTokens: count('input_tokens'),
+      outputTokens: count('output_tokens'),
+      cacheReadTokens: count('cache_read_input_tokens'),
+      cacheCreationTokens: count('cache_creation_input_tokens'),
+      costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
+      model: used ?? model ?? null,
+    },
+  };
 }

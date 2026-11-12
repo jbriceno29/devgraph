@@ -1,5 +1,5 @@
 import type { ProjectRepositoryPort } from '../../projects/index.js';
-import type { KnowledgeGraphRepositoryPort } from '../../knowledge/index.js';
+import type { GraphRelationship, KnowledgeEntity, KnowledgeGraphRepositoryPort } from '../../knowledge/index.js';
 import type {
   ChangeSetApplyPort,
   ChangeSetPlannerPort,
@@ -43,37 +43,15 @@ export class ChangeSetPlanningService {
         prompt: prompt.trim(),
         ...(contextPackage ? { contextPackage } : {}),
         ...(model ? { model } : {}),
-        project: {
-          name: project.props.name,
-          description: project.props.description ?? null,
-          rules: project.props.rules ?? [],
-          revision: project.currentRevision,
-          ...(project.props.objectives?.length ? { objectives: project.props.objectives } : {}),
-          ...(project.props.techStack && Object.keys(project.props.techStack).length
-            ? { techStack: project.props.techStack }
-            : {}),
-        },
+        project: plannerProject(project),
         focusEntity: entities.find(e => e.id === focusEntityId) ?? null,
         entities,
         relationships: this.graph.listRelationships(projectId),
         ...(extras.references?.length ? { references: extras.references } : {}),
         ...(extras.uiSpec ? { uiSpec: extras.uiSpec } : {}),
       });
-    const relationships = this.graph.listRelationships(projectId),
-      features = new Set(entities.filter(entity => entity.entityType === 'FEATURE').map(entity => entity.id));
-    const linked = new Set(
-      extras.uiSpec?.entityId
-        ? relationships
-            .filter(edge => edge.edgeType === 'DOCUMENTED_BY' && edge.targetId === extras.uiSpec!.entityId)
-            .map(edge => edge.sourceId)
-        : [],
-    );
-    const plan = extras.uiSpec
-      ? applyUiSpecPlan(draft.operations, extras.uiSpec, { features, linked })
-      : { operations: draft.operations, problems: [] };
-    const used = extras.references?.length
-      ? `\n\nReferencias usadas: ${extras.references.map(item => `«${item.name}» (${item.kind === 'VISUAL' ? 'cómo debe verse' : item.kind === 'FUNCTIONAL' ? 'qué debe hacer' : 'solo inspiración'})`).join(', ')}.`
-      : '';
+    const plan = uiSpecPlan(draft.operations, extras.uiSpec, entities, this.graph.listRelationships(projectId));
+    const used = referencesNote(extras.references);
     const changeSet: ChangeSet = {
       id: globalThis.crypto.randomUUID(),
       projectId,
@@ -92,21 +70,7 @@ export class ChangeSetPlanningService {
       entities,
       this.graph.listRelationships(projectId),
     );
-    const issues = [
-      ...validation.issues,
-      ...plan.problems.map(message => ({
-        operationIndex: -1,
-        severity: 'ERROR' as const,
-        code: 'UI_SPEC_MISSING',
-        message,
-      })),
-    ];
-    const result = {
-      ...changeSet,
-      status:
-        validation.status === 'VALIDATED' && plan.problems.length ? ('PENDING_APPROVAL' as const) : validation.status,
-      validationIssues: issues,
-    };
+    const result = withUiSpecProblems(changeSet, validation, plan.problems);
     this.changes.save(result);
     return result;
   }
@@ -249,4 +213,65 @@ export class ChangeSetPlanningService {
     if (!found) throw new Error('Propuesta no encontrada.');
     return found;
   }
+}
+
+type Project = NonNullable<ReturnType<ProjectRepositoryPort['findById']>>;
+
+/** The project as the planner sees it: name, description, rules, revision, and objectives and stack when set. */
+function plannerProject(project: Project) {
+  return {
+    name: project.props.name,
+    description: project.props.description ?? null,
+    rules: project.props.rules ?? [],
+    revision: project.currentRevision,
+    ...(project.props.objectives?.length ? { objectives: project.props.objectives } : {}),
+    ...(project.props.techStack && Object.keys(project.props.techStack).length
+      ? { techStack: project.props.techStack }
+      : {}),
+  };
+}
+
+/** With docs/UI_SPEC.md in play, the plan updates it in place and links the features it touches. */
+function uiSpecPlan(
+  operations: ChangeOperation[],
+  uiSpec: PlanningUiSpec | undefined,
+  entities: KnowledgeEntity[],
+  relationships: GraphRelationship[],
+): { operations: ChangeOperation[]; problems: string[] } {
+  if (!uiSpec) return { operations, problems: [] };
+  const features = new Set(entities.filter(entity => entity.entityType === 'FEATURE').map(entity => entity.id));
+  const linked = new Set(
+    uiSpec.entityId
+      ? relationships
+          .filter(edge => edge.edgeType === 'DOCUMENTED_BY' && edge.targetId === uiSpec.entityId)
+          .map(edge => edge.sourceId)
+      : [],
+  );
+  return applyUiSpecPlan(operations, uiSpec, { features, linked });
+}
+
+const referencesNote = (references: PlanningReference[] | undefined) =>
+  references?.length
+    ? `\n\nReferencias usadas: ${references.map(item => `«${item.name}» (${item.kind === 'VISUAL' ? 'cómo debe verse' : item.kind === 'FUNCTIONAL' ? 'qué debe hacer' : 'solo inspiración'})`).join(', ')}.`
+    : '';
+
+/** A plan that should have updated the UI specification and did not stays pending, with that problem listed. */
+function withUiSpecProblems(
+  changeSet: ChangeSet,
+  validation: { status: ChangeSet['status']; issues: ChangeSet['validationIssues'] },
+  problems: string[],
+): ChangeSet {
+  return {
+    ...changeSet,
+    status: validation.status === 'VALIDATED' && problems.length ? 'PENDING_APPROVAL' : validation.status,
+    validationIssues: [
+      ...validation.issues,
+      ...problems.map(message => ({
+        operationIndex: -1,
+        severity: 'ERROR' as const,
+        code: 'UI_SPEC_MISSING',
+        message,
+      })),
+    ],
+  };
 }

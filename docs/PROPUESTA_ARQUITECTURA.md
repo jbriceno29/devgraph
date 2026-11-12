@@ -190,7 +190,12 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
   - El prompt de la tarea pasó a `application/prompts/task-prompt.ts`.
   - El orquestador ya no importa `node:crypto` (usa `globalThis.crypto`) y salió de la línea base.
   - Comportamiento idéntico: pasan las 587 pruebas sin tocarlas. Las corridas reales con `haiku` de 3d (dos tareas, documentos, integración, 16 pruebas en `main`) y de C6 (instalación de Next.js, `next build`, integración) dan el mismo resultado que antes.
-- **Pendiente:** A3b, el repositorio de ejecuciones; A3c, el piloto; A3d, el inicio; A3e, el resto.
+- **A3b, el repositorio de ejecuciones (hecho):** `SqliteAgentExecutionRepository` pasó de 909 a 133 líneas.
+  - Queda como fachada que delega en siete repositorios `sqlite-execution-*.ts`: perfiles, política, aprobaciones, tareas, ramas, resultados y ejecuciones. Las filas y su mapeo van en `sqlite-execution-rows.ts`.
+  - El puerto `AgentExecutionRepositoryPort` ahora extiende ocho puertos de como mucho ocho métodos, en `ports/execution-store-port.ts` (regla 9). Los casos de uso pueden depender solo del que usan.
+  - `recordTaskOutcome` se partió en `linkFiles` y `upsertCodeReference`, y `node:crypto` dejó paso a `globalThis.crypto`.
+  - Pasan las 587 pruebas sin tocarlas. La corrida real con `haiku` de 3d da el mismo resultado.
+- **Pendiente:** A3c, el piloto; A3d, el inicio; A3e, el resto.
 
 **Estado de A1b (2026-11-12): hecho.** `src/shared/kernel/` (`graph.ts`, `artifacts.ts`) tiene el vocabulario común; el dominio ya no importa `shared/contracts` y los contratos lo reexportan. El informe de métricas pasó a `shared/contracts/metrics-view.ts` (los contratos ya no importan módulos). Cada `ipc.ts` marca con `serial(...)` los canales que mutan estado; el router expone `isSerialized` y el despachador ya no tiene lista propia. Pruebas nuevas: los canales serializados son exactamente los de antes y todo canal que llama el cliente de Tauri tiene handler. En la línea base de capas solo quedan los tres usos de `node:crypto`/`node:path` en `application/` (Clock/IdGenerator en A3).
 

@@ -1,15 +1,9 @@
 import type { ProjectEnvironment } from '../../../projects/index.js';
-import type {
-  AgentExecution,
-  AgentEvent,
-  AgentProfile,
-  AgentProvider,
-  ExecutionFileDiff,
-} from '../../domain/models.js';
-import type { WorkItem } from '../../../knowledge/index.js';
+import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider } from '../../domain/models.js';
 import type { ContextSnapshot } from '../../../context/index.js';
-import type { AutonomyPolicy, ApprovalRequest } from '../../domain/governance.js';
-import type { TaskOutcome } from '../../domain/task-outcome.js';
+import type { AutonomyPolicy } from '../../domain/governance.js';
+
+export type * from './execution-store-port.js';
 
 export interface AgentExecutionProfile extends AgentProfile {
   provider: AgentProvider;
@@ -17,99 +11,6 @@ export interface AgentExecutionProfile extends AgentProfile {
   models: { default: string | null; planning: string | null; available: string[] };
   /** Opaque provider connection settings (e.g. authMode), handed to the adapter. */
   connectionConfig: Record<string, unknown>;
-}
-
-export interface AgentExecutionRepositoryPort {
-  listProfiles(projectId: string): AgentExecutionProfile[];
-  findProfile(projectId: string, profileId: string): AgentExecutionProfile | null;
-  findWorkItem(projectId: string, workItemId: string): WorkItem | null;
-  getRepositoryRoot(projectId: string): string | null;
-  getRepositoryId(projectId: string): string | null;
-  getAutonomyPolicy(projectId: string, profileId: string): AutonomyPolicy;
-  updateAutonomyPolicy(
-    policyId: string,
-    fields: Pick<
-      AutonomyPolicy,
-      | 'writablePaths'
-      | 'readonlyPaths'
-      | 'deniedPaths'
-      | 'allowedCommands'
-      | 'maxExecutionMinutes'
-      | 'maxTurns'
-      | 'decisionPolicy'
-    >,
-  ): void;
-  /** Closes approval requests left PENDING by an execution that will never resume. */
-  rejectPendingApprovals(executionId: string, note: string): void;
-  /** Sets `authMode` in the wired provider's connection config. */
-  setProviderAuthMode(projectId: string, mode: 'subscription' | 'api_key'): void;
-  createExecution(execution: AgentExecution): void;
-  updateExecution(execution: AgentExecution): void;
-  findExecution(executionId: string): AgentExecution | null;
-  listExecutions(projectId: string): AgentExecution[];
-  appendEvent(executionId: string, event: AgentEvent): { id: string; sequenceNo: number; createdAt: string };
-  listEvents(executionId: string): Array<{ id: string; sequenceNo: number; createdAt: string; event: AgentEvent }>;
-  createApprovalRequest(request: ApprovalRequest): void;
-  resolveApprovalRequest(requestId: string, decision: { approved: boolean; resolvedBy: string; note: string }): void;
-  /** Moves a work item through the WorkItem state machine; bumps and returns the graph revision. */
-  transitionWorkItem(
-    projectId: string,
-    workItemId: string,
-    to: import('../../../knowledge/index.js').WorkItemStatus,
-  ): number;
-  /** Work items this one DEPENDS_ON (direct edges only). */
-  listDependencies(
-    projectId: string,
-    workItemId: string,
-  ): Array<{ id: string; displayKey: string; title: string; status: string }>;
-  /** Work items that DEPEND_ON this one. */
-  listDependents(
-    projectId: string,
-    workItemId: string,
-  ): Array<{ id: string; displayKey: string; title: string; status: string }>;
-  /** Nearest FEATURE ancestor of a work item (following parent links), or null. */
-  findFeatureFor(projectId: string, workItemId: string): { id: string; displayKey: string; title: string } | null;
-  /** Features this one depends on: DEPENDS_ON between FEATUREs, plus the features of tasks its tasks depend on. */
-  listFeatureDependencies(
-    projectId: string,
-    featureId: string,
-  ): Array<{ id: string; displayKey: string; title: string }>;
-  /** Work items under a feature (subtasks included), ordered by key. */
-  listFeatureTasks(
-    projectId: string,
-    featureId: string,
-  ): Array<{ id: string; displayKey: string; title: string; status: string }>;
-  /** Integration branch owned by a feature (or by a work item without a feature). */
-  getIntegrationBranch(
-    ownerId: string,
-  ): { branchName: string; sourceBranch: string; integratedAt?: string | null } | null;
-  saveIntegrationBranch(input: {
-    ownerId: string;
-    projectId: string;
-    repositoryId: string;
-    branchName: string;
-    sourceBranch: string;
-  }): void;
-  /** Records when a feature branch was integrated into its base branch (null: it has new work since). Optional for fakes. */
-  setFeatureIntegrated?(projectId: string, branchName: string, at: string | null): void;
-  /** Repository paths of the project's Markdown documents (artifacts and decision records). */
-  listDocumentPaths(projectId: string): string[];
-  /**
-   * Stores the outcome of an accepted task and its evidence in the graph: a CODE_REFERENCE per changed file with a
-   * MODIFIES edge (GENERATED_BY for the project's documents), provenance EXECUTION. Bumps and returns the graph revision.
-   */
-  recordTaskOutcome(outcome: TaskOutcome, repositoryId: string): number;
-  findTaskOutcome(workItemId: string): TaskOutcome | null;
-  /** Engine-side id of an agent session (what `--resume` takes). */
-  externalSessionId(sessionId: string): string | null;
-  listFileDiffs(
-    executionId: string,
-  ): Array<{ filePath: string; changeType: string; additions: number; deletions: number; diffPatch: string | null }>;
-  recordFileDiffs(
-    executionId: string,
-    repositoryId: string,
-    diffs: Array<Pick<ExecutionFileDiff, 'filePath' | 'changeType' | 'additions' | 'deletions' | 'diffPatch'>>,
-  ): void;
 }
 
 export interface GitIsolationPort {

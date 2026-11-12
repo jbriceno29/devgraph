@@ -50,7 +50,6 @@
     "src/modules/documents/infrastructure/transactional-markdown-file-store.ts": 18,
     "src/modules/execution/infrastructure/git-isolation-service.ts": 95,
     "src/modules/activity/infrastructure/sqlite-activity-repository.ts": 120,
-    "src/modules/execution/infrastructure/sqlite-agent-execution-repository.ts": 56,
     "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 220
   },
   "long-string": {
@@ -84,7 +83,6 @@
     "src/modules/execution/infrastructure/execution-validator.ts": 386,
     "src/modules/projects/infrastructure/repository-scanner.ts": 516,
     "src/modules/execution/infrastructure/git-isolation-service.ts": 491,
-    "src/modules/execution/infrastructure/sqlite-agent-execution-repository.ts": 909,
     "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373,
     "src/shared/contracts/ipc-contracts.ts": 382
   },

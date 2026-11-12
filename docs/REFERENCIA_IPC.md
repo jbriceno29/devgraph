@@ -31,6 +31,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `changeset:reject` ⛓ | Rechaza un ChangeSet. |
 | `workitem:set_status` ⛓ | Cambia a mano el estado de una tarea (los estados que dependen de una ejecución no se pueden fijar; `READY` exige dependencias en `DONE`). |
 | `policy:update` ⛓ | Actualiza la política de ejecución y de decisiones del proyecto. |
+| `environment:set_skills` ⛓ | Activa o apaga (booleano) las skills incluidas en las tareas de interfaz del proyecto. Devuelve el entorno. |
 | `environment:approve_dependencies` ⛓ | Aprueba paquetes fuera del perfil de stack (nombres válidos de npm); la app los instalará en las ejecuciones siguientes. Devuelve el entorno. |
 
 ### Ejecuciones
@@ -85,7 +86,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `agent:list_profiles` | Perfiles de agente del proyecto, con proveedor y modelos disponibles. |
 | `execution:list` / `execution:list_events` / `execution:get_detail` | Lista las ejecuciones / los eventos de una / el detalle forense (diff por archivo, salida de las pruebas, acciones denegadas). |
 | `policy:get` | Política de ejecución y de decisiones del proyecto. |
-| `environment:get` | Perfil de stack del proyecto (id, título, paquetes, fecha de revisión), si la app instala dependencias para él y los paquetes aprobados por el usuario. |
+| `environment:get` | Perfil de stack del proyecto (id, título, paquetes, fecha de revisión), si la app instala dependencias para él, los paquetes aprobados, si las skills están activas y cuáles vienen con la app. |
 | `pilot:get` | Estado del piloto de una feature: autonomía, última corrida, eventos, tareas y uso. |
 | `metrics:feature_report` | Métricas de una feature. |
 | `activity:list` | Bandeja de actividad del proyecto (derivada, sin IA); admite un límite. |

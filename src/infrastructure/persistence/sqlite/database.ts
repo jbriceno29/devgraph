@@ -20,6 +20,7 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; file: string }> = [
   { version: 13, file: '013_inception_repository_scan.sql' },
   { version: 14, file: '014_stack_profile.sql' },
   { version: 15, file: '015_review_model.sql' },
+  { version: 16, file: '016_project_skills.sql' },
 ];
 const migrationPath = (file: string) => fileURLToPath(new URL(`./migrations/${file}`, import.meta.url));
 export interface OpenDatabaseOptions { filename: string; readonly?: boolean; initialize?: boolean }

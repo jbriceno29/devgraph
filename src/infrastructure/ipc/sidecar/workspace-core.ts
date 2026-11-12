@@ -134,15 +134,16 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
  // Plan S2: the stack profile's dependencies, installed by the app in each run's worktree (log in executions/<id>/environment.log).
  const installer=dependencies.environmentInstaller??new NpmEnvironment();
- const stackRow=(projectId:string)=>store.openProject(projectId).database.prepare('SELECT stack_profile_id,approved_dependencies_json FROM projects WHERE id=?').get(projectId) as {stack_profile_id:string|null;approved_dependencies_json:string}|undefined;
+ const stackRow=(projectId:string)=>store.openProject(projectId).database.prepare('SELECT stack_profile_id,approved_dependencies_json,skills_enabled FROM projects WHERE id=?').get(projectId) as {stack_profile_id:string|null;approved_dependencies_json:string;skills_enabled:number}|undefined;
  const approvedPackages=(row:{approved_dependencies_json:string}|undefined):string[]=>{try{const value=JSON.parse(row?.approved_dependencies_json??'[]') as unknown;return Array.isArray(value)?value.filter((name):name is string=>typeof name==='string'&&PACKAGE_NAME.test(name)):[];}catch{return [];}};
  const projectEnvironment=(projectId:string):WorkspaceEnvironmentPort=>({
   forProject:id=>{const row=stackRow(id);return environmentFor(row?.stack_profile_id,approvedPackages(row));},
   provision:async input=>{const result=await installer.provision(input);const directory=join(workspaceRoot,'projects',input.projectId,'executions',input.executionId);mkdirSync(directory,{recursive:true});writeFileSync(join(directory,'environment.log'),`${result.log}\n`,'utf8');return result;},
   reconcile:input=>installer.reconcile(input),
  });
- const environmentView=(projectId:string):ProjectEnvironmentDto=>{const row=stackRow(projectId),profile=findStackProfile(row?.stack_profile_id);return {stackProfile:profile?{id:profile.id,title:profile.title,packages:profilePackages(profile),reviewedAt:profile.reviewedAt}:null,installs:environmentFor(row?.stack_profile_id)!==null,approvedPackages:approvedPackages(row)};};
- const approveDependencies=(projectId:string,packages:unknown):ProjectEnvironmentDto=>{
+ const environmentView=async(projectId:string):Promise<ProjectEnvironmentDto>=>{const row=stackRow(projectId),profile=findStackProfile(row?.stack_profile_id);return {stackProfile:profile?{id:profile.id,title:profile.title,packages:profilePackages(profile),reviewedAt:profile.reviewedAt}:null,installs:environmentFor(row?.stack_profile_id)!==null,approvedPackages:approvedPackages(row),skillsEnabled:row?.skills_enabled===1,bundledSkills:(await bundledSkills()).map(skill=>({id:skill.manifest.id,title:skill.manifest.title,license:skill.manifest.license}))};};
+ const setSkills=(projectId:string,enabled:unknown):Promise<ProjectEnvironmentDto>=>{if(typeof enabled!=='boolean')throw new Error('Indica si activas las skills (sí o no).');store.openProject(projectId).database.prepare('UPDATE projects SET skills_enabled=?,updated_at=? WHERE id=?').run(enabled?1:0,new Date().toISOString(),projectId);return environmentView(projectId);};
+ const approveDependencies=(projectId:string,packages:unknown):Promise<ProjectEnvironmentDto>=>{
   const names=(Array.isArray(packages)?packages:[]).map(name=>String(name).trim()).filter(Boolean);
   if(!names.length)throw new Error('Indica qué paquetes apruebas.');
   const invalid=names.filter(name=>!PACKAGE_NAME.test(name));if(invalid.length)throw new Error(`Nombres de paquete no válidos: ${invalid.join(', ')}.`);
@@ -158,7 +159,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const skillProvision=(projectId:string):SkillProvisionPort=>({
   select:async input=>{
    const db=store.openProject(projectId).database;
-   const row=db.prepare('SELECT tech_stack_json,stack_profile_id FROM projects WHERE id=?').get(input.projectId) as {tech_stack_json:string;stack_profile_id:string|null}|undefined;
+   const row=db.prepare('SELECT tech_stack_json,stack_profile_id,skills_enabled FROM projects WHERE id=?').get(input.projectId) as {tech_stack_json:string;stack_profile_id:string|null;skills_enabled:number}|undefined;
+   if(row?.skills_enabled!==1)return [];
    const stack=(()=>{try{return JSON.parse(row?.tech_stack_json??'{}') as Record<string,unknown>;}catch{return {};}})();
    const ids=input.tasks.map(task=>task.id);
    const documentedByUiSpec=ids.length>0&&Boolean(db.prepare(`SELECT 1 FROM knowledge_entities t JOIN graph_edges e ON e.source_id=t.parent_id AND e.edge_type='DOCUMENTED_BY' JOIN artifacts a ON a.entity_id=e.target_id WHERE t.id IN (${ids.map(()=>'?').join(',')}) AND a.relative_path=? LIMIT 1`).get(...ids,UI_SPEC_PATH));
@@ -353,6 +355,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
     case 'environment:get': return environmentView(String(args[0]??''));
     case 'environment:approve_dependencies': return approveDependencies(String(args[0]??''),args[1]);
+    case 'environment:set_skills': return setSkills(String(args[0]??''),args[1]);
     case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(typeof policy?.maxTurns==='number'||policy?.maxTurns===null?{maxTurns:policy.maxTurns}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);

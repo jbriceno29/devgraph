@@ -134,7 +134,11 @@ describe('dependencies managed by the app (plan S2)', () => {
   });
 
   it('interface work carries the bundled Impeccable skill in its worktree, never in the commit; other work does not', async () => {
-    const { pilot, until, git, adapter } = await setup('good', [['t1', 'TASK-001', 'READY'], ['t2', 'TASK-002', 'BLOCKED']], { t1: 'Guardar notas en localStorage', t2: 'Pantalla con la lista de notas' });
+    const { core, projectId, pilot, until, git, adapter } = await setup('good', [['t1', 'TASK-001', 'READY'], ['t2', 'TASK-002', 'BLOCKED']], { t1: 'Guardar notas en localStorage', t2: 'Pantalla con la lista de notas' });
+    // Off by default (they cost 3–4.5× per interface task in the notas-spa measurement): the project turns them on.
+    expect(await core.handle({ channel: 'environment:get', args: [projectId] })).toMatchObject({ skillsEnabled: false, bundledSkills: [{ id: 'impeccable', license: 'Apache-2.0' }] });
+    await expect(core.handle({ channel: 'environment:set_skills', args: [projectId, 'yes'] })).rejects.toThrow();
+    expect(await core.handle({ channel: 'environment:set_skills', args: [projectId, true] })).toMatchObject({ skillsEnabled: true });
     await pilot('start', { acknowledgeCost: true });
     const done = await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
     expect(done.run!.status, done.run!.reason ?? '').toBe('COMPLETED');
@@ -144,6 +148,14 @@ describe('dependencies managed by the app (plan S2)', () => {
     expect(adapter.inputs[1]!.prompt).toContain('docs/UI_SPEC.md (en lugar de DESIGN.md)');
     expect(adapter.inputs[1]!.policy!.readonlyPaths).toContain('.claude/skills/impeccable');
     expect(git('ls-tree', '-r', '--name-only', 'feature/feat-001-notas').split('\n').some(file => file.startsWith('.claude/'))).toBe(false);
+  });
+
+  it('without turning skills on, interface work runs without them', async () => {
+    const { pilot, until, adapter } = await setup('good', [['t1', 'TASK-001', 'READY']], { t1: 'Pantalla con la lista de notas' });
+    await pilot('start', { acknowledgeCost: true });
+    await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
+    expect(adapter.inputs[0]!.skills ?? []).toEqual([]);
+    expect(adapter.skillPresent).toEqual([false]);
   });
 
   it('never lets the agent change npm\'s configuration', async () => {

@@ -1,6 +1,7 @@
 import { useEffect,useMemo,useRef,useState,type KeyboardEvent } from 'react';
 import { ExecutionReview } from './ExecutionReview.js';
 import { DependencyApproval } from './DependencyApproval.js';
+import { ProjectSkillsForm } from './ProjectSkillsForm.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
 import { FeaturePilotPanel } from './FeaturePilotPanel.js';
 import { EngineAuthForm } from './EngineAuthForm.js';
@@ -82,7 +83,7 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId,selectedExecut
      :<p className="rounded-xl border border-dashed border-border-strong p-4 text-xs text-fg-muted">{selectedExecution?`Esta ejecución está «${executionStatusLabel(selectedExecution.status)}». Solo se revisan las terminadas.`:'Elige una ejecución terminada para revisar sus cambios.'}{toReview>0?` Hay ${toReview} por revisar.`:''}</p>}
    </div>}
    {tab==='pilot'&&<FeaturePilotPanel projectId={projectId} nodes={nodes}/>}
-   {tab==='settings'&&<div className="grid gap-4 xl:grid-cols-2"><ExecutionPolicyForm projectId={projectId}/><div className="space-y-4"><EngineAuthForm projectId={projectId} nodes={nodes}/>{selectedProfile&&<Capabilities provider={selectedProfile.providerName} capabilities={selectedProfile.capabilities}/>}</div></div>}
+   {tab==='settings'&&<div className="grid gap-4 xl:grid-cols-2"><ExecutionPolicyForm projectId={projectId}/><div className="space-y-4"><EngineAuthForm projectId={projectId} nodes={nodes}/><ProjectSkillsForm projectId={projectId}/>{selectedProfile&&<Capabilities provider={selectedProfile.providerName} capabilities={selectedProfile.capabilities}/>}</div></div>}
   </div>
   {TABS.filter(item=>item.id!==tab).map(item=><div key={item.id} id={`agents-panel-${item.id}`} role="tabpanel" aria-labelledby={`agents-tab-${item.id}`} hidden/>)}
   <dialog ref={dialogRef} className="approval-dialog w-[min(92vw,34rem)] rounded-2xl border border-border-strong bg-surface-raised p-0 text-fg shadow-2xl" aria-labelledby="approval-heading" onClose={handleApprovalClose}>

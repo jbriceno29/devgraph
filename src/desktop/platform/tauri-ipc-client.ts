@@ -22,6 +22,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   setWorkItemStatus:(projectId,workItemId,status)=>invokeCore('workitem:set_status',[projectId,workItemId,status]),
   updateExecutionPolicy:(projectId,policy)=>invokeCore('policy:update',[projectId,policy]),
   approveDependencies:(projectId,packages)=>invokeCore('environment:approve_dependencies',[projectId,packages]),
+  setProjectSkills:(projectId,enabled)=>invokeCore('environment:set_skills',[projectId,enabled]),
   setFeatureAutonomy:(projectId,featureId,input)=>invokeCore('pilot:set_autonomy',[projectId,featureId,input]),
   startPilot:(projectId,featureId,input)=>invokeCore('pilot:start',[projectId,featureId,input]),
   stopPilot:(projectId,featureId)=>invokeCore('pilot:stop',[projectId,featureId]),

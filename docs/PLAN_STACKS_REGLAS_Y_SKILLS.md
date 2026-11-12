@@ -9,8 +9,8 @@ Complementa a `docs/PLAN_DE_TRABAJO.md` (plan vigente del núcleo). Nace de la a
 | :--- | :--- |
 | S1. Catálogo de perfiles de stack y reglas en capas | Hecha (núcleo, inicio y vista de la propuesta) |
 | S2. Dependencias gestionadas por la app (entorno del worktree) | Hecha con npm (Python con dependencias, pendiente) |
-| S3. Prueba a escala real con un proyecto con dependencias | Primera corrida hecha (2 features, 5 tareas); falta la medición comparada |
-| S4. Skills incluidas en la app | Hecha con Impeccable; verificado que el agente la lee; falta medir su efecto |
+| S3. Prueba a escala real con un proyecto con dependencias | Hecha: corrida real desde el inicio y medición comparada `notas-spa` (empate en calidad, 0 intervenciones, 2,75× el costo por la skill) |
+| S4. Skills incluidas en la app | Hecha con Impeccable, opcional por proyecto y apagada por defecto tras medir su costo |
 | S5. Puertas de calidad que no escribe el agente | Hecha: banderas de calidad y revisión independiente opcional |
 | S6. Higiene del repositorio (CI, formato, documentación) | CI e índice de documentación hechos; formateador pendiente |
 
@@ -104,6 +104,8 @@ Objetivo: la evidencia que falta. Un proyecto nuevo con dependencias (por ejempl
 - Métricas de la Etapa 5 del plan del núcleo: tareas cerradas sin intervención, intervenciones por motivo, costo ponderado, convenciones respetadas.
 - Comparación con el mismo proyecto hecho a mano en un chat, si la cuota lo permite.
 - Informe en `docs/benchmarks/`.
+
+> **Medición comparada (2026-11-12):** `docs/benchmarks/2026-11-12-notas-spa-haiku.md`, escenario nuevo `notas-spa` (React con dependencias reales, 9 tareas, convención encadenada, 26 pruebas ocultas). El arnés `scripts/benchmark/run-benchmark.mjs` admite ahora escenarios con dependencias (`setup`, `verify`, `judge: "vitest"`, `stackProfile`, `conventionTag`, `promptNote`, `policy`). Resultado: empate perfecto en calidad (26/26 y convención 8/8 en ambos brazos), 0 intervenciones frente a 9 mensajes, y 2,75× el costo ponderado, del que ~202 k de 326 k son las dos ejecuciones de interfaz con Impeccable; sin ellas, ~1,7×. **Decisión:** skills opcionales por proyecto y apagadas por defecto (migración 016). **Lo que sigue sin demostrarse:** un escenario donde el chat se degrade (más tareas, más features, decisiones encadenadas a distancia); los dos escenarios medidos son demasiado fáciles para separar calidad.
 
 **Cierre:** informe con la decisión: seguir, ajustar o replantear.
 

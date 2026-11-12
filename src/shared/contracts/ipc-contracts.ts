@@ -37,6 +37,7 @@ export interface WorkspaceIpcCommands {
   'workitem:set_status': (projectId:string,workItemId:string,status:string)=>Promise<{status:string;revision:number}>;
   'policy:update': (projectId:string,policy:ExecutionPolicyDto)=>Promise<ExecutionPolicyDto>;
   'environment:approve_dependencies': (projectId:string,packages:string[])=>Promise<ProjectEnvironmentDto>;
+  'environment:set_skills': (projectId:string,enabled:boolean)=>Promise<ProjectEnvironmentDto>;
   'pilot:set_autonomy': (projectId:string,featureId:string,input:SetFeatureAutonomyInput)=>Promise<FeatureAutonomyDto>;
   'pilot:start': (projectId:string,featureId:string,input:{acknowledgeCost:boolean})=>Promise<PilotRunDto>;
   'pilot:stop': (projectId:string,featureId:string)=>Promise<PilotRunDto|null>;
@@ -127,6 +128,8 @@ export interface WorkspaceIpcClient {
     updateExecutionPolicy(projectId:string,policy:ExecutionPolicyDto):Promise<ExecutionPolicyDto>;
     /** Plan S2: approve packages outside the stack profile. Optional so existing fakes stay valid; the Tauri client implements it. */
     approveDependencies?(projectId:string,packages:string[]):Promise<ProjectEnvironmentDto>;
+    /** Plan S4: turn the bundled skills on or off for the project's interface tasks. Optional so existing fakes stay valid. */
+    setProjectSkills?(projectId:string,enabled:boolean):Promise<ProjectEnvironmentDto>;
     setFeatureAutonomy(projectId:string,featureId:string,input:SetFeatureAutonomyInput):Promise<FeatureAutonomyDto>;
     startPilot(projectId:string,featureId:string,input:{acknowledgeCost:boolean}):Promise<PilotRunDto>;
     stopPilot(projectId:string,featureId:string):Promise<PilotRunDto|null>;

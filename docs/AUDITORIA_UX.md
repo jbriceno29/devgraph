@@ -155,6 +155,39 @@ Sigue pendiente repetir el recorrido con el arnés en el navegador.
 | C1 | Resúmenes de la validación en español (y traducción de los guardados en inglés); en el inspector, tipo y prioridad traducidos y el rol recomendado oculto; «cerca del límite» en lugar de `allowed_warning`. | `domain/agents/result-summary.ts`, `labels.ts` |
 | C6 | «Integrada en … · commit …» una vez integrada y «Al aceptarla se integrará…» antes; feature ya integrada con «Volver a integrar» como acción secundaria; diff con color por línea. | `ExecutionReview.tsx`, `FeatureIntegration.tsx` |
 
+### F0b · Conflictos entre features
+
+Origen: la validación de B2 ([VALIDACION_F0.md](VALIDACION_F0.md#resultados-de-la-validación)). FEAT-001 y FEAT-002
+salieron del mismo commit, crearon las dos `src/tasks.js` con diseños distintos y la segunda ya no se puede integrar.
+`main` quedó intacto, pero el usuario solo ve el error.
+
+**1. Prevenir (el planificador y el piloto).**
+
+- Regla en el planificador: si dos features crean o cambian el mismo módulo o archivo, la segunda lleva `DEPENDS_ON`
+  hacia la primera. Una feature con dependencias no arranca hasta que estas estén integradas.
+- Aviso temprano: al terminar una feature (todas sus tareas en «Hecha»), comprobar con `git merge-tree` si su rama
+  chocará con `main`. Si choca, el banner lo dice antes de que el usuario pulse «Integrar».
+- La rama de una feature que aún no tiene tareas aceptadas parte del `main` del momento en que empieza su primera tarea.
+
+**2. Dar salida al conflicto (la interfaz).**
+
+- El mensaje dice qué pasó y qué hacer: «FEAT-002 y main cambiaron los mismos archivos», seguido de la lista de
+  archivos con un enlace al diff de cada uno.
+- La acción principal es «Resolver con un agente». Una tarea en un worktree junta `main` en la rama de la feature,
+  resuelve los conflictos respetando lo ya integrado y pasa las comprobaciones. Se revisa y se acepta como cualquier
+  ejecución, y conserva el trabajo hecho.
+- La acción secundaria es «Rehacer FEAT-002 sobre main». Las tareas vuelven a «Lista» y la rama nueva parte del `main`
+  actual. La rama anterior no se borra: se renombra (`…-anterior-N`), conforme a la regla de no borrar ramas.
+
+**Cómo se comprueba.** Pruebas de integración con dos features que crean el mismo archivo. Comprobaciones:
+
+- Con la dependencia, la segunda feature espera a la primera.
+- Sin ella, el aviso aparece antes de integrar.
+- La resolución con un agente falso deja la rama integrable.
+- «Rehacer» deja la rama anterior intacta.
+
+Para la corrida real, repetir el caso de `todo-app` sobre una copia y cerrar B2 con éxito.
+
 ## 7. Cómo repetir la revisión con la app real
 
 El arnés no forma parte del repositorio. Se reconstruye en minutos:

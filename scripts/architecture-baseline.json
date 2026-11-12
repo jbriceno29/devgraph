@@ -2,9 +2,6 @@
   "function-size": {
     "src/modules/activity/application/activity-service.ts": 156,
     "src/modules/documents/application/artifact-management-service.ts": 30,
-    "src/modules/context/application/context-resolver.ts": 87,
-    "src/modules/context/application/graph-traversal.ts": 133,
-    "src/modules/context/application/hybrid-retrieval.ts": 12,
     "src/modules/inception/application/foundation-plan.ts": 99,
     "src/desktop/presentation/FolderField.tsx": 31,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 505,

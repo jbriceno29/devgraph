@@ -43,10 +43,10 @@ export class GitRepositoryInitializer {
   }
 }
 
-/** Git without system or global configuration, without hooks and without fsmonitor. */
-async function pinnedGit(cwd: string, args: string[]): Promise<string> {
+/** Git without system or global configuration, without hooks and without fsmonitor (also used, read-only, by the repository scanner). */
+export async function pinnedGit(cwd: string, args: string[], options: { maxBuffer?: number } = {}): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: devNull, GIT_TEMPLATE_DIR: '', GIT_TERMINAL_PROMPT: '0' };
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT']) delete env[key];
-  const { stdout } = await execFileAsync('git', ['-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', '-c', 'commit.gpgsign=false', ...args], { cwd, env, encoding: 'utf8', timeout: 30_000, windowsHide: true });
+  const { stdout } = await execFileAsync('git', ['-c', `core.hooksPath=${devNull}`, '-c', 'core.fsmonitor=false', '-c', 'commit.gpgsign=false', ...args], { cwd, env, encoding: 'utf8', timeout: 30_000, windowsHide: true, ...(options.maxBuffer ? { maxBuffer: options.maxBuffer } : {}) });
   return stdout;
 }

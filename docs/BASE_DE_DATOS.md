@@ -24,6 +24,7 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 | 010 | `010_execution_groups.sql` | Tabla `execution_work_items` (tareas que cubre una ejecución agrupada, con posición) y `feature_autonomy.group_tasks` (0 por defecto) y `max_group_size` (3). |
 | 012 | `012_inception_ui_exploration.sql` | Reconstruye `project_inception` para admitir la etapa `EXPLORE_UI` (SQLite no permite cambiar un `CHECK`; las filas se copian) y añade `ui_json`: las direcciones de diseño con su prototipo HTML, la elegida y si se pidió explorar el diseño. |
 | 011 | `011_inception_references.sql` | `project_inception.references_json`: las referencias adjuntas (tipo, nota, estado y traducción a texto de cada una). Los archivos viven en `projects/<id>/inception/references/`. |
+| 013 | `013_inception_repository_scan.sql` | `project_inception.repository_json` (`null` por defecto): en modo brownfield, lo leído del repositorio al empezar (manifiestos, estructura y estilos, como mucho 48 KB), las inferencias con su evidencia y las correcciones del usuario. |
 
 ## Tablas principales
 
@@ -63,5 +64,5 @@ Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`
 
 ### Inicio de proyecto y actividad
 
-- `project_inception` (008, 009, 011, 012): una fila por proyecto con fase (`ASK_GOALS`, `EXPLORE_UI`, `PROPOSAL`, `APPLIED`), estado (`WORKING`, `WAITING_USER`, `FAILED`, `DONE`), descripción, preguntas, respuestas, suposiciones, el ChangeSet de la propuesta, modelo, uso, error, notas de regeneración y el id de la tarea de scaffold.
+- `project_inception` (008, 009, 011, 012, 013): una fila por proyecto con fase (`ASK_GOALS`, `EXPLORE_UI`, `PROPOSAL`, `APPLIED`), estado (`WORKING`, `WAITING_USER`, `FAILED`, `DONE`), descripción, preguntas, respuestas, suposiciones, el ChangeSet de la propuesta, modelo, uso, error, notas de regeneración, el id de la tarea de scaffold, las referencias, la exploración visual y, en modo brownfield, el escaneo del repositorio.
 - **La bandeja de actividad no tiene tabla propia:** `activity:list` la deriva de tareas, ejecuciones, aprobaciones, ChangeSets, corridas del piloto, ramas de feature y el estado de `project_inception`.

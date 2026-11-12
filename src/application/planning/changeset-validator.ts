@@ -3,6 +3,8 @@ import type { ChangeOperation, ChangeSet } from '../../domain/knowledge/change-s
 import type { GraphRelationship, KnowledgeEntity } from '../../domain/graph/knowledge-entity.js';
 import { canTransitionWorkItem } from '../../domain/work-management/entities.js';
 import { profileIssues } from '../../domain/projects/project-profile.js';
+import { UI_SPEC_PATH } from '../../shared/ui-spec.js';
+import { missingUiSpecSections } from './ui-spec-update.js';
 
 export interface ValidationResult { valid:boolean; issues:ChangeSet['validationIssues']; status:'VALIDATED'|'CONFLICTED'|'PENDING_APPROVAL' }
 const docOps=(operation:ChangeOperation)=>operation.type==='UPSERT_ARTIFACT'||operation.type==='CREATE_DECISION_RECORD';
@@ -29,6 +31,8 @@ export class ChangeSetValidator {
     const path=op.relativePath;
     if(!path.startsWith('docs/')||!path.toLowerCase().endsWith('.md')||path.includes('\\')||path.split('/').some(p=>p==='..'||p==='.'||!p))issue('UNSAFE_DOCUMENT_PATH','Los documentos deben usar una ruta relativa segura dentro de docs/ y terminar en .md.');
     if(paths.has(path))issue('DUPLICATE_DOCUMENT_PATH',`La ruta ${path} aparece más de una vez.`);paths.add(path);
+    // The interface specification every feature follows can be updated, never broken: whoever writes it (planner, agent, inception, a manual edit) keeps its eight sections.
+    if(op.type==='UPSERT_ARTIFACT'&&path===UI_SPEC_PATH){const missing=missingUiSpecSections(op.markdownContent);if(missing.length)issue('UI_SPEC_SECTIONS',`${UI_SPEC_PATH} debe conservar sus 8 secciones; faltan: ${missing.join(', ')}.`);}
    }
    if(op.type==='UPSERT_ARTIFACT'&&op.entityId&&!op.tempId){const entity=entityFor(op.entityId);if(!entity||entity.entityType!=='ARTIFACT'||entity.projectId!==changeSet.projectId)issue('INVALID_ARTIFACT_TARGET','El upsert debe apuntar a un Artifact existente del proyecto.');}
    else if(createsEntity(op)){

@@ -22,7 +22,7 @@ export const proposal:InceptionProposalDto={
  ],
  scaffoldTaskTitle:'Preparar el proyecto',
 };
-export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,references:[],ui:{wanted:false,options:[],selectedOptionId:null},updatedAt:null};
+export const notStarted:InceptionViewDto={projectId:'p',stage:'NOT_STARTED',status:'IDLE',nextAction:'START',brief:'',questions:[],answers:[],assumptions:[],proposal:null,error:null,model:null,repositoryPath:null,usage:{calls:0,inputTokens:0,outputTokens:0,cacheReadTokens:0,cacheCreationTokens:0,costUsd:null},notes:[],scaffoldTaskId:null,references:[],ui:{wanted:false,options:[],selectedOptionId:null},repository:null,updatedAt:null};
 /** Dos direcciones visuales como las que devuelve el motor (el HTML no viaja en la vista: se pide aparte). */
 export const uiOptions:InceptionUiOptionDto[]=[
  {id:'ui-1',title:'Panel claro',summary:'Barra lateral y tarjetas sobre fondo claro.',navigation:'Barra lateral con tres secciones.',screens:['Inicio','Tareas','Ajustes'],designSystemNotes:['Azul #2255ff','Tipografía del sistema'],source:'GENERATED',htmlBytes:4200,externalReferences:[]},

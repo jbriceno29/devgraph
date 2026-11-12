@@ -2,9 +2,12 @@ import type { ContextFlowDto, GraphEdgeType, GraphNodeView, GraphEdgeView, Knowl
 import type { ArtifactDocumentDto, ArtifactDocumentViewDto, ArtifactSyncStatusChangedDto, CreateArtifactDocumentInput } from './artifact-view.js';
 import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from './context-view.js';
 import type { ActivitySummaryDto } from './activity-view.js';
-import type { InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
+import type { RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
+import type { InceptionReferenceDto, InceptionReferenceInput, InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
 import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto,FeatureIntegrationStateDto } from './agent-view.js';
 
+/** Extras of a planning proposal: translated references and the interface specification. */
+export interface ProposeChangesOptions { references?:Array<Pick<InceptionReferenceDto,'name'|'kind'|'note'>&{translation:NonNullable<InceptionReferenceDto['translation']>}>; updateUiSpec?:boolean }
 export interface CreateProjectInput { name:string; slug:string; description?:string; objectives?:string[]; techStack?:Record<string,unknown>; rules?:string[] }
 export interface ProjectSummaryDto { id:string; name:string; slug:string; description:string|null; currentRevision:number; createdAt:string; updatedAt:string }
 export interface GraphFilterDto { entityTypes?:KnowledgeEntityType[]; edgeTypes?:GraphEdgeType[] }
@@ -19,7 +22,10 @@ export interface WorkspaceIpcCommands {
   'repository:configure': (projectId:string,localPath:string)=>Promise<{projectId:string;localPath:string}>;
   'artifact:create': (input:CreateArtifactDocumentInput)=>Promise<ArtifactDocumentViewDto>;
   'artifact:save': (documentId:string,expectedContentHash:string,content:string)=>Promise<ArtifactDocumentViewDto>;
-  'changeset:propose_from_chat': (projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string)=>Promise<ChangeSetDto>;
+  /** `options` (planning a feature on a project in progress): references already translated by `planning:translate_references` (data for the planner) and whether to update docs/UI_SPEC.md (or create it). */
+  'changeset:propose_from_chat': (projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string,options?:ProposeChangesOptions)=>Promise<ChangeSetDto>;
+  /** Translates reference files attached while planning into text with the inception's translator (V1); the files are kept only during the call. Runs concurrently (a model call). */
+  'planning:translate_references': (projectId:string,references:InceptionReferenceInput[])=>Promise<InceptionReferenceDto[]>;
   'changeset:edit': (changeSetId:string,operations:unknown[])=>Promise<ChangeSetDto>;
   'changeset:apply': (changeSetId:string)=>Promise<{changeSet:ChangeSetDto;revision:number}>;
   'changeset:reject': (changeSetId:string)=>Promise<ChangeSetDto>;
@@ -43,7 +49,7 @@ export interface WorkspaceIpcCommands {
   /** Starts the inception: returns at once with status WORKING; `inception:updated` tells when the questions are ready. */
   'inception:start': (projectId:string,input:StartInceptionInput)=>Promise<InceptionViewDto>;
   /** Saves the answers and asks for the proposal (in PROPOSAL, regenerates it; optional `notes` ≤ 2000 chars say what to change and are kept for later regenerations). Returns at once with status WORKING. */
-  'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string,options?:{exploreUi?:boolean})=>Promise<InceptionViewDto>;
+  'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string,options?:{exploreUi?:boolean;corrections?:RepositoryCorrectionDto[]})=>Promise<InceptionViewDto>;
   /** Adds a prototype (HTML) the user made elsewhere as one more design direction; only while choosing a direction. Answers at once. */
   'inception:import_prototype': (projectId:string,input:{name:string;html:string})=>Promise<InceptionViewDto>;
   /** Adds a finished design made elsewhere: an image (base64; a model describes it) or React code (converted to an HTML prototype). Returns at once with status WORKING. */
@@ -82,6 +88,8 @@ export interface WorkspaceIpcQueries {
   'inception:get': (projectId:string)=>Promise<InceptionViewDto>;
   /** The HTML of a design direction's prototype (kept out of `inception:get`, which is polled). */
   'inception:get_ui_prototype': (projectId:string,optionId:string)=>Promise<string>;
+  /** Brownfield preview: manifests, structure and style files the assistant would read from the project's repository (paths and sizes, no contents; .gitignore respected, no symlinks or secrets, ≤ 48 KB). */
+  'repository:scan': (projectId:string)=>Promise<RepositoryScanSummaryDto>;
 }
 export interface WorkspaceIpcEvents {
   'graph:revision_updated': {projectId:string;revision:number};
@@ -102,7 +110,9 @@ export interface WorkspaceIpcClient {
     configureRepository(projectId:string,localPath:string):Promise<{projectId:string;localPath:string}>;
     createArtifact(input:CreateArtifactDocumentInput):Promise<ArtifactDocumentViewDto>;
     saveArtifact(documentId:string,expectedContentHash:string,content:string):Promise<ArtifactDocumentViewDto>;
-    proposeChanges(projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string):Promise<ChangeSetDto>;
+    proposeChanges(projectId:string,prompt:string,focusEntityId?:string,contextSnapshotId?:string,model?:string,options?:ProposeChangesOptions):Promise<ChangeSetDto>;
+    /** Optional so existing fakes stay valid; the Tauri client implements it. */
+    translateReferences?(projectId:string,references:InceptionReferenceInput[]):Promise<InceptionReferenceDto[]>;
     editChangeSet(changeSetId:string,operations:unknown[]):Promise<ChangeSetDto>;
     applyChangeSet(changeSetId:string):Promise<{changeSet:ChangeSetDto;revision:number}>;
     rejectChangeSet(changeSetId:string):Promise<ChangeSetDto>;

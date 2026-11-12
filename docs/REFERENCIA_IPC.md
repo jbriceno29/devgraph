@@ -2,9 +2,9 @@
 
 Fuente: `src/shared/contracts/ipc-contracts.ts` (tipos `WorkspaceIpcCommands`, `WorkspaceIpcQueries` y `WorkspaceIpcEvents`) y `src/infrastructure/ipc/sidecar/request-dispatcher.ts`. Los DTO están en `src/shared/contracts/*.ts`. El cliente de la interfaz (`WorkspaceIpcClient`) envuelve estos canales en métodos tipados (`commands`, `queries`, `events` y el grupo opcional `inception`); la implementación real es `src/desktop/platform/tauri-ipc-client.ts`.
 
-Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo reenvía al sidecar como una línea JSON y devuelve la respuesta (ver `docs/ARQUITECTURA_ACTUAL.md`). Tiempo de espera: 60 s; 330 s para `changeset:propose_from_chat`.
+Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo reenvía al sidecar como una línea JSON y devuelve la respuesta (ver `docs/ARQUITECTURA_ACTUAL.md`). Tiempo de espera: 60 s; 330 s para `changeset:propose_from_chat` y `planning:translate_references`.
 
-**Orden de ejecución.** Los comandos marcados con ⛓ se ejecutan uno a uno y en orden de llegada (`SERIALIZED_CHANNELS`). Las consultas y `changeset:propose_from_chat` corren en paralelo.
+**Orden de ejecución.** Los comandos marcados con ⛓ se ejecutan uno a uno y en orden de llegada (`SERIALIZED_CHANNELS`). Las consultas, `changeset:propose_from_chat` y `planning:translate_references` corren en paralelo.
 
 ## Comandos (modifican estado)
 
@@ -24,7 +24,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | :--- | :--- |
 | `artifact:create` ⛓ | Crea un documento Markdown (con plantilla) y lo vincula al grafo. |
 | `artifact:save` ⛓ | Guarda un documento de forma atómica comprobando el hash esperado del contenido. |
-| `changeset:propose_from_chat` | Pide al motor una propuesta de cambios (ChangeSet) a partir de un texto, con foco, snapshot de contexto y modelo opcionales. |
+| `changeset:propose_from_chat` | Pide al motor una propuesta de cambios (ChangeSet) a partir de un texto, con foco, snapshot de contexto y modelo opcionales. Sexto argumento opcional `options` (`ProposeChangesOptions`): `references` (las ya traducidas por `planning:translate_references`: `{name, kind, note, translation}`; el núcleo las vuelve a normalizar por tipo y entran al prompt como datos inertes) y `updateUiSpec` (actualizar `docs/UI_SPEC.md`, o crearla si no existe). Con una especificación existente, las features nuevas se enlazan a ella (`DOCUMENTED_BY`) aunque no se pida actualizarla; si se pidió y la propuesta no la incluye, queda sin validar (`UI_SPEC_MISSING`). Cualquier escritura de `docs/UI_SPEC.md` sin sus 8 secciones se rechaza en la validación (`UI_SPEC_SECTIONS`). |
+| `planning:translate_references` | Traduce a texto las referencias adjuntas al planificar (`InceptionReferenceInput[]`, mismas reglas y límites que en el inicio) con el traductor de V1; devuelve un `InceptionReferenceDto` por archivo (`TRANSLATED` o `FAILED` con el motivo). Los archivos se guardan solo durante la llamada, en `projects/<id>/planning/references/`, y se borran al terminar. |
 | `changeset:edit` ⛓ | Edita las operaciones de un ChangeSet pendiente y lo revalida. |
 | `changeset:apply` ⛓ | Aplica un ChangeSet validado (transaccional: SQLite y Markdown). |
 | `changeset:reject` ⛓ | Rechaza un ChangeSet. |
@@ -57,8 +58,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
-| `inception:start` ⛓ | Inicia el asistente con una descripción y, opcionalmente, hasta 5 `references` (`{name, kind: VISUAL\|FUNCTIONAL\|CONCEPTUAL, note?, dataBase64}`); responde al instante con estado `WORKING`. Un modelo aparte traduce las referencias a texto antes de preguntar. Sin `references` en un reintento tras un fallo, reutiliza las ya guardadas. |
-| `inception:answer` ⛓ | Guarda las respuestas y pide la propuesta (o, con `options: {exploreUi: true}`, 2 o 3 direcciones de diseño con prototipo); en la fase de propuesta la regenera, con `notes` opcionales (hasta 2000 caracteres) que indican qué cambiar. |
+| `inception:start` ⛓ | Si el proyecto tiene un repositorio con código, primero lo escanea (ver `repository:scan`), guarda lo leído en `project_inception.repository_json` y el asistente devuelve, junto a las preguntas, inferencias con evidencia (rutas que existen en el escaneo; las demás se descartan). Inicia el asistente con una descripción y, opcionalmente, hasta 5 `references` (`{name, kind: VISUAL\|FUNCTIONAL\|CONCEPTUAL, note?, dataBase64}`); responde al instante con estado `WORKING`. Un modelo aparte traduce las referencias a texto antes de preguntar. Sin `references` en un reintento tras un fallo, reutiliza las ya guardadas. |
+| `inception:answer` ⛓ | Guarda las respuestas y pide la propuesta (o, con `options: {exploreUi: true}`, 2 o 3 direcciones de diseño con prototipo); en la fase de propuesta la regenera, con `notes` opcionales (hasta 2000 caracteres) que indican qué cambiar. En modo brownfield, `options.corrections` (`[{inferenceId, correction}]`, hasta 500 caracteres cada una) corrige lo inferido del repositorio y sustituye a las correcciones anteriores; una vacía significa «es correcto». |
 | `inception:import_prototype` ⛓ | Añade un prototipo HTML hecho en otra herramienta (`{name, html}`, hasta 120.000 caracteres) como una dirección más (máximo 5); solo mientras se elige una dirección. Responde al instante. |
 | `inception:import_design` ⛓ | Añade un diseño terminado hecho en otra herramienta: una imagen (`kind: 'IMAGE'`, `content` en base64; un modelo la describe en texto y queda como dirección sin prototipo) o código React (`kind: 'REACT'`, `content` es el texto; el asistente lo convierte en un prototipo HTML autocontenido). Cuenta para el máximo de 5 direcciones y solo funciona mientras se elige. Responde al instante con estado `WORKING`. |
 | `inception:reopen_design` ⛓ | Desde la propuesta, vuelve a las direcciones de diseño ya generadas (con la elección conservada) o, si el diseño nunca se pidió, las genera ahora con las mismas respuestas; la propuesta pendiente se rechaza. |
@@ -86,8 +87,9 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `pilot:get` | Estado del piloto de una feature: autonomía, última corrida, eventos, tareas y uso. |
 | `metrics:feature_report` | Métricas de una feature. |
 | `activity:list` | Bandeja de actividad del proyecto (derivada, sin IA); admite un límite. |
-| `inception:get` | Estado del asistente de inicio (incluye las direcciones de diseño sin su HTML). |
+| `inception:get` | Estado del asistente de inicio (incluye las direcciones de diseño sin su HTML y, en modo brownfield, `repository`: el resumen del escaneo sin contenidos, las inferencias con su evidencia y las correcciones). |
 | `inception:get_ui_prototype` | El HTML del prototipo de una dirección (`optionId`). |
+| `repository:scan` | Modo brownfield: qué leería el asistente del repositorio principal del proyecto (`RepositoryScanSummaryDto`: nombre, archivos por lenguaje, carpetas, archivos leídos con su tipo y tamaño, exclusiones por motivo y tamaño serializado; sin contenidos). Usa `git ls-files` con git aislado (respeta `.gitignore`), no sigue enlaces simbólicos, no abre posibles secretos, no sale del repositorio y el escaneo completo no supera 48 KB. Falla si el proyecto no tiene repositorio. |
 
 ## Eventos (del núcleo a la interfaz)
 

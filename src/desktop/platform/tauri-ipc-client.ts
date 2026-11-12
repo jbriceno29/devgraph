@@ -9,7 +9,8 @@ export const workspaceIpc:WorkspaceIpcClient={
   configureRepository:(projectId,localPath)=>invokeCore('repository:configure',[projectId,localPath]),
   createArtifact:input=>invokeCore('artifact:create',[input]),
   saveArtifact:(documentId,expectedContentHash,content)=>invokeCore('artifact:save',[documentId,expectedContentHash,content]),
-  proposeChanges:(projectId,prompt,focusEntityId,contextSnapshotId,model)=>invokeCore('changeset:propose_from_chat',[projectId,prompt,focusEntityId,contextSnapshotId,model]),
+  proposeChanges:(projectId,prompt,focusEntityId,contextSnapshotId,model,options)=>invokeCore('changeset:propose_from_chat',options?[projectId,prompt,focusEntityId,contextSnapshotId,model,options]:[projectId,prompt,focusEntityId,contextSnapshotId,model]),
+  translateReferences:(projectId,references)=>invokeCore('planning:translate_references',[projectId,references]),
   editChangeSet:(changeSetId,operations)=>invokeCore('changeset:edit',[changeSetId,operations]),
   applyChangeSet:changeSetId=>invokeCore('changeset:apply',[changeSetId]),
   rejectChangeSet:changeSetId=>invokeCore('changeset:reject',[changeSetId]),
@@ -62,6 +63,7 @@ export const workspaceIpc:WorkspaceIpcClient={
   approve:projectId=>invokeCore('inception:approve',[projectId]),
   restart:projectId=>invokeCore('inception:restart',[projectId]),
   initializeRepository:(projectId,absolutePath)=>invokeCore('repository:initialize',[projectId,absolutePath]),
+  scanRepository:projectId=>invokeCore('repository:scan',[projectId]),
   onUpdated(listener){return subscribe('inception:updated',listener);},
  },
  events:{

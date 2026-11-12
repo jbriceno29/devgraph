@@ -41,7 +41,7 @@ Las ocho de la sección 6, resueltas así:
 ### Lo que no se hizo (límites actuales)
 
 - **Solo Claude Code:** el contrato del motor de inicio (`InceptionEnginePort`) existe, pero no hay implementación para Codex.
-- **Sin modo brownfield:** no existe `repository:scan` ni escaneo de repositorios existentes; el asistente solo funciona sobre un proyecto sin plan (si ya hay features o tareas, `inception:start` lo rechaza).
+- **Modo brownfield (Etapa E, entregada en la Etapa V4 del plan de exploración visual):** si el repositorio del proyecto ya tiene código, `inception:start` lo escanea (`repository:scan`: manifiestos, estructura y estilos, respetando `.gitignore`, sin enlaces simbólicos ni secretos, como mucho 48 KB) y el asistente infiere stack y sistema de diseño con evidencia que el usuario puede corregir. Sigue siendo solo para proyectos sin plan (si ya hay features o tareas, `inception:start` lo rechaza).
 - **Dos puertas, no cuatro:** convenciones y política de ejecución no son etapas separadas; salen en la propuesta única.
 - **SIGKILL del sidecar:** si el proceso del núcleo muere por SIGKILL no hay oportunidad de detener la llamada del motor en curso (por verificar si queda un proceso huérfano).
 - **Prueba real:** se verificó con `haiku` real (propuesta en Python al pedirlo con una nota, ~0,035 USD, según el plan de trabajo); la prueba prevista con `sonnet`/`opus` y el piloto cerrando Fundación y una feature no está registrada.

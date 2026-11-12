@@ -24,7 +24,7 @@ Tú dices qué quieres construir y apruebas el plan; la aplicación se encarga d
 ## Recorrido completo
 
 1. **Crea el proyecto** con un nombre.
-2. **Abre la vista «Inicio».** Describe en pocas líneas qué quieres construir (hasta 4000 caracteres). El asistente te hará como mucho 5 preguntas con opciones sugeridas; puedes contestar o dejar «decide tú». Las suposiciones del asistente se muestran. Si tienes capturas, bocetos, un prototipo HTML, un PDF o un documento, adjúntalos en «Referencias (opcional)» y di para qué sirve cada uno: **cómo debe verse**, **qué debe hacer** o **solo inspiración** (ver «Referencias» más abajo).
+2. **Abre la vista «Inicio».** Si tu proyecto ya tiene código, conecta antes su repositorio: el asistente partirá de lo que existe (ver «Proyecto con código existente» más abajo). Describe en pocas líneas qué quieres construir (hasta 4000 caracteres). El asistente te hará como mucho 5 preguntas con opciones sugeridas; puedes contestar o dejar «decide tú». Las suposiciones del asistente se muestran. Si tienes capturas, bocetos, un prototipo HTML, un PDF o un documento, adjúntalos en «Referencias (opcional)» y di para qué sirve cada uno: **cómo debe verse**, **qué debe hacer** o **solo inspiración** (ver «Referencias» más abajo).
 3. **Conecta una carpeta Git** o crea una nueva desde la propia vista (la ruta debe ser absoluta, y la carpeta no existir o estar vacía). La aprobación necesita un repositorio.
 4. **Revisa la propuesta.** Verás: objetivo, alcance, stack, reglas, comandos de verificación, un ADR con las alternativas consideradas, documentos, requisitos y el plan inicial (una feature «Fundación» con una primera tarea de preparación y el resto de features). ¿Algo no te gusta? Escribe una nota con lo que quieres cambiar y regenera; las notas se acumulan. Si todo está bien, aprueba. Hasta entonces no se crea nada en tu proyecto. Puedes reiniciar el asistente si aún no aprobaste.
 5. **Ejecuta.** En la vista «Agentes», elige una tarea `READY` y pulsa iniciar (puedes elegir el modelo). O abre una feature, sube su autonomía a `PILOT` y actívalo: la aplicación te mostrará un aviso de costo que debes aceptar.
@@ -44,6 +44,17 @@ En el paso de la idea puedes adjuntar hasta 5 archivos (png, jpg, webp, gif, pdf
 
 La nota («qué conservar o evitar») ayuda a afinarlo. Después de analizarlas, la pantalla de preguntas muestra «Cómo se entendieron tus referencias» para que compruebes lo que entendió el modelo; si algo no es así, corrígelo en tus respuestas o en las notas de la propuesta. El análisis cuesta unos centavos y tarda unos segundos. El contenido de los archivos se trata como datos: las instrucciones que contengan se ignoran. Los PDF necesitan `pdftoppm` (paquete `poppler-utils`) instalado; sin él, ese archivo no se podrá analizar y el asistente te lo dirá. Solo funciona con Claude Code.
 
+## Proyecto con código existente
+
+Si conectas un repositorio que ya tiene código **antes** de pulsar «Empezar», el asistente lo lee primero y parte de lo que existe en lugar de proponer un proyecto desde cero. Con «Ver qué se leerá» puedes ver la lista antes de empezar.
+
+- **Qué lee:** los manifiestos (`package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `tsconfig.json`, configuraciones de Vite/Next…), el README, la estructura de carpetas, el número de archivos por lenguaje y los estilos (`tailwind.config.*`, archivos de tokens o de tema, hojas de estilo globales; de una hoja grande, solo sus variables y tokens). No lee tu código fuente.
+- **Qué no lee nunca:** lo que excluye tu `.gitignore` (también lo que está versionado pero ignorado), carpetas generadas (`node_modules`, `dist`, `build`…), enlaces simbólicos (no los sigue, ni a archivos ni a carpetas) y cualquier archivo que parezca un secreto (`.env*`, claves `.pem`/`.key`, `id_rsa`, `.npmrc`, `credentials*`, `secrets*`…). No sale de la carpeta del repositorio, no ejecuta nada y no escribe nada. Si un archivo permitido contiene algo con forma de secreto (una clave de API, una URL con contraseña), se sustituye por `[REDACTADO]`.
+- **Tope:** como mucho 48 KB en total, que es lo que puede llegar al modelo, siempre como datos (las instrucciones que contenga un archivo o un comentario se ignoran).
+- **Lo que se detectó:** en la pantalla de preguntas verás «Lo que se detectó en tu repositorio»: el stack, el sistema de diseño, la estructura y cómo se prueba, **cada cosa con su evidencia** (los archivos en los que se basa; la aplicación descarta lo que el modelo diga sin un archivo real que lo respalde). Si algo no es así, corrígelo en su campo: tu corrección manda sobre lo detectado en todos los pasos siguientes, y puedes cambiarla después con «Cambiar mis respuestas».
+- **La propuesta** mantiene el stack existente (sin añadir dependencias), registra en las reglas las convenciones y los estilos que ya sigue el código, usa el comando de pruebas que ya defines (por ejemplo `npm test`) y su primera tarea revisa y documenta la base existente en lugar de crear un scaffold. Al aprobar solo se escribe en `docs/`.
+- Un repositorio recién creado (solo README, `.gitignore` y `docs/`) cuenta como proyecto nuevo.
+
 ## Diseño del proyecto (opcional)
 
 Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan» (viene marcada si adjuntaste una referencia visual). Un modelo diseña 2 o 3 direcciones distintas, cada una con un prototipo que puedes **probar** (filtrar, añadir, navegar). Los prototipos son completos (varias pantallas, datos de ejemplo, edición, atajos de teclado y los estados vacío, de carga, de error y de éxito), así que tarda de 5 a 7 minutos y cuesta entre medio dólar y un dólar; un ajuste a una sola dirección, un tercio de eso. Después puedes:
@@ -57,6 +68,14 @@ Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «M
 Si ya estás viendo la propuesta y no te convence el aspecto, pulsa **«Volver a las direcciones de diseño»**: vuelves a las mismas direcciones, con tu elección marcada, sin perder lo que generaste (la propuesta pendiente se descarta y se prepara una nueva al elegir). Si no habías pedido el diseño, el mismo botón dice **«Ver propuestas de diseño»** y las genera en ese momento con tus respuestas.
 
 Los prototipos se muestran aislados: funcionan sin Internet y no tienen acceso a tus datos ni al resto de la app. Si uno intenta cargar recursos de fuera, no se cargan y se te avisa; si intenta salir de su página o recargarse, la vista previa se detiene y puedes reiniciarla. Si tu proyecto es un programa de terminal, una librería o un servicio, déjalo sin marcar: no hace falta.
+
+## Cambiar la interfaz al planificar una feature
+
+En «Planificar», al pedir una feature nueva sobre un proyecto en marcha, puedes:
+
+- **Adjuntar referencias** (las mismas que en el inicio: hasta 5 archivos, cada uno con su propósito: cómo debe verse, qué debe hacer o solo inspiración). El mismo modelo traductor del inicio las describe en texto antes de proponer, el planificador trabaja solo con esa descripción y verás «Cómo se entendieron tus referencias». Los archivos se borran al terminar el análisis; si cambias la propuesta sin cambiar los archivos, no se vuelven a analizar.
+- **Actualizar `docs/UI_SPEC.md` con este cambio** (o **crearla**, si el proyecto aún no tiene especificación). El planificador recibe la especificación actual y devuelve el documento completo con lo nuevo (pantallas, componentes, estados y decisiones) sin quitar lo que ya tiene. La propuesta no se puede aplicar si a la especificación le falta alguna de sus 8 secciones, o si pediste actualizarla y no la incluye; esa comprobación vale para cualquier propuesta que la toque, venga del planificador, de un agente o de una edición a mano.
+- Las features nuevas quedan enlazadas a `docs/UI_SPEC.md` cuando existe (lo marques o no), así sus agentes la reciben en su contexto.
 
 ## Dónde queda el código
 
@@ -90,7 +109,7 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 | Síntoma | Qué hacer |
 | :--- | :--- |
 | Cambié código del núcleo y no se nota | El núcleo (Node) no se recarga en vivo: cierra y vuelve a ejecutar `npm run desktop`. |
-| «El núcleo no respondió a … en N s» | La petición tardó más que el tiempo permitido (60 s, 330 s para proponer cambios). Revisa el registro `logs/sidecar.log` en la carpeta de datos de la aplicación; si el núcleo murió, la siguiente petición lo reinicia. |
+| «El núcleo no respondió a … en N s» | La petición tardó más que el tiempo permitido (60 s; 330 s para proponer cambios y para analizar referencias en Planificar). Revisa el registro `logs/sidecar.log` en la carpeta de datos de la aplicación; si el núcleo murió, la siguiente petición lo reinicia. |
 | El agente falla al empezar o dice que no hay sesión | Abre una terminal, ejecuta `claude` y inicia sesión; vuelve a intentar. Si el CLI está en una ruta poco habitual, define `GRAPHDEV_CLAUDE_PATH` antes de abrir la aplicación. |
 | «Integrar en main» se rechaza por cambios sin commitear | Tu repositorio tiene la rama base abierta con cambios sin guardar. Commitéalos o guárdalos (`git stash`) y vuelve a integrar. Si la rama base está abierta en otro worktree, cambia de rama allí. |
 | «Integrar en main» da conflicto | La rama de la feature choca con cambios nuevos en la rama base. Resuélvelo en Git y vuelve a intentarlo. |
@@ -99,11 +118,14 @@ Solo corre un piloto a la vez por proyecto. Si una ejecución supera el tiempo m
 | La aprobación del inicio no avanza | Falta el repositorio: conecta uno o crea uno nuevo. |
 | El asistente dice «La llamada se interrumpió» | La app se cerró mientras trabajaba. Pulsa «Reintentar» (conserva lo que ya estaba hecho) o «Empezar de nuevo». |
 | «No se pudo analizar «archivo»…» al empezar | El modelo no pudo leer esa referencia (vacía, dañada o un PDF sin `pdftoppm`). Pulsa «Reintentar» o «Empezar de nuevo» sin ese archivo. |
+| «No se pudo leer el repositorio…» al empezar | La lectura del repositorio usa `git ls-files`; comprueba que la carpeta conectada sea un repositorio Git y que `git` esté instalado. Pulsa «Reintentar las preguntas». |
+| «Pediste actualizar docs/UI_SPEC.md, pero la propuesta no la incluye» o «debe conservar sus 8 secciones» | La propuesta no se puede aplicar tal cual: pide otra o corrige las operaciones en «Avanzado». |
 | «El inicio del proyecto ya empezó» | Continúa donde lo dejaste, o reinícialo con el botón de reinicio (solo antes de aprobar). El asistente es solo para proyectos sin plan. |
 | No llegan avisos del sistema | Las notificaciones de escritorio dependen de la API web del webview y del permiso; la bandeja de actividad dentro de la aplicación es la vía fiable. |
 
 ## Lo que todavía no hace
 
 - Trabajar con Codex (el código existe pero está desconectado; solo funciona Claude Code).
-- Analizar un repositorio existente para proponer el plan (el asistente de inicio es para proyectos vacíos).
+- Replanificar un proyecto que ya tiene plan en el grafo: el asistente de inicio parte del código existente, pero solo en proyectos sin features ni tareas.
+- Leer código fuente o capturas de pantalla del repositorio en el modo de código existente (solo manifiestos, estructura y estilos).
 - Mostrar el camino crítico de una feature en el grafo.

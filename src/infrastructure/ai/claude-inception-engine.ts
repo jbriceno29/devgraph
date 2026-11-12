@@ -1,7 +1,7 @@
 import type { InceptionEnginePort } from '../../application/ports/inception-port.js';
 import { ClaudeChangeSetPlanner, type ClaudeChangeSetPlannerOptions } from './claude-change-set-planner.js';
 import { CLAUDE_ISOLATION_ARGS } from './claude-code-adapter.js';
-import { buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, parseProposal, parseQuestions, parseUiOptions, proposalSchema, questionsSchema, uiExplorationSchema } from './inception-contract.js';
+import { brownfieldQuestionsSchema, buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, parseProposal, parseQuestions, parseUiOptions, proposalSchema, questionsSchema, uiExplorationSchema } from './inception-contract.js';
 
 /** Time limit of a design call (generating the directions, or adjusting one). */
 export const DESIGN_TIMEOUT_MS = 900_000;
@@ -12,7 +12,7 @@ export class ClaudeInceptionEngine implements InceptionEnginePort {
   constructor(cwd: string, options: ClaudeChangeSetPlannerOptions = {}) { this.runner = new ClaudeChangeSetPlanner(cwd, { timeoutMs: 600_000, ...options }); }
 
   async askGoals(input: Parameters<InceptionEnginePort['askGoals']>[0]) {
-    const { output, usage } = await this.runner.structured(buildQuestionsPrompt(input.project), questionsSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal);
+    const { output, usage } = await this.runner.structured(buildQuestionsPrompt(input.project), input.project.repository ? brownfieldQuestionsSchema : questionsSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal);
     return { ...parseQuestions(output, 'Claude Code'), usage };
   }
 

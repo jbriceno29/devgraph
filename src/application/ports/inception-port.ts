@@ -1,5 +1,9 @@
 import type { ChangeSetDraft } from './change-set-planning-port.js';
 import type { InceptionAnswerDto, InceptionQuestionDto, InceptionReferenceDto, InceptionReferenceTranslationDto, InceptionUiOptionDto, ReferenceKind } from '../../shared/contracts/inception-view.js';
+import type { RepositoryCorrectionDto, RepositoryInferenceDto, RepositoryScanDto } from '../../shared/contracts/repository-scan.js';
+
+/** Brownfield mode: what was read from a repository that already has code, what the assistant inferred from it and what the user corrected. */
+export interface InceptionRepositoryState { scan: RepositoryScanDto; inferences: RepositoryInferenceDto[]; corrections: RepositoryCorrectionDto[] }
 
 /** Tokens and cost of one engine call (null fields when the engine does not report them). */
 export interface InceptionEngineUsage { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null; model: string | null }
@@ -9,6 +13,8 @@ export interface InceptionProjectInput {
   references?: Array<{ kind: ReferenceKind; name: string; note: string; translation: InceptionReferenceTranslationDto }>;
   /** The visual direction the user approved (data for the proposal). `prototypeHtml` only for an imported one, whose details nobody wrote down. */
   direction?: { title: string; summary: string; navigation: string; screens: string[]; designSystemNotes: string[]; source: 'GENERATED' | 'IMPORTED'; prototypeHtml?: string };
+  /** The project's repository already has code: the scan (data for every prompt), the inferences already made and the user's corrections. */
+  repository?: InceptionRepositoryState;
 }
 
 /** One visual direction as the engine writes it: details plus a self-contained interactive HTML prototype. */
@@ -49,7 +55,7 @@ export interface InceptionReferenceFilesPort {
  */
 export interface InceptionEnginePort {
   /** Up to 5 short questions about goal and scope, with suggested options. */
-  askGoals(input: { project: InceptionProjectInput; model?: string; signal?: AbortSignal }): Promise<{ questions: InceptionQuestionDto[]; assumptions: string[]; usage: InceptionEngineUsage | null }>;
+  askGoals(input: { project: InceptionProjectInput; model?: string; signal?: AbortSignal }): Promise<{ questions: InceptionQuestionDto[]; assumptions: string[]; /** Brownfield only: stack, design system, structure and testing inferred from the scan, each with evidence paths (the service keeps only evidence that exists). */ inferences?: unknown[]; usage: InceptionEngineUsage | null }>;
   /** One proposal: profile, stack ADR with alternatives, vision, requirements and the initial plan with «Fundación». */
   propose(input: { project: InceptionProjectInput; questions: InceptionQuestionDto[]; answers: InceptionAnswerDto[]; model?: string; /** The user's change requests about earlier proposals (data, never instructions). */ notes?: string[]; signal?: AbortSignal }): Promise<{ draft: ChangeSetDraft; assumptions: string[]; usage: InceptionEngineUsage | null }>;
   /**
@@ -73,6 +79,8 @@ export interface InceptionRecord {
   references: InceptionReference[];
   /** Visual exploration (optional step before the proposal). */
   ui: InceptionUiState;
+  /** Brownfield mode: null when the repository had no code (or none was configured) when the inception started. */
+  repository: InceptionRepositoryState | null;
   createdAt: string; updatedAt: string;
 }
 export interface InceptionRepositoryPort {

@@ -4,10 +4,17 @@ import type { InceptionReferenceFilesPort } from '../../application/ports/incept
 
 const FILE_NAME = /^(?:ref|design)-\d{1,2}\.[a-z0-9]{2,5}$/;
 
-/** The attached files of a project inception, under `<projects>/<projectId>/inception/references/`. File names are fixed by the app (`ref-<n>.<ext>` for references, `design-<n>.<ext>` for imported design images), never by the user. */
+/**
+ * The attached files of a project inception, under `<projects>/<projectId>/inception/references/` (or, for references attached while planning a feature,
+ * `<projects>/<projectId>/planning/references/`, kept only during the translation). File names are fixed by the app (`ref-<n>.<ext>` for references,
+ * `design-<n>.<ext>` for imported design images), never by the user.
+ */
 export class InceptionReferenceFiles implements InceptionReferenceFilesPort {
-  constructor(private readonly projectsRoot: string) {}
-  private folder(projectId: string): string { return join(this.projectsRoot, projectId, 'inception', 'references'); }
+  constructor(private readonly projectsRoot: string, private readonly area: 'inception' | 'planning' = 'inception') {}
+  private folder(projectId: string): string {
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(projectId)) throw new Error('Proyecto inválido.');
+    return join(this.projectsRoot, projectId, this.area, 'references');
+  }
   pathOf(projectId: string, file: string): string {
     if (!FILE_NAME.test(file)) throw new Error(`Nombre de referencia no válido: ${file}`);
     return join(this.folder(projectId), file);

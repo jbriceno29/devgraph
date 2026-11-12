@@ -50,10 +50,18 @@ import { ClaudeReferenceTranslator } from '../../ai/claude-reference-translator.
 import { SqliteInceptionRepository } from '../../persistence/repositories/sqlite-inception-repository.js';
 import { ClaudeInceptionEngine } from '../../ai/claude-inception-engine.js';
 import { GitRepositoryInitializer } from '../../git/git-repository-initializer.js';
+import { GitRepositoryScanner } from '../../filesystem/repository-scanner.js';
+import { PlanningReferencesService } from '../../../application/planning/planning-references.js';
+import { normalizeTranslation } from '../../ai/reference-translation-contract.js';
+import { UI_SPEC_PATH } from '../../../shared/ui-spec.js';
+import { MAX_REFERENCES, MAX_REFERENCE_NOTE, REFERENCE_KINDS, type ReferenceKind } from '../../../shared/contracts/inception-view.js';
+import type { PlanningReference } from '../../../application/ports/change-set-planning-port.js';
+import type { RepositoryScannerPort } from '../../../application/ports/repository-scan-port.js';
+import { summarizeScan } from '../../../shared/contracts/repository-scan.js';
 import type { InceptionAnswerDto, StartInceptionInput } from '../../../shared/contracts/inception-view.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort}={}) {
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort;repositoryScanner?:RepositoryScannerPort;/** Tests: the ChangeSet planner (otherwise the wired engine's). */changeSetPlanner?:ChangeSetPlannerPort}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const documentCommitter=new GitDocumentCommitter();
@@ -62,6 +70,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  const agentAdapter=dependencies.agentAdapter??new ClaudeCodeAdapter();
  const executionServices=new Map<string,AgentOrchestrator>();
  const pilots=new Map<string,FeaturePilot>();
+ // Brownfield mode: reads manifests, structure and styles of a repository that already has code (nothing runs, ≤ 48 KB).
+ const scanner=dependencies.repositoryScanner??new GitRepositoryScanner();
  const getManagement=(projectId:string)=>{
   const workspace=store.openProject(projectId);
   return new ArtifactManagementService(workspace.projects,workspace.graph,workspace.artifacts,workspace.repositories,files,event=>emit('artifact:sync_status_changed',event as ArtifactSyncStatusChangedEvent),documentCommitter);
@@ -73,10 +83,21 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
  // The planner follows the wired engine, with the provider's planning model and auth mode.
  const providerConnection=(projectId:string,database:ConstructorParameters<typeof SqliteAgentExecutionRepository>[0])=>new SqliteAgentExecutionRepository(database,agentAdapter.providerId).listProfiles(projectId).find(profile=>profile.roleKey==='DEVELOPER');
  const plannerFor=(projectId:string,database:ConstructorParameters<typeof SqliteAgentExecutionRepository>[0],cwd:string):ChangeSetPlannerPort=>{
+  if(dependencies.changeSetPlanner)return dependencies.changeSetPlanner;
   if(agentAdapter.providerId!=='claude-code')return new CodexChangeSetPlanner(cwd);
   const profile=providerConnection(projectId,database);
   return new ClaudeChangeSetPlanner(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription',defaultModel:profile?.models.planning??null});
  };
+ // The reference translator is its own model call (the only one with a tool: Read, inside a throwaway folder with copies of the files). Inception and Planificar share it.
+ const translatorFor=(projectId:string):ReferenceTranslatorPort=>dependencies.referenceTranslator??{translate:input=>{
+  if(agentAdapter.providerId!=='claude-code')throw new Error('El análisis de referencias todavía solo funciona con Claude Code.');
+  const profile=providerConnection(projectId,store.openProject(projectId).database);
+  const cwd=join(workspaceRoot,'projects',projectId);mkdirSync(cwd,{recursive:true});
+  return new ClaudeReferenceTranslator(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription'}).translate(input);
+ }};
+ const planningModels=(projectId:string)=>{const profile=providerConnection(projectId,store.openProject(projectId).database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};};
+ // References attached while planning a feature (Planificar): translated with the same translator, files kept only during the call.
+ const planningReferences=new PlanningReferencesService({translator:translatorFor,files:new InceptionReferenceFiles(join(workspaceRoot,'projects'),'planning'),models:planningModels,projectExists:id=>store.listProjects().some(project=>project.id===id)});
  // Project inception: one service per project (it tracks its background engine call). The engine follows the wired provider.
  const inceptions=new Map<string,ProjectInceptionService>();
  const getInception=(projectId:string)=>{
@@ -91,17 +112,11 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   };
   // Built per call, so `inception:get` works with any engine and auth changes apply to the next call.
   const engine:InceptionEnginePort=dependencies.inceptionEngine??{askGoals:input=>claudeEngine().askGoals(input),propose:input=>claudeEngine().propose(input),exploreUi:input=>claudeEngine().exploreUi(input)};
-  // The reference translator is its own model call (the only one with a tool: Read, inside a throwaway folder with copies of the files).
-  const translator:ReferenceTranslatorPort=dependencies.referenceTranslator??{translate:input=>{
-   if(agentAdapter.providerId!=='claude-code')throw new Error('El análisis de referencias todavía solo funciona con Claude Code.');
-   const profile=providerConnection(projectId,workspace.database);
-   const cwd=join(workspaceRoot,'projects',projectId);mkdirSync(cwd,{recursive:true});
-   return new ClaudeReferenceTranslator(cwd,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription'}).translate(input);
-  }};
+  const translator=translatorFor(projectId);
   const service=new ProjectInceptionService({projects:workspace.projects,graph:workspace.graph,store:new SqliteInceptionRepository(workspace.database),engine,
    planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>{const result=await getPlanning(projectId).apply(id);return {revision:result.revision,resolvedIds:result.resolvedIds};},reject:id=>{getPlanning(projectId).reject(id);}},
    repositoryPath:id=>workspace.repositories.findPrimaryForProject(id)?.localPath??null,
-   translator,referenceFiles:new InceptionReferenceFiles(join(workspaceRoot,'projects')),designFiles:new DesignPrototypeWriter(),
+   translator,referenceFiles:new InceptionReferenceFiles(join(workspaceRoot,'projects')),designFiles:new DesignPrototypeWriter(),scanner,
    models:id=>{const profile=providerConnection(id,workspace.database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};},
    emit:(channel,payload)=>emit(channel,payload)});
   inceptions.set(projectId,service);return service;
@@ -192,7 +207,13 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'inception:get': return getInception(String(args[0]??'')).get(String(args[0]??''));
     case 'inception:start': {const projectId=String(args[0]??'');return getInception(projectId).start(projectId,(args[1]??{}) as StartInceptionInput);}
-    case 'inception:answer': {const projectId=String(args[0]??'');const options=args[3] as {exploreUi?:boolean}|undefined;return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined,options&&typeof options==='object'?{exploreUi:options.exploreUi===true}:undefined);}
+    case 'inception:answer': {const projectId=String(args[0]??'');const options=args[3] as {exploreUi?:boolean;corrections?:unknown}|undefined;return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined,options&&typeof options==='object'?{...(options.exploreUi!==undefined?{exploreUi:options.exploreUi===true}:{}),...(options.corrections!==undefined?{corrections:options.corrections}:{})}:undefined);}
+    case 'repository:scan': {
+     // Brownfield preview: what the assistant would read from the project's repository (no contents in the answer).
+     const projectId=String(args[0]??'');const path=store.openProject(projectId).repositories.findPrimaryForProject(projectId)?.localPath;
+     if(!path)throw new Error('El proyecto no tiene un repositorio configurado.');
+     return summarizeScan(await scanner.scan(path));
+    }
     case 'inception:import_prototype': {const projectId=String(args[0]??'');return getInception(projectId).importPrototype(projectId,(args[1]??{}) as {name:string;html:string});}
     case 'inception:import_design': {const projectId=String(args[0]??'');return getInception(projectId).importDesign(projectId,(args[1]??{}) as {name:string;kind:'IMAGE'|'REACT';content:string});}
     case 'inception:revise_ui': {const projectId=String(args[0]??'');return getInception(projectId).reviseUiOption(projectId,String(args[1]??''),String(args[2]??''));}
@@ -229,8 +250,15 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
      if(snapshotId){const snapshot=getContextEngine(projectId).getSnapshot(snapshotId);if(snapshot.projectId!==projectId||snapshot.focusEntityId!==focusEntityId)throw new Error('El ContextSnapshot no corresponde al proyecto y foco seleccionados.');const currentRevision=store.openProject(projectId).projects.findById(projectId)!.currentRevision;if(snapshot.graphRevision!==currentRevision)throw new Error('El ContextSnapshot quedó desactualizado; vuelve a preparar el contexto antes de proponer cambios.');contextPackage=renderContextSnapshot(snapshot);}
      const model=typeof args[4]==='string'&&args[4].trim()?args[4].trim():undefined;
      if(model){const available=providerConnection(projectId,store.openProject(projectId).database)?.models.available??[];if(!available.includes(model))throw new Error(`El modelo ${model} no está disponible para planificar.`);}
-     return getPlanning(projectId).propose(projectId,prompt,focusEntityId,contextPackage,model);
+     // Planning a feature on a project in progress: translated references (data) and the interface specification (docs/UI_SPEC.md), when it exists.
+     const options=(args[5]&&typeof args[5]==='object'?args[5]:{}) as {references?:unknown;updateUiSpec?:unknown};
+     const references=planningReferenceInputs(options.references);
+     const management=getManagement(projectId),specDocument=management.repositoryPath(projectId)?management.list(projectId).find(document=>document.relativePath===UI_SPEC_PATH&&document.entityType==='ARTIFACT'):undefined;
+     const specContent=specDocument&&options.updateUiSpec===true?(await management.read(specDocument.id).catch(()=>null))?.content??null:null;
+     const uiSpec=specDocument||options.updateUiSpec===true?{entityId:specDocument?.id??null,content:specContent,update:options.updateUiSpec===true}:undefined;
+     return getPlanning(projectId).propose(projectId,prompt,focusEntityId,contextPackage,model,{...(references.length?{references}:{}),...(uiSpec?{uiSpec}:{})});
     }
+    case 'planning:translate_references': {const projectId=String(args[0]??'');return planningReferences.translate(projectId,args[1]);}
     case 'changeset:edit': return getPlanningForChangeSet(String(args[0]??'')).edit(String(args[0]??''),args[1] as ChangeOperation[]);
     case 'changeset:apply': {
      const changeSetId=String(args[0]??''),planning=getPlanningForChangeSet(changeSetId),result=await planning.apply(changeSetId);
@@ -314,6 +342,20 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   }
   throw new Error('Ejecución no encontrada.');
  }
+}
+/** References the renderer sends back with a proposal (already translated): checked and capped again here, field by field and per kind. */
+function planningReferenceInputs(value:unknown):PlanningReference[]{
+ if(value===undefined||value===null)return [];
+ if(!Array.isArray(value))throw new Error('Las referencias deben enviarse como una lista.');
+ if(value.length>MAX_REFERENCES)throw new Error(`Puedes usar como mucho ${MAX_REFERENCES} referencias.`);
+ return value.flatMap(raw=>{
+  const item=(raw&&typeof raw==='object'?raw:{}) as Record<string,unknown>;const kind=item.kind as ReferenceKind;
+  if(!REFERENCE_KINDS.includes(kind))throw new Error('Indica si cada referencia es visual, funcional o conceptual.');
+  const name=String(item.name??'').replace(/\\/g,'/').split('/').pop()!.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,120)||'referencia';
+  const note=String(item.note??'').trim().slice(0,MAX_REFERENCE_NOTE);
+  if(!item.translation||typeof item.translation!=='object')return [];
+  return [{kind,name,note,translation:normalizeTranslation(kind,item.translation)}];
+ });
 }
 function summarize(project:Project):ProjectSummaryDto{return {id:project.props.id,name:project.props.name,slug:project.props.slug,description:project.props.description??null,currentRevision:project.currentRevision,createdAt:project.props.createdAt,updatedAt:project.props.updatedAt};}
 function toDocumentDto(document:import('../../../application/ports/artifact-management-port.js').ArtifactDocumentRecord):ArtifactDocumentDto {return {id:document.id,projectId:document.projectId,displayKey:document.displayKey,title:document.title,summary:document.summary,entityType:document.entityType,artifactType:document.artifactType,version:document.version,adrNumber:document.adrNumber,relativePath:document.relativePath,contentHash:document.contentHash,syncStatus:document.syncStatus};}

@@ -30,7 +30,7 @@ Actualizado: 2026-11-11 (rama `feat/claude-code`). Los commits son los de `git l
 - Camino crítico de la feature en el grafo.
 - Medir si las instrucciones extra del prompt para proponer cambios al plan alteran el costo ponderado.
 - Que el planificador de ChangeSets use el aislamiento de configuración del CLI (hoy solo lo usan las ejecuciones).
-- Del asistente de inicio: modo brownfield (`repository:scan`) y el resto de lo que la propuesta deja fuera.
+- Del asistente de inicio: lo que la propuesta deja fuera, salvo el modo brownfield (`repository:scan`, entregado en la Etapa V4 del plan de exploración visual); queda re-planificar un proyecto que ya tiene plan.
 
 
 ## 1. Visión

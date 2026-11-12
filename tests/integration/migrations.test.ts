@@ -41,7 +41,7 @@ describe('versioned schema migrations',()=>{
  });
 });
 
-describe('migration 012: the inception table is rebuilt for the new stage',()=>{
+describe('migration 012: the inception table is rebuilt for the new stage (and 013 adds the brownfield scan, null for existing rows)',()=>{
  it('keeps the rows of an existing workspace and then accepts EXPLORE_UI, which the old CHECK refused',()=>{
   const root=mkdtempSync(join(tmpdir(),'graphdev2-migrate-012-'));roots.push(root);const filename=join(root,'workspace.sqlite');
   const previous=new Database(filename);
@@ -53,7 +53,7 @@ describe('migration 012: the inception table is rebuilt for the new stage',()=>{
   previous.close();
   const db=openDatabase({filename});
   expect(db.pragma('user_version',{simple:true})).toBe(latest);
-  expect(db.prepare('SELECT * FROM project_inception').all()).toEqual([{project_id:'p',stage:'PROPOSAL',status:'WAITING_USER',brief:'Mi idea',questions_json:'[{"id":"q1"}]',answers_json:'[{"questionId":"q1","answer":"a"}]',assumptions_json:'["supuesto"]',change_set_id:null,model:'opus',usage_json:'[]',error:null,notes_json:'["nota"]',scaffold_task_id:'t1',references_json:'[{"id":"ref-1"}]',ui_json:'{}',created_at:'antes',updated_at:'ahora'}]);
+  expect(db.prepare('SELECT * FROM project_inception').all()).toEqual([{project_id:'p',stage:'PROPOSAL',status:'WAITING_USER',brief:'Mi idea',questions_json:'[{"id":"q1"}]',answers_json:'[{"questionId":"q1","answer":"a"}]',assumptions_json:'["supuesto"]',change_set_id:null,model:'opus',usage_json:'[]',error:null,notes_json:'["nota"]',scaffold_task_id:'t1',references_json:'[{"id":"ref-1"}]',ui_json:'{}',repository_json:'null',created_at:'antes',updated_at:'ahora'}]);
   db.prepare("UPDATE project_inception SET stage='EXPLORE_UI'").run();
   expect(()=>db.prepare("UPDATE project_inception SET stage='OTRA'").run()).toThrow(/CHECK/);
   closeDatabase(db);

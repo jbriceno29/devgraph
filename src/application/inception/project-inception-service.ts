@@ -3,7 +3,10 @@ import { DEFAULT_DECISION_POLICY, decide } from '../../domain/autonomy/decision-
 import type { ProjectRepositoryPort } from '../ports/project-repository-port.js';
 import type { KnowledgeGraphRepositoryPort } from '../ports/knowledge-graph-repository-port.js';
 import type { ChangeSetDraft } from '../ports/change-set-planning-port.js';
-import { EMPTY_UI_STATE, type InceptionEnginePort, type InceptionEngineUsage, type InceptionRecord, type InceptionReference, type InceptionReferenceFilesPort, type InceptionRepositoryPort, type InceptionUiOption, type ReferenceTranslatorPort, type UiOptionDraft } from '../ports/inception-port.js';
+import { EMPTY_UI_STATE, type InceptionEnginePort, type InceptionEngineUsage, type InceptionRecord, type InceptionReference, type InceptionReferenceFilesPort, type InceptionRepositoryPort, type InceptionRepositoryState, type InceptionUiOption, type ReferenceTranslatorPort, type UiOptionDraft } from '../ports/inception-port.js';
+import type { RepositoryScannerPort } from '../ports/repository-scan-port.js';
+import { summarizeScan } from '../../shared/contracts/repository-scan.js';
+import { normalizeCorrections, normalizeInferences } from './repository-evidence.js';
 import { findExternalReferences } from '../../shared/prototype-safety.js';
 import { prepareReferences } from './reference-files.js';
 import { DESIGN_IMAGE_EXTENSIONS, MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_UI_OPTIONS, type InceptionActivityDto, type InceptionAnswerDto, type InceptionNextAction, type InceptionProposalDto, type InceptionStage, type InceptionStatus, type InceptionViewDto, type StartInceptionInput } from '../../shared/contracts/inception-view.js';
@@ -28,6 +31,8 @@ export interface ProjectInceptionDependencies {
   translator?: ReferenceTranslatorPort;
   referenceFiles?: InceptionReferenceFilesPort;
   designFiles?: DesignPrototypeWriterPort;
+  /** Brownfield mode: reads the configured repository when the inception starts; when it already has code, the assistant works from that evidence. */
+  scanner?: RepositoryScannerPort;
   emit?(channel: 'inception:updated' | 'graph:revision_updated', payload: unknown): void;
 }
 
@@ -72,13 +77,15 @@ export class ProjectInceptionService {
       for (const item of prepared) this.deps.referenceFiles.save(projectId, item.file, item.content);
       references = prepared.map(({ content: _content, ...rest }): InceptionReference => ({ ...rest, status: 'PENDING', error: null, translation: null }));
     }
-    const record: InceptionRecord = { projectId, stage: 'ASK_GOALS', status: 'WORKING', brief, questions: [], answers: [], assumptions: [], changeSetId: null, model, usage: current?.usage ?? [], error: null, notes: [], scaffoldTaskId: null, references, ui: EMPTY_UI_STATE, createdAt: current?.createdAt ?? now, updatedAt: now };
+    const record: InceptionRecord = { projectId, stage: 'ASK_GOALS', status: 'WORKING', brief, questions: [], answers: [], assumptions: [], changeSetId: null, model, usage: current?.usage ?? [], error: null, notes: [], scaffoldTaskId: null, references, ui: EMPTY_UI_STATE, repository: null, createdAt: current?.createdAt ?? now, updatedAt: now };
     this.deps.store.save(record);
     this.launch(record, async signal => {
+      // Brownfield: a repository that already has code is read first (nothing runs), and everything after works from that evidence.
+      const repository = await this.scanRepository(record, signal);
       const understood = await this.translateReferences(record, signal);
-      const result = await this.deps.engine.askGoals({ project: this.projectInput(projectId, brief, project.props, understood), ...(model ? { model } : {}), signal });
+      const result = await this.deps.engine.askGoals({ project: this.projectInput(projectId, brief, project.props, understood, undefined, repository), ...(model ? { model } : {}), signal });
       const questions = result.questions.slice(0, MAX_QUESTIONS).map((question, index) => ({ ...question, id: question.id?.trim() || `q${index + 1}`, options: question.options.slice(0, 6), default: question.default && question.options.includes(question.default) ? question.default : null }));
-      return { stage: 'ASK_GOALS', status: 'WAITING_USER', questions, assumptions: result.assumptions, usage: result.usage };
+      return { stage: 'ASK_GOALS', status: 'WAITING_USER', questions, assumptions: result.assumptions, repository: repository ? { ...repository, inferences: normalizeInferences(result.inferences, repository.scan) } : null, usage: result.usage };
     }, 'ASK_GOALS');
     return this.get(projectId);
   }
@@ -87,7 +94,7 @@ export class ProjectInceptionService {
    * Answers the questions and asks for the proposal; in PROPOSAL it regenerates it (the previous one is rejected).
    * `notes` (PROPOSAL only) is what the user wants changed: it is kept, with earlier ones, for every later regeneration.
    */
-  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string | null, options?: { exploreUi?: boolean }): InceptionViewDto {
+  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string | null, options?: { exploreUi?: boolean; /** Brownfield: the user's corrections of what was inferred from the repository (they replace the earlier ones). */ corrections?: unknown }): InceptionViewDto {
     const project = this.requireProject(projectId), current = this.record(projectId);
     if (!current || current.status === 'WORKING' || current.stage === 'APPLIED' || current.status === 'DONE') throw new Error(!current ? 'Empieza primero el inicio del proyecto.' : current.status === 'WORKING' ? 'Espera a que termine la llamada en curso.' : 'El inicio del proyecto ya se aplicó.');
     if (current.stage === 'ASK_GOALS' && current.status === 'FAILED' && !current.questions.length) throw new Error('Las preguntas no se generaron; vuelve a empezar.');
@@ -105,11 +112,13 @@ export class ProjectInceptionService {
     if (note.length > MAX_INCEPTION_NOTE) throw new Error(`Lo que quieres cambiar admite como mucho ${MAX_INCEPTION_NOTE} caracteres.`);
     if (note && current.stage !== 'PROPOSAL') throw new Error('Los cambios se piden sobre una propuesta ya preparada; responde primero las preguntas.');
     const allNotes = note ? [...(current.notes ?? []), note].slice(-MAX_NOTES) : current.notes ?? [];
+    if (Array.isArray(options?.corrections) && options.corrections.length && !current.repository) throw new Error('No hay nada detectado en el repositorio que corregir.');
+    const repository = current.repository && options?.corrections !== undefined && options.corrections !== null ? { ...current.repository, corrections: normalizeCorrections(options.corrections, current.repository.inferences) } : current.repository;
     const normalized = current.questions.map(question => ({ questionId: question.id, answer: given.get(question.id) ?? current.answers.find(answer => answer.questionId === question.id)?.answer ?? '' }));
     if (current.changeSetId) { const previous = this.deps.planning.find(current.changeSetId); if (previous && !['APPLIED', 'REJECTED'].includes(previous.status)) this.deps.planning.reject(previous.id); }
     // From the questions the user may ask to see design directions first; a retry keeps what they asked for.
     const exploring = current.stage === 'ASK_GOALS' && (options?.exploreUi ?? current.ui.wanted);
-    const record: InceptionRecord = { ...current, status: 'WORKING', answers: normalized, notes: allNotes, changeSetId: null, error: null, ui: current.stage === 'ASK_GOALS' ? { ...current.ui, wanted: exploring, options: exploring ? [] : current.ui.options } : current.ui, updatedAt: new Date().toISOString() };
+    const record: InceptionRecord = { ...current, status: 'WORKING', answers: normalized, notes: allNotes, repository, changeSetId: null, error: null, ui: current.stage === 'ASK_GOALS' ? { ...current.ui, wanted: exploring, options: exploring ? [] : current.ui.options } : current.ui, updatedAt: new Date().toISOString() };
     this.deps.store.save(record);
     if (exploring) this.launch(record, signal => this.exploreWork(record, project.props, signal), current.stage);
     else this.launch(record, signal => this.proposalWork(record, project.props, signal), current.stage);
@@ -170,7 +179,7 @@ export class ProjectInceptionService {
       const record: InceptionRecord = { ...current, status: 'WORKING', error: null, updatedAt: new Date().toISOString() };
       this.deps.store.save(record);
       this.launch(record, async signal => {
-        const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title: name.replace(/\.[a-z0-9]+$/i, '') || 'Componente React', summary: '', navigation: '', screens: [], designSystemNotes: [], prototypeHtml: source }, notes: [CONVERT_REACT_NOTE] }, signal });
+        const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? [], undefined, record.repository), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title: name.replace(/\.[a-z0-9]+$/i, '') || 'Componente React', summary: '', navigation: '', screens: [], designSystemNotes: [], prototypeHtml: source }, notes: [CONVERT_REACT_NOTE] }, signal });
         const draft = result.options[0];
         if (!draft) throw new Error('El asistente no devolvió el prototipo convertido.');
         return { stage: 'EXPLORE_UI' as const, status: 'WAITING_USER' as const, ui: { ...record.ui, options: [...record.ui.options, this.toUiOption(draft, 'IMPORTED', id)] }, usage: result.usage };
@@ -194,7 +203,7 @@ export class ProjectInceptionService {
       const { prototypeHtml, title, summary, navigation, screens, designSystemNotes } = option;
       // A direction that comes from a picture has no HTML: adjusting it asks the engine to build the prototype from its description.
       const notes = option.source === 'IMAGE' ? [`${IMAGE_TO_PROTOTYPE_NOTE} ${note}`] : [note];
-      const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title, summary, navigation, screens, designSystemNotes, prototypeHtml }, notes }, signal });
+      const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? [], undefined, record.repository), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title, summary, navigation, screens, designSystemNotes, prototypeHtml }, notes }, signal });
       const draft = result.options[0];
       if (!draft) throw new Error('El asistente no devolvió el prototipo ajustado.');
       return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: record.ui.options.map(item => (item.id === optionId ? this.toUiOption(draft, item.source === 'IMAGE' ? 'GENERATED' : item.source, item.id) : item)) }, usage: result.usage };
@@ -334,7 +343,7 @@ export class ProjectInceptionService {
   private view(projectId: string, record: InceptionRecord | null): InceptionViewDto {
     const repositoryPath = this.deps.repositoryPath(projectId);
     const usage = (record?.usage ?? []).reduce((total, item) => ({ calls: total.calls + 1, inputTokens: total.inputTokens + item.inputTokens, outputTokens: total.outputTokens + item.outputTokens, cacheReadTokens: total.cacheReadTokens + item.cacheReadTokens, cacheCreationTokens: total.cacheCreationTokens + item.cacheCreationTokens, costUsd: item.costUsd === null ? total.costUsd : (total.costUsd ?? 0) + item.costUsd }), { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: null as number | null });
-    if (!record) return { projectId, stage: 'NOT_STARTED', status: 'IDLE', nextAction: 'START', brief: '', questions: [], answers: [], assumptions: [], proposal: null, error: null, model: null, repositoryPath, usage, notes: [], scaffoldTaskId: null, references: [], ui: { wanted: false, options: [], selectedOptionId: null }, updatedAt: null };
+    if (!record) return { projectId, stage: 'NOT_STARTED', status: 'IDLE', nextAction: 'START', brief: '', questions: [], answers: [], assumptions: [], proposal: null, error: null, model: null, repositoryPath, usage, notes: [], scaffoldTaskId: null, references: [], ui: { wanted: false, options: [], selectedOptionId: null }, repository: null, updatedAt: null };
     const status: InceptionStatus = record.status;
     const proposal = record.changeSetId ? this.proposal(record.changeSetId) : null;
     const stage: InceptionStage = record.stage;
@@ -343,7 +352,7 @@ export class ProjectInceptionService {
       : stage === 'ASK_GOALS' ? 'ANSWER'
       : stage === 'EXPLORE_UI' ? 'CHOOSE_UI'
       : !proposal || proposal.status !== 'VALIDATED' || record.error ? 'REVISE_PROPOSAL' : !repositoryPath ? 'SET_UP_REPOSITORY' : 'APPROVE';
-    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), ui: { wanted: record.ui.wanted, selectedOptionId: record.ui.selectedOptionId, options: record.ui.options.map(({ prototypeHtml: _html, imageFile: _file, imageMime: _mime, ...visible }) => visible) }, updatedAt: record.updatedAt };
+    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), ui: { wanted: record.ui.wanted, selectedOptionId: record.ui.selectedOptionId, options: record.ui.options.map(({ prototypeHtml: _html, imageFile: _file, imageMime: _mime, ...visible }) => visible) }, repository: record.repository ? { scan: summarizeScan(record.repository.scan), inferences: record.repository.inferences, corrections: record.repository.corrections } : null, updatedAt: record.updatedAt };
   }
 
   private proposal(changeSetId: string): InceptionProposalDto | null {
@@ -358,9 +367,24 @@ export class ProjectInceptionService {
     if (model && !models.available.includes(model)) throw new Error(`El modelo ${model} no está disponible para planificar.`);
     return model || models.planning;
   }
-  private projectInput(projectId: string, brief: string, props: { name: string; description?: string | null }, references: readonly InceptionReference[] = [], direction?: ReturnType<ProjectInceptionService['approvedDirection']>) {
+  private projectInput(projectId: string, brief: string, props: { name: string; description?: string | null }, references: readonly InceptionReference[] = [], direction?: ReturnType<ProjectInceptionService['approvedDirection']>, repository?: InceptionRepositoryState | null) {
     const understood = references.flatMap(item => (item.status === 'TRANSLATED' && item.translation ? [{ kind: item.kind, name: item.name, note: item.note, translation: item.translation }] : []));
-    return { name: props.name, description: props.description ?? null, brief, rootId: this.rootId(projectId), ...(understood.length ? { references: understood } : {}), ...(direction ? { direction } : {}) };
+    return { name: props.name, description: props.description ?? null, brief, rootId: this.rootId(projectId), ...(understood.length ? { references: understood } : {}), ...(direction ? { direction } : {}), ...(repository ? { repository } : {}) };
+  }
+
+  /**
+   * Brownfield mode: reads the configured repository (manifests, structure, styles; nothing runs). Only a repository that already has code
+   * counts; what was read is stored right away, so the user sees it while the assistant works and a later failure does not lose it.
+   */
+  private async scanRepository(record: InceptionRecord, signal: AbortSignal): Promise<InceptionRepositoryState | null> {
+    const path = this.deps.repositoryPath(record.projectId), scanner = this.deps.scanner;
+    if (!path || !scanner) return null;
+    const scan = await scanner.scan(path).catch((error: unknown) => { throw new Error(`No se pudo leer el repositorio ${path}: ${error instanceof Error ? error.message : String(error)}`); });
+    if (!scan.hasCode) return null;
+    const state: InceptionRepositoryState = { scan, inferences: [], corrections: [] };
+    const latest = this.deps.store.find(record.projectId);
+    if (!signal.aborted && latest && latest.createdAt === record.createdAt && latest.status === 'WORKING') this.deps.store.save({ ...latest, repository: state, updatedAt: new Date().toISOString() });
+    return state;
   }
 
   /**
@@ -421,13 +445,13 @@ export class ProjectInceptionService {
   }
   /** The design gate: 2–3 directions with their prototypes, replacing whatever was there. */
   private async exploreWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
-    const result = await this.deps.engine.exploreUi({ project: this.projectInput(record.projectId, record.brief, props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), signal });
+    const result = await this.deps.engine.exploreUi({ project: this.projectInput(record.projectId, record.brief, props, record.references ?? [], undefined, record.repository), questions: record.questions, answers: record.answers, ...this.uiModel(record), signal });
     return { stage: 'EXPLORE_UI' as const, status: 'WAITING_USER' as const, ui: { ...record.ui, options: result.options.map((draft, index) => this.toUiOption(draft, 'GENERATED', `ui-${index + 1}`)), selectedOptionId: null }, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage };
   }
   /** The proposal gate: one engine call, validated and stored as a ChangeSet awaiting the user's approval. */
   private async proposalWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
     const projectId = record.projectId, rootId = this.rootId(projectId);
-    const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, props, record.references ?? [], this.approvedDirection(record)), questions: record.questions, answers: record.answers, ...(record.notes?.length ? { notes: record.notes } : {}), ...(record.model ? { model: record.model } : {}), signal });
+    const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, props, record.references ?? [], this.approvedDirection(record), record.repository), questions: record.questions, answers: record.answers, ...(record.notes?.length ? { notes: record.notes } : {}), ...(record.model ? { model: record.model } : {}), signal });
     const plan = buildFoundationPlan(result.draft.operations, rootId, { uiSpec: !!this.approvedDirection(record) });
     const changeSet = this.deps.planning.submit(projectId, { title: result.draft.title || 'Inicio del proyecto', rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)].filter(Boolean).join('\n'), operations: plan.operations }, `inception:${projectId}`);
     return { stage: 'PROPOSAL' as const, status: 'WAITING_USER' as const, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage, changeSetId: changeSet.id, error: plan.problems.length ? plan.problems.join(' ') : null };

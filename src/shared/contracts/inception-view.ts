@@ -1,3 +1,5 @@
+import type { InceptionRepositoryDto, RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
+
 /**
  * Project inception («asistente de proyecto»): two gates. ASK_GOALS (up to 5 questions about goal and scope) and
  * PROPOSAL (one ChangeSet with profile, stack ADR, vision, requirements and the initial plan with «Fundación»), then APPLIED.
@@ -70,6 +72,8 @@ export interface InceptionViewDto {
   /** The attached references and what the translator understood from each (the files themselves never leave the workspace). */
   references: InceptionReferenceDto[];
   ui: InceptionUiDto;
+  /** Brownfield mode: what was read from a repository that already had code when the inception started, what the assistant inferred and what the user corrected (null otherwise). */
+  repository: InceptionRepositoryDto | null;
   updatedAt: string | null;
 }
 /** Limits of `inception:answer` notes (one change request per regeneration). */
@@ -103,7 +107,7 @@ export interface InceptionIpcClient {
   get(projectId: string): Promise<InceptionViewDto>;
   start(projectId: string, input: StartInceptionInput): Promise<InceptionViewDto>;
   /** `notes`: optional free text with what to change; only while reviewing a proposal (it regenerates it keeping the answers). */
-  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string, options?: { exploreUi?: boolean }): Promise<InceptionViewDto>;
+  answer(projectId: string, answers: InceptionAnswerDto[], notes?: string, options?: { exploreUi?: boolean; /** Brownfield: corrections of what was inferred from the repository (they replace the earlier ones). */ corrections?: RepositoryCorrectionDto[] }): Promise<InceptionViewDto>;
   /** Adds a prototype the user made elsewhere (an HTML file) as one more direction to look at. Only while choosing a direction. */
   importPrototype(projectId: string, input: { name: string; html: string }): Promise<InceptionViewDto>;
   /** Adds a finished design the user made elsewhere: a picture (`IMAGE`, base64 content; a model describes it) or React code (`REACT`, source text; the engine converts it into a self-contained HTML prototype). Only while choosing a direction. */
@@ -119,5 +123,7 @@ export interface InceptionIpcClient {
   approve(projectId: string): Promise<InceptionViewDto>;
   restart(projectId: string): Promise<InceptionViewDto>;
   initializeRepository(projectId: string, absolutePath: string): Promise<InitializeRepositoryResultDto>;
+  /** Brownfield preview: what would be read from the project's repository (paths, kinds and sizes, no contents). Optional so older fakes stay valid. */
+  scanRepository?(projectId: string): Promise<RepositoryScanSummaryDto>;
   onUpdated(listener: (event: { projectId: string; stage: InceptionStage; status: InceptionStatus }) => void): () => void;
 }

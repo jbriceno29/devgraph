@@ -25,7 +25,8 @@ const PROPOSAL_TIMEOUT: Duration = Duration::from_secs(330);
 
 pub fn timeout_for(channel: &str) -> Duration {
     match channel {
-        "changeset:propose_from_chat" => PROPOSAL_TIMEOUT,
+        // Translating the references attached while planning is a model call too (the translator gives up at 300 s).
+        "changeset:propose_from_chat" | "planning:translate_references" => PROPOSAL_TIMEOUT,
         _ => DEFAULT_TIMEOUT,
     }
 }
@@ -295,6 +296,7 @@ mod tests {
     #[test]
     fn proposals_get_a_longer_timeout_than_the_planner() {
         assert_eq!(timeout_for("changeset:propose_from_chat"), Duration::from_secs(330));
+        assert_eq!(timeout_for("planning:translate_references"), Duration::from_secs(330));
         assert_eq!(timeout_for("project:list"), Duration::from_secs(60));
     }
 

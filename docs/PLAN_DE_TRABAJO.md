@@ -22,14 +22,15 @@ Actualizado: 2026-11-11 (rama `feat/claude-code`). Los commits son los de `git l
 | Pruebas de UI deterministas | Hecha | `cd351b5` (2026-11-11) |
 | 4. Portabilidad entre motores (Codex) | **Pendiente.** Los adaptadores de Codex siguen en el código sin cablear | — |
 
+**Plan en curso (2026-11-11):** `docs/PLAN_STACKS_REGLAS_Y_SKILLS.md` (auditoría, perfiles de stack, dependencias gestionadas por la app, prueba a escala real, skills incluidas). Corrección: el planificador de ChangeSets ya usa el aislamiento del CLI (`claude-change-set-planner.ts`).
+
 **Pendiente, de forma explícita:**
 
 - Etapa 4: reconectar `CodexAgentAdapter` y `CodexChangeSetPlanner` con el contrato actual y medir H3 (necesita cuota de Codex).
-- Recortar el prompt de contexto de la tarea (la sexta medición lo identifica como la mayor parte del costo evitable).
+- ~~Recortar el prompt de contexto de la tarea~~ Hecho (novena medición, `docs/benchmarks/2026-11-12-todo-v2-haiku-memoria-condensada.md`): la memoria de las dependencias pierde «Convenciones» y, si no son directas, «Decisiones» y «Pendiente»; −30 % de texto de contexto con la misma calidad, pero sin ahorro de costo distinguible del ruido.
 - Notificaciones de escritorio fiables: hoy usan la API web `Notification`, sin plugin de Tauri.
 - Camino crítico de la feature en el grafo.
 - Medir si las instrucciones extra del prompt para proponer cambios al plan alteran el costo ponderado.
-- Que el planificador de ChangeSets use el aislamiento de configuración del CLI (hoy solo lo usan las ejecuciones).
 - Del asistente de inicio: lo que la propuesta deja fuera, salvo el modo brownfield (`repository:scan`, entregado en la Etapa V4 del plan de exploración visual); queda re-planificar un proyecto que ya tiene plan.
 
 

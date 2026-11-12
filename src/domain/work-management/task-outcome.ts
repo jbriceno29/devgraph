@@ -37,6 +37,26 @@ export function extractConventions(summary: string): string[] {
 }
 
 /**
+ * The closing summary of a finished task as context for a later one. The conventions go out always: they already reach the prompt as
+ * tier-1 rules (`extractConventions`), so repeating them in every dependency only grows the prompt. A task that is not a direct prerequisite
+ * (`onlyDone`) keeps just what was done: its decisions and pending items were for whoever came right after, and the files and the
+ * conventions carry the rest. A summary without the sections (an older or free-form one) is returned untouched.
+ */
+export function condenseOutcomeSummary(summary: string, onlyDone: boolean): string {
+  const lines = summary.split(/\r?\n/);
+  const kept: string[] = [];
+  let section: string | null = null, recognized = false;
+  for (const line of lines) {
+    const heading = SECTION.exec(line);
+    if (heading) { section = heading[1]!.toLowerCase(); recognized = true; }
+    if (section === null || section === 'hecho' || (!onlyDone && (section === 'decisiones' || section === 'pendiente'))) kept.push(line);
+  }
+  if (!recognized) return summary;
+  const text = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return text || summary;
+}
+
+/**
  * A grouped run closes several tasks with one summary: one section per WorkItem, each headed by the task key
  * («## TASK-002 …», «**TASK-002**», «Parte 2 de 3: TASK-002 …»). Returns the section of every key, or null when any
  * key has no heading, so the caller can fall back to the shared summary. Text before the first heading goes with

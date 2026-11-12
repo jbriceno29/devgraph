@@ -113,6 +113,22 @@ describe('memory that flows between tasks (Stage 2)',()=>{
   expect(adapter.prompts.at(-1)).toContain('Toda validación lanza RangeError');
  });
 
+ it('hands a direct prerequisite its decisions and pending items, and a further one only what it did; conventions only as rules',async()=>{
+  const {core,workspaceRoot,projectId,adapter,runAndAccept}=await setup();
+  const db=openDatabase({filename:join(workspaceRoot,'projects',projectId,'workspace.sqlite'),initialize:false});
+  try{db.prepare(`INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES('d2',?,'t3','t2','DEPENDS_ON','USER',NULL,NULL,NULL,1,'now')`).run(projectId);db.prepare("UPDATE knowledge_entities SET status='BLOCKED' WHERE id='t3'").run();}finally{closeDatabase(db);}
+  await runAndAccept('t1');await runAndAccept('t2');
+  await core.handle({channel:'workitem:set_status',args:[projectId,'t3','READY','dependencias cumplidas']}).catch(()=>undefined);
+  await runAndAccept('t3');
+  const prompt=adapter.prompts.at(-1)!;
+  const decision='Las tareas viven en src/tasks.ts como un arreglo exportado `tasks`.';
+  // TASK-002 (direct) keeps its decisions; TASK-001 (two steps away) only what it did.
+  expect(prompt.split(decision)).toHaveLength(2);
+  expect(prompt).toContain('Resultado al cerrar la tarea');
+  // The convention TASK-001 declared reaches the prompt once, as a rule, and not again inside the summaries.
+  expect(prompt.split('Toda validación lanza RangeError con mensaje en español.')).toHaveLength(2);
+ });
+
  it('warns when the mandatory context alone exceeds the token budget',async()=>{
   const {core,projectId}=await setup();
   const preview=await core.handle({channel:'context:preview_package',args:[{projectId,focusEntityId:'t1',maxAllowedTokens:5}]}) as {warnings:string[]};

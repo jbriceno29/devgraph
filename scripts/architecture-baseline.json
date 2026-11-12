@@ -42,8 +42,7 @@
     "src/modules/planning/infrastructure/claude-change-set-planner.ts": 36,
     "src/modules/projects/infrastructure/repository-scanner.ts": 143,
     "src/modules/documents/infrastructure/transactional-markdown-file-store.ts": 18,
-    "src/modules/activity/infrastructure/sqlite-activity-repository.ts": 120,
-    "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 220
+    "src/modules/activity/infrastructure/sqlite-activity-repository.ts": 120
   },
   "file-size": {
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
@@ -61,8 +60,7 @@
     "src/desktop/presentation/shell/ActivityInbox.tsx": 339,
     "src/desktop/state/WorkspaceShell.tsx": 326,
     "src/desktop/state/project-create-form.tsx": 452,
-    "src/modules/projects/infrastructure/repository-scanner.ts": 516,
-    "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373
+    "src/modules/projects/infrastructure/repository-scanner.ts": 516
   },
   "ipc-access": {
     "src/desktop/main.tsx": 1,

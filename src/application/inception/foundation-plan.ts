@@ -170,6 +170,15 @@ export function buildFoundationPlan(
     newStatus: taskDeps(task).length ? 'BLOCKED' : 'READY',
     reason: 'Estado inicial del plan del inicio del proyecto.',
   }));
+  // Approving the foundation is the user's decision: its ADRs start accepted, so they reach the agents' context.
+  for (const decision of ops)
+    if (decision.type === 'CREATE_DECISION_RECORD' && decision.tempId)
+      statuses.push({
+        type: 'UPDATE_ENTITY_STATUS',
+        entityId: decision.tempId,
+        newStatus: 'ACCEPTED',
+        reason: 'Aceptada al aprobar el plan del inicio del proyecto.',
+      });
   const ready = tasks.filter(task => !taskDeps(task).length);
   if (scaffold && ready.some(task => task !== scaffold))
     problems.push(

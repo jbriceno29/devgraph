@@ -1,4 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { SetDecisionStatusUseCase } from '../../../application/graph/set-decision-status.js';
+import { decisionTransitions } from '../../../domain/knowledge/decision-status.js';
 import { join } from 'node:path';
 import { manualWorkItemTransitions, type WorkItemStatus } from '../../../domain/work-management/entities.js';
 import { ProjectWorkspaceStore } from '../../persistence/sqlite/project-workspace-store.js';
@@ -618,6 +620,8 @@ export function createWorkspaceCore(
                 const integration = getExecutionService(project.id).featureIntegration(project.id, id);
                 return integration ? { ...details, integration } : details;
               }
+              if (details.entity.type === 'DECISION_RECORD')
+                return { ...details, allowedStatusChanges: decisionTransitions(details.entity.status) };
               if (details.entity.type !== 'WORK_ITEM') return details;
               const outcome = getExecutionService(project.id).taskOutcome(id);
               return {
@@ -890,6 +894,16 @@ export function createWorkspaceCore(
             String(args[1] ?? ''),
             String(args[2] ?? '') as WorkItemStatus,
           );
+        }
+        case 'decision:set_status': {
+          const projectId = String(args[0] ?? '');
+          const result = new SetDecisionStatusUseCase(store.openProject(projectId).graph).execute(
+            projectId,
+            String(args[1] ?? ''),
+            String(args[2] ?? ''),
+          );
+          emit('graph:revision_updated', { projectId, revision: result.revision });
+          return result;
         }
         case 'policy:get': {
           const projectId = String(args[0] ?? '');

@@ -1,11 +1,12 @@
 import type {
+  DecisionStatusRepositoryPort,
   KnowledgeEntityDetails,
   ExecutionHistoryRecord,
   KnowledgeGraphRepositoryPort,
 } from '../../../application/ports/knowledge-graph-repository-port.js';
 import type { KnowledgeEntity, GraphRelationship } from '../../../domain/graph/knowledge-entity.js';
 import type { SqliteDatabase } from '../sqlite/database.js';
-export class SqliteKnowledgeGraphRepository implements KnowledgeGraphRepositoryPort {
+export class SqliteKnowledgeGraphRepository implements KnowledgeGraphRepositoryPort, DecisionStatusRepositoryPort {
   constructor(private readonly db: SqliteDatabase) {}
   findEntityById(id: string): KnowledgeEntity | null {
     const row = this.db.prepare('SELECT * FROM knowledge_entities WHERE id=?').get(id) as EntityRow | undefined;
@@ -80,6 +81,27 @@ export class SqliteKnowledgeGraphRepository implements KnowledgeGraphRepositoryP
         `INSERT INTO knowledge_entities (id,project_id,entity_type,display_key,title,summary,status,parent_id,created_revision,updated_revision,created_at,updated_at) VALUES (@id,@projectId,@entityType,@displayKey,@title,@summary,@status,@parentId,@createdRevision,@updatedRevision,@createdAt,@updatedAt)`,
       )
       .run(e);
+  }
+  setDecisionStatus(projectId: string, decisionId: string, from: string, to: string): number {
+    return this.db
+      .transaction(() => {
+        const row = this.db
+          .prepare(
+            `SELECT p.current_revision FROM knowledge_entities e JOIN projects p ON p.id=e.project_id WHERE e.project_id=? AND e.id=? AND e.entity_type='DECISION_RECORD' AND e.status=?`,
+          )
+          .get(projectId, decisionId, from) as { current_revision: number } | undefined;
+        if (!row) throw new Error('La decisión cambió mientras la editabas; vuelve a abrirla.');
+        const revision = row.current_revision + 1,
+          now = new Date().toISOString();
+        this.db
+          .prepare('UPDATE knowledge_entities SET status=?,updated_revision=?,updated_at=? WHERE id=?')
+          .run(to, revision, now, decisionId);
+        if (to === 'ACCEPTED')
+          this.db.prepare('UPDATE decision_records SET decided_at=? WHERE entity_id=?').run(now, decisionId);
+        this.db.prepare('UPDATE projects SET current_revision=?,updated_at=? WHERE id=?').run(revision, now, projectId);
+        return revision;
+      })
+      .immediate();
   }
   insertRelationship(e: GraphRelationship): void {
     this.db

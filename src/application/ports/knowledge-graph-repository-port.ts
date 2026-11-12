@@ -19,3 +19,9 @@ export interface KnowledgeGraphRepositoryPort {
   insertEntity(entity: KnowledgeEntity): void;
   insertRelationship(edge: GraphRelationship): void;
 }
+/** Status changes of decision records, made by the user from the inspector. */
+export interface DecisionStatusRepositoryPort {
+  findEntityById(id: string): KnowledgeEntity | null;
+  /** Sets the status when it is still `from` (else throws), stamps decided_at on ACCEPTED, bumps and returns the revision. */
+  setDecisionStatus(projectId: string, decisionId: string, from: string, to: string): number;
+}

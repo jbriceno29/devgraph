@@ -63,6 +63,9 @@ export const statusLabel = pick({
   ARCHIVED: 'Archivada',
   REMOVED: 'Eliminada',
   ACTIVE: 'Activo',
+  ACCEPTED: 'Aceptada',
+  REJECTED: 'Rechazada',
+  SUPERSEDED: 'Reemplazada',
   GHOST: 'Propuesta',
 });
 /** Estado de una ejecución de agente. */

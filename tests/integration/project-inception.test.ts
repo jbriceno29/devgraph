@@ -281,6 +281,10 @@ describe('project inception (core)', () => {
       `SELECT s.title AS source,t.title AS target FROM graph_edges e JOIN knowledge_entities s ON s.id=e.source_id JOIN knowledge_entities t ON t.id=e.target_id WHERE e.edge_type='DEPENDS_ON' AND s.entity_type='FEATURE'`,
     );
     expect(featureEdges).toEqual([{ source: 'Gestión de tareas', target: 'Fundación' }]);
+    // Approving the foundation accepts its ADR: only accepted decisions reach the agents.
+    expect(
+      query<{ status: string }>(dbPath, `SELECT status FROM knowledge_entities WHERE entity_type='DECISION_RECORD'`),
+    ).toEqual([{ status: 'ACCEPTED' }]);
     expect(readFileSync(join(repo, 'docs', 'architecture', 'ADR', 'ADR-001-stack.md'), 'utf8')).toContain(
       'Python: otro runtime',
     );

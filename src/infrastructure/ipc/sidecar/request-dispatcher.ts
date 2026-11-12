@@ -31,6 +31,7 @@ export const SERIALIZED_CHANNELS: ReadonlySet<string> = new Set([
   'execution:accept',
   'execution:request_changes',
   'workitem:set_status',
+  'decision:set_status',
   'policy:update',
   'environment:approve_dependencies',
   'environment:set_skills',

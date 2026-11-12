@@ -30,6 +30,8 @@ export const workspaceIpc: WorkspaceIpcClient = {
     requestExecutionChanges: input => invokeCore('execution:request_changes', [input]),
     setWorkItemStatus: (projectId, workItemId, status) =>
       invokeCore('workitem:set_status', [projectId, workItemId, status]),
+    setDecisionStatus: (projectId, decisionId, status) =>
+      invokeCore('decision:set_status', [projectId, decisionId, status]),
     updateExecutionPolicy: (projectId, policy) => invokeCore('policy:update', [projectId, policy]),
     approveDependencies: (projectId, packages) => invokeCore('environment:approve_dependencies', [projectId, packages]),
     setProjectSkills: (projectId, enabled) => invokeCore('environment:set_skills', [projectId, enabled]),

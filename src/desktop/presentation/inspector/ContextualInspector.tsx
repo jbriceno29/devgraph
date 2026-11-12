@@ -139,7 +139,15 @@ export function ContextualInspector({
         )}
       </header>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-        {onChangeStatus && details.allowedStatusChanges && (
+        {onChangeStatus && details.allowedStatusChanges && entity.type === 'DECISION_RECORD' && (
+          <DecisionControl
+            key={entity.id + entity.status}
+            current={entity.status}
+            options={details.allowedStatusChanges}
+            onChange={onChangeStatus}
+          />
+        )}
+        {onChangeStatus && details.allowedStatusChanges && entity.type !== 'DECISION_RECORD' && (
           <StatusControl
             key={entity.id + entity.status}
             current={entity.status}
@@ -356,6 +364,72 @@ function StatusControl({
       )}
       {current === 'DRAFT' && options.includes('READY') && (
         <p className="mt-2 text-[11px] text-fg-muted">Márcala como «Lista» para poder ejecutarla con un agente.</p>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+const decisionActions: Record<string, { label: string; primary?: boolean }> = {
+  ACCEPTED: { label: 'Aceptar', primary: true },
+  REJECTED: { label: 'Rechazar' },
+  SUPERSEDED: { label: 'Marcar como reemplazada' },
+  DRAFT: { label: 'Volver a borrador' },
+};
+const decisionHelp: Record<string, string> = {
+  DRAFT: 'Los agentes aún no la reciben: solo siguen las decisiones aceptadas.',
+  ACCEPTED: 'Los agentes la reciben en el contexto de las tareas a las que afecta.',
+  REJECTED: 'Descartada: los agentes no la reciben.',
+  SUPERSEDED: 'Reemplazada por otra decisión: los agentes ya no la siguen.',
+};
+/** Decisión (ADR): aceptarla, rechazarla, marcarla como reemplazada o reabrirla. */
+function DecisionControl({
+  current,
+  options,
+  onChange,
+}: {
+  current: string;
+  options: string[];
+  onChange(status: string): Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  const apply = async (status: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onChange(status);
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section aria-label="Estado de la decisión" className="rounded-xl border border-border bg-surface-sunken p-3">
+      <h3 className={`mb-1 ${heading}`}>Decisión</h3>
+      <p className="mb-2 text-[11px] text-fg-muted">{decisionHelp[current] ?? 'Este estado no admite cambios.'}</p>
+      {options.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {options.map(option => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => void apply(option)}
+              disabled={busy}
+              className={`min-h-9 flex-1 rounded-lg px-3 text-xs disabled:opacity-50 ${focusRing} ${
+                decisionActions[option]?.primary
+                  ? 'bg-accent font-medium text-accent-fg hover:opacity-90'
+                  : 'border border-border-strong text-fg hover:border-accent'
+              }`}
+            >
+              {decisionActions[option]?.label ?? statusLabel(option)}
+            </button>
+          ))}
+        </div>
       )}
       {error && (
         <p role="alert" className="mt-2 text-xs text-danger">

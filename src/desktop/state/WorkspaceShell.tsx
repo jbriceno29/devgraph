@@ -144,7 +144,11 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
   const integrateFeature = window.workspaceIpc.commands.integrateFeature;
   const changeStatus = async (status: string) => {
     if (!inspector) return;
-    await window.workspaceIpc.commands.setWorkItemStatus(projectId, inspector.entity.id, status);
+    if (inspector.entity.type === 'DECISION_RECORD') {
+      const setDecisionStatus = window.workspaceIpc.commands.setDecisionStatus;
+      if (!setDecisionStatus) throw new Error('Esta versión de la app no puede cambiar el estado de una decisión.');
+      await setDecisionStatus(projectId, inspector.entity.id, status);
+    } else await window.workspaceIpc.commands.setWorkItemStatus(projectId, inspector.entity.id, status);
     await state.refreshGraph();
     await state.selectEntity(inspector.entity.id);
   };

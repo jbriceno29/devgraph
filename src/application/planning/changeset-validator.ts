@@ -2,6 +2,7 @@ import { GraphTopologyService } from '../../domain/graph/graph-topology-service.
 import type { ChangeOperation, ChangeSet } from '../../domain/knowledge/change-set.js';
 import type { GraphRelationship, KnowledgeEntity } from '../../domain/graph/knowledge-entity.js';
 import { canTransitionWorkItem } from '../../domain/work-management/entities.js';
+import { canTransitionDecision, decisionTransitions } from '../../domain/knowledge/decision-status.js';
 import { profileIssues } from '../../domain/projects/project-profile.js';
 import { UI_SPEC_PATH } from '../../shared/ui-spec.js';
 import { missingUiSpecSections } from './ui-spec-update.js';
@@ -161,6 +162,11 @@ export class ChangeSetValidator {
           issue(
             'INVALID_STATUS_TRANSITION',
             `No se permite cambiar el WorkItem de ${entity.status} a ${op.newStatus}.`,
+          );
+        else if (entity.entityType === 'DECISION_RECORD' && !canTransitionDecision(entity.status, op.newStatus))
+          issue(
+            'INVALID_STATUS_TRANSITION',
+            `La decisión ${entity.displayKey} no puede pasar de ${entity.status} a ${op.newStatus} (se permite: ${decisionTransitions(entity.status).join(', ') || 'ninguno'}).`,
           );
       } else if (op.type === 'DELETE_RELATIONSHIP' && !edges.some(edge => edge.id === op.edgeId))
         issue('MISSING_RELATIONSHIP', `No existe la relación ${op.edgeId}.`);

@@ -166,6 +166,11 @@ export interface WorkspaceIpcCommands {
     workItemId: string,
     status: string,
   ) => Promise<{ status: string; revision: number }>;
+  'decision:set_status': (
+    projectId: string,
+    decisionId: string,
+    status: string,
+  ) => Promise<{ status: string; revision: number }>;
   'policy:update': (projectId: string, policy: ExecutionPolicyDto) => Promise<ExecutionPolicyDto>;
   'environment:approve_dependencies': (projectId: string, packages: string[]) => Promise<ProjectEnvironmentDto>;
   'environment:set_skills': (projectId: string, enabled: boolean) => Promise<ProjectEnvironmentDto>;
@@ -289,6 +294,12 @@ export interface WorkspaceIpcClient {
     setWorkItemStatus(
       projectId: string,
       workItemId: string,
+      status: string,
+    ): Promise<{ status: string; revision: number }>;
+    /** Accept, reject, supersede or reopen an ADR. Optional so existing fakes stay valid; the Tauri client implements it. */
+    setDecisionStatus?(
+      projectId: string,
+      decisionId: string,
       status: string,
     ): Promise<{ status: string; revision: number }>;
     updateExecutionPolicy(projectId: string, policy: ExecutionPolicyDto): Promise<ExecutionPolicyDto>;

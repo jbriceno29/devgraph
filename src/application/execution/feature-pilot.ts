@@ -181,6 +181,9 @@ export class FeaturePilot {
           continue;
         }
         if (final.status === 'CANCELLED') return this.finish(run, 'STOPPED', `Se canceló la ejecución de ${label}.`);
+        // Plan S2: retrying cannot fix a package nobody approved; only the user can.
+        const packages = unapprovedPackages(final);
+        if (packages) return this.waitUser(run, `${label} necesita paquetes que no están aprobados: ${packages.join(', ')}. Apruébalos en Agentes y reanuda el piloto, o reanuda sin aprobarlos para que el agente busque otra forma.`, next.id, final.id);
         attempts.set(next.id, attempt);
         failures.set(next.id, this.failureContext(final));
         groups.set(next.id, members.map(task => task.id));
@@ -317,3 +320,9 @@ export class FeaturePilot {
 }
 
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+
+/** The packages a failed run needs approved (plan S2), or null when it failed for another reason. */
+export function unapprovedPackages(execution: AgentExecution): string[] | null {
+  const summary = execution.testSummary as { reason?: unknown; packages?: unknown } | null;
+  return summary?.reason === 'DEPENDENCY_APPROVAL' && Array.isArray(summary.packages) ? summary.packages.map(String) : null;
+}

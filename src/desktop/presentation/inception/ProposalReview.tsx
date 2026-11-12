@@ -55,6 +55,7 @@ export function ProposalReview({view,applied=false}:{view:InceptionViewDto;appli
     {view.assumptions.length>0&&<><p className="mt-3 font-medium text-fg">Lo que el asistente supuso</p><List items={view.assumptions}/></>}
    </Section>
    <Section title="Stack elegido" empty={!stack.length&&!decision}>
+    {profile?.stackProfile&&<div className="mb-3 rounded-lg border border-border bg-surface-raised px-3 py-2"><p className="text-fg"><span className="font-medium">Perfil recomendado: {profile.stackProfile.title}</span> <span className="text-[11px] text-fg-subtle">(catálogo revisado el {profile.stackProfile.reviewedAt})</span></p><p className="mt-1 text-fg-muted">{profile.stackProfile.packages.length?<>La app instalará estos paquetes en cada ejecución: <span className="font-mono text-[11px]">{profile.stackProfile.packages.join(', ')}</span>.</>:'Sin dependencias externas: solo la biblioteca estándar.'}</p></div>}
     {stack.length>0&&<dl className="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-1">{stack.map(([key,value])=><div key={key} className="contents"><dt className="text-fg-subtle">{key}</dt><dd className="text-fg">{value}</dd></div>)}</dl>}
     {decision&&<div className="mt-3 space-y-2">
      <p className="font-medium text-fg">Decisión: {decision.title}</p>

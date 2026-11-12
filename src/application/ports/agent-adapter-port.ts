@@ -10,6 +10,8 @@ export interface AgentRunInput {
   policy?: AgentRunPolicy;
   /** Provider connection settings (e.g. `authMode`), opaque to the application layer. */
   providerConfig?: Record<string, unknown>;
+  /** Plan S4: skills the app copied into the worktree for this run (project skills folder); the engine loads only these. */
+  skills?: string[];
   /** Engine session to continue (a cache of earlier work in the same feature); the workspace stays the source of truth. */
   resumeSessionId?: string;
   /** Tope de turnos del motor (exploración, herramientas); ausente o 0 = sin límite. */

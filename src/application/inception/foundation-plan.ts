@@ -1,6 +1,7 @@
 import type { ChangeOperation } from '../../domain/knowledge/change-set.js';
 import { UI_SPEC_PATH, UI_SPEC_SECTIONS } from '../../shared/ui-spec.js';
-import type { InceptionFeatureDto, InceptionProposalDto } from '../../shared/contracts/inception-view.js';
+import type { InceptionFeatureDto, InceptionProposalDto, InceptionStackProfileDto } from '../../shared/contracts/inception-view.js';
+import { STACK_PROFILES, applyStackProfile, findStackProfile, profilePackages } from '../../domain/projects/stack-catalog.js';
 
 type Op<T extends ChangeOperation['type']> = Extract<ChangeOperation, { type: T }>;
 const FOUNDATION = /fundaci[oó]n|foundation/i;
@@ -15,7 +16,7 @@ const KEPT: ReadonlySet<ChangeOperation['type']> = new Set(['SET_PROJECT_PROFILE
  * other feature, feature dependencies mirrored on tasks (so no task starts before its prerequisites), and the initial
  * statuses (the scaffold READY, the rest BLOCKED). `problems` lists what the draft lacks; the user revises it then.
  */
-export function buildFoundationPlan(operations: ChangeOperation[], rootId: string, options: { uiSpec?: boolean } = {}): { operations: ChangeOperation[]; problems: string[] } {
+export function buildFoundationPlan(operations: ChangeOperation[], rootId: string, options: { uiSpec?: boolean; brownfield?: boolean } = {}): { operations: ChangeOperation[]; problems: string[] } {
   const problems: string[] = [];
   const ops = operations.filter(op => KEPT.has(op.type) && !(op.type === 'UPSERT_ARTIFACT' && op.entityId && !op.tempId)).map(op => ({ ...op })) as ChangeOperation[];
   for (const op of ops) if (op.type === 'CREATE_MODULE' && !op.parentId) op.parentId = rootId;
@@ -26,6 +27,13 @@ export function buildFoundationPlan(operations: ChangeOperation[], rootId: strin
   const byId = new Map(tasks.map(task => [task.tempId, task]));
   for (const task of tasks) { let parent = task.parentId, depth = 0; while (byId.has(parent) && depth++ < 8) parent = byId.get(parent)!.parentId; task.parentId = parent; }
   if (ops.filter(op => op.type === 'SET_PROJECT_PROFILE').length !== 1) problems.push('La propuesta debe fijar el perfil del proyecto (objetivo, alcance, stack, reglas y verificación) exactamente una vez.');
+  // Plan S1: a new project follows a stack profile of the catalog, which sets its stack, rules and verification; an existing one keeps its stack.
+  const profileIndex = ops.findIndex(op => op.type === 'SET_PROJECT_PROFILE');
+  const proposedProfile = profileIndex >= 0 ? ops[profileIndex] as Op<'SET_PROJECT_PROFILE'> : undefined;
+  const stackProfile = options.brownfield ? null : findStackProfile(proposedProfile?.stackProfileId);
+  if (proposedProfile && options.brownfield) delete proposedProfile.stackProfileId;
+  else if (proposedProfile && stackProfile) ops[profileIndex] = { ...applyStackProfile(proposedProfile, stackProfile), type: 'SET_PROJECT_PROFILE' };
+  else if (proposedProfile) problems.push(`${proposedProfile.stackProfileId ? `El perfil de stack «${proposedProfile.stackProfileId}» no existe` : 'Falta el perfil de stack'}: elige uno del catálogo (${STACK_PROFILES.map(profile => profile.id).join(', ')}).`);
   const decision = ops.find((op): op is Op<'CREATE_DECISION_RECORD'> => op.type === 'CREATE_DECISION_RECORD');
   if (!decision) problems.push('Falta el ADR del stack con sus alternativas.');
   else if (!decision.alternativesMd.trim()) problems.push('El ADR del stack debe describir las alternativas consideradas.');
@@ -34,6 +42,7 @@ export function buildFoundationPlan(operations: ChangeOperation[], rootId: strin
   const scaffold = foundation ? tasks.find(task => task.parentId === foundation.tempId) : undefined;
   if (foundation && !scaffold) problems.push('La feature «Fundación» necesita una primera tarea de scaffold.');
   if (scaffold) {
+    if (stackProfile) { const guide = `Perfil de stack «${stackProfile.title}» (${stackProfile.id}). Estructura: ${stackProfile.structure} ${stackProfile.scaffold}`; if (!scaffold.summary.includes(guide)) scaffold.summary = `${scaffold.summary.trim()}\n\n${guide}`.trim(); }
     if (!scaffold.summary.includes(NO_INSTALL_RULE)) scaffold.summary = `${scaffold.summary.trim()}\n\n${NO_INSTALL_RULE}`.trim();
     if (!scaffold.acceptanceCriteria.includes(NO_INSTALL_CRITERION)) scaffold.acceptanceCriteria = [...scaffold.acceptanceCriteria, NO_INSTALL_CRITERION];
   }
@@ -92,11 +101,16 @@ export function summarizeFoundationPlan(operations: ChangeOperation[]): Pick<Inc
     tasks: tasks.filter(task => task.parentId === feature.tempId).map(task => ({ tempId: task.tempId, title: task.title, initialStatus: status.get(task.tempId) === 'READY' ? 'READY' as const : 'BLOCKED' as const })),
   }));
   return {
-    profile: profile ? { description: profile.description ?? null, objectives: profile.objectives, outOfScope: profile.outOfScope, techStack: profile.techStack, rules: profile.rules, verificationCommands: profile.verificationCommands } : null,
+    profile: profile ? { description: profile.description ?? null, objectives: profile.objectives, outOfScope: profile.outOfScope, techStack: profile.techStack, rules: profile.rules, verificationCommands: profile.verificationCommands, stackProfile: stackProfileView(profile.stackProfileId) } : null,
     decision: decision ? { title: decision.title, alternativesMd: decision.alternativesMd, decisionMd: decision.decisionMd, consequencesMd: decision.consequencesMd } : null,
     documents: operations.flatMap(op => op.type === 'UPSERT_ARTIFACT' || op.type === 'CREATE_DECISION_RECORD' ? [{ title: op.title, relativePath: op.relativePath }] : []),
     requirements: operations.flatMap(op => op.type === 'CREATE_REQUIREMENT' ? [op.title] : []),
     features,
     scaffoldTaskTitle: foundation ? tasks.find(task => task.parentId === foundation.tempId)?.title ?? null : null,
   };
+}
+
+function stackProfileView(id: string | undefined): InceptionStackProfileDto | null {
+  const profile = findStackProfile(id);
+  return profile ? { id: profile.id, title: profile.title, packages: profilePackages(profile), reviewedAt: profile.reviewedAt } : null;
 }

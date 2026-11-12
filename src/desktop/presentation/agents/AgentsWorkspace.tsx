@@ -1,5 +1,6 @@
 import { useEffect,useMemo,useRef,useState,type KeyboardEvent } from 'react';
 import { ExecutionReview } from './ExecutionReview.js';
+import { DependencyApproval } from './DependencyApproval.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
 import { FeaturePilotPanel } from './FeaturePilotPanel.js';
 import { EngineAuthForm } from './EngineAuthForm.js';
@@ -76,6 +77,7 @@ export function AgentsWorkspace({projectId,nodes,selectedEntityId,selectedExecut
    </div>}
    {tab==='review'&&<div className="space-y-3">
     {history}
+    {selectedExecution?.pendingPackages?.length?<DependencyApproval key={selectedExecution.id} execution={selectedExecution}/>:null}
     {selectedExecution?.status==='COMPLETED'?<div className="rounded-xl border border-border bg-surface-sunken"><ExecutionReview execution={selectedExecution} tasks={coveredOf(selectedExecution).map(node=>({id:node.id,key:node.key,label:node.label}))} models={availableModels} defaultModel={selectedProfile?.defaultModel??null} onChanged={next=>{setSelectedExecutionId(next.id);if(ACTIVE.includes(next.status))setTab('run');void window.workspaceIpc.queries.listExecutions(projectId).then(setExecutions).catch(setError);}}/></div>
      :<p className="rounded-xl border border-dashed border-border-strong p-4 text-xs text-fg-muted">{selectedExecution?`Esta ejecución está «${executionStatusLabel(selectedExecution.status)}». Solo se revisan las terminadas.`:'Elige una ejecución terminada para revisar sus cambios.'}{toReview>0?` Hay ${toReview} por revisar.`:''}</p>}
    </div>}

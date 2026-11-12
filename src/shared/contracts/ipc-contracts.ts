@@ -4,7 +4,7 @@ import type { ContextPackageDto,ContextSnapshotDto,PreviewContextInput } from '.
 import type { ActivitySummaryDto } from './activity-view.js';
 import type { RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
 import type { InceptionReferenceDto, InceptionReferenceInput, InceptionAnswerDto, InceptionIpcClient, InceptionStage, InceptionStatus, InceptionViewDto, InitializeRepositoryResultDto, StartInceptionInput } from './inception-view.js';
-import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto,FeatureIntegrationStateDto } from './agent-view.js';
+import type { AgentEventDto,AgentExecutionDto,AgentEventRecordDto,AgentProfileDto,StartAgentExecutionInput,ResolveExecutionApprovalInput,RequestExecutionChangesInput,AcceptExecutionResultDto,ExecutionDetailDto,ExecutionPolicyDto,FeaturePilotDto,FeatureReportDto,FeatureAutonomyDto,SetFeatureAutonomyInput,PilotRunDto,FeatureIntegrationResultDto,FeatureIntegrationStateDto,ProjectEnvironmentDto } from './agent-view.js';
 
 /** Extras of a planning proposal: translated references and the interface specification. */
 export interface ProposeChangesOptions { references?:Array<Pick<InceptionReferenceDto,'name'|'kind'|'note'>&{translation:NonNullable<InceptionReferenceDto['translation']>}>; updateUiSpec?:boolean }
@@ -36,6 +36,7 @@ export interface WorkspaceIpcCommands {
   'execution:request_changes': (input:RequestExecutionChangesInput)=>Promise<AgentExecutionDto>;
   'workitem:set_status': (projectId:string,workItemId:string,status:string)=>Promise<{status:string;revision:number}>;
   'policy:update': (projectId:string,policy:ExecutionPolicyDto)=>Promise<ExecutionPolicyDto>;
+  'environment:approve_dependencies': (projectId:string,packages:string[])=>Promise<ProjectEnvironmentDto>;
   'pilot:set_autonomy': (projectId:string,featureId:string,input:SetFeatureAutonomyInput)=>Promise<FeatureAutonomyDto>;
   'pilot:start': (projectId:string,featureId:string,input:{acknowledgeCost:boolean})=>Promise<PilotRunDto>;
   'pilot:stop': (projectId:string,featureId:string)=>Promise<PilotRunDto|null>;
@@ -80,6 +81,7 @@ export interface WorkspaceIpcQueries {
   'execution:list_events': (executionId:string)=>Promise<AgentEventRecordDto[]>;
   'execution:get_detail': (executionId:string)=>Promise<ExecutionDetailDto>;
   'policy:get': (projectId:string)=>Promise<ExecutionPolicyDto>;
+  'environment:get': (projectId:string)=>Promise<ProjectEnvironmentDto>;
   'pilot:get': (projectId:string,featureId:string)=>Promise<FeaturePilotDto>;
   'provider:get_auth': (projectId:string)=>Promise<{authMode:'subscription'|'api_key';apiKeyAvailable:boolean}>;
   'graph:context_flow': (projectId:string,workItemId:string)=>Promise<ContextFlowDto>;
@@ -123,6 +125,8 @@ export interface WorkspaceIpcClient {
     requestExecutionChanges(input:RequestExecutionChangesInput):Promise<AgentExecutionDto>;
     setWorkItemStatus(projectId:string,workItemId:string,status:string):Promise<{status:string;revision:number}>;
     updateExecutionPolicy(projectId:string,policy:ExecutionPolicyDto):Promise<ExecutionPolicyDto>;
+    /** Plan S2: approve packages outside the stack profile. Optional so existing fakes stay valid; the Tauri client implements it. */
+    approveDependencies?(projectId:string,packages:string[]):Promise<ProjectEnvironmentDto>;
     setFeatureAutonomy(projectId:string,featureId:string,input:SetFeatureAutonomyInput):Promise<FeatureAutonomyDto>;
     startPilot(projectId:string,featureId:string,input:{acknowledgeCost:boolean}):Promise<PilotRunDto>;
     stopPilot(projectId:string,featureId:string):Promise<PilotRunDto|null>;
@@ -147,6 +151,8 @@ export interface WorkspaceIpcClient {
     listExecutionEvents(executionId:string):Promise<AgentEventRecordDto[]>;
     getExecutionDetail(executionId:string):Promise<ExecutionDetailDto>;
     getExecutionPolicy(projectId:string):Promise<ExecutionPolicyDto>;
+    /** Plan S2: stack profile and approved packages. Optional so existing fakes stay valid. */
+    getProjectEnvironment?(projectId:string):Promise<ProjectEnvironmentDto>;
     getFeaturePilot(projectId:string,featureId:string):Promise<FeaturePilotDto>;
     /** How the engine authenticates for the project (works without features, unlike getFeaturePilot). Optional so older client fakes stay valid. */
     getProviderAuth?(projectId:string):Promise<{authMode:'subscription'|'api_key';apiKeyAvailable:boolean}>;

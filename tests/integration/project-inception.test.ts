@@ -12,6 +12,7 @@ import type { InceptionViewDto } from '../../src/shared/contracts/inception-view
 import { DEFAULT_DECISION_POLICY, decide, normalizeDecisionPolicy } from '../../src/domain/autonomy/decision-policy.js';
 import { ChangeSetValidator } from '../../src/application/planning/changeset-validator.js';
 import { NO_INSTALL_RULE } from '../../src/application/inception/foundation-plan.js';
+import { APP_RULES } from '../../src/domain/projects/stack-catalog.js';
 
 const roots:string[]=[];const cores:Array<ReturnType<typeof createWorkspaceCore>>=[];
 afterEach(()=>{for(const core of cores.splice(0))core.close();for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
@@ -90,12 +91,21 @@ describe('project inception (core)',()=>{
   const project=query<{objectives_json:string;out_of_scope_json:string;tech_stack_json:string;rules_json:string;description:string}>(dbPath,'SELECT * FROM projects')[0]!;
   expect(JSON.parse(project.objectives_json)).toEqual(['Gestionar tareas personales desde la terminal']);
   expect(JSON.parse(project.out_of_scope_json)).toEqual(['Sincronización en la nube']);
-  expect(JSON.parse(project.tech_stack_json)).toMatchObject({runtime:'Node.js 22'});
-  expect(JSON.parse(project.rules_json)).toHaveLength(2);
-  expect((await call<{allowedCommands:string[]}>('policy:get',projectId)).allowedCommands).toEqual(['node --test']);
+  // Plan S1: the catalog's profile sets the stack (its keys win), the rules go app → profile → project, and the verification is the profile's.
+  expect(JSON.parse(project.tech_stack_json)).toEqual({lenguaje:'JavaScript (módulos ES)',runtime:'Node.js',pruebas:'node:test',dependencias:'ninguna'});
+  const rules=JSON.parse(project.rules_json) as string[];
+  expect(rules.slice(0,APP_RULES.length)).toEqual([...APP_RULES]);
+  expect(rules).toContain('Solo biblioteca estándar de Node: no se añaden paquetes externos.');
+  expect(rules.slice(-2)).toEqual(['Identificadores en inglés; textos de usuario en español.','Pruebas en tests/ con node:test.']);
+  expect(query<{stack_profile_id:string}>(dbPath,'SELECT stack_profile_id FROM projects')[0]!.stack_profile_id).toBe('minimo-node');
+  const appliedPolicy=await call<{allowedCommands:string[];writablePaths:string[]}>('policy:get',projectId);
+  expect(appliedPolicy.allowedCommands).toEqual(['node --test']);
+  // The profile's root files join the default writable paths (a real run with haiku could not create its configuration without them).
+  expect(appliedPolicy.writablePaths).toEqual(expect.arrayContaining(['src/**','tests/**','package.json','README.md','.gitignore','test/**']));
   const tasks=query<{id:string;title:string;status:string;summary:string}>(dbPath,`SELECT id,title,status,summary FROM knowledge_entities WHERE entity_type='WORK_ITEM' ORDER BY display_key`);
   expect(tasks.map(task=>[task.title,task.status])).toEqual([['Crear el scaffold','READY'],['Módulo de errores','BLOCKED'],['Crear tareas','BLOCKED'],['Listar tareas','BLOCKED']]);
   expect(tasks[0]!.summary).toContain(NO_INSTALL_RULE);
+  expect(tasks[0]!.summary).toContain('Perfil de stack «Node mínimo, sin dependencias» (minimo-node).');
   const featureEdges=query<{source:string;target:string}>(dbPath,`SELECT s.title AS source,t.title AS target FROM graph_edges e JOIN knowledge_entities s ON s.id=e.source_id JOIN knowledge_entities t ON t.id=e.target_id WHERE e.edge_type='DEPENDS_ON' AND s.entity_type='FEATURE'`);
   expect(featureEdges).toEqual([{source:'Gestión de tareas',target:'Fundación'}]);
   expect(readFileSync(join(repo,'docs','architecture','ADR','ADR-001-stack.md'),'utf8')).toContain('Python: otro runtime');
@@ -106,8 +116,8 @@ describe('project inception (core)',()=>{
   const context=await call<{packageText:string;snapshot:{includedSources:Array<{sourceId:string;authorityTier:number;extractedContent:string}>}}>('context:preview_package',{projectId,focusEntityId:tasks[0]!.id});
   const profile=context.snapshot.includedSources.find(source=>source.sourceId===`profile:${projectId}`)!;
   expect(profile.authorityTier).toBe(1);
-  expect(profile.extractedContent).toBe('Objetivo: Gestionar tareas personales desde la terminal\nFuera de alcance: Sincronización en la nube\nStack: lenguaje: JavaScript (ESM); runtime: Node.js 22; pruebas: node --test');
-  expect(context.packageText).toContain('Stack: lenguaje: JavaScript (ESM)');
+  expect(profile.extractedContent).toBe('Objetivo: Gestionar tareas personales desde la terminal\nFuera de alcance: Sincronización en la nube\nStack: lenguaje: JavaScript (módulos ES); runtime: Node.js; pruebas: node:test; dependencias: ninguna');
+  expect(context.packageText).toContain('Stack: lenguaje: JavaScript (módulos ES)');
   await expect(call('inception:restart',projectId)).rejects.toThrow(/ya se aplicó/);
  });
 

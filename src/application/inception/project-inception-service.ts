@@ -452,7 +452,7 @@ export class ProjectInceptionService {
   private async proposalWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
     const projectId = record.projectId, rootId = this.rootId(projectId);
     const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, props, record.references ?? [], this.approvedDirection(record), record.repository), questions: record.questions, answers: record.answers, ...(record.notes?.length ? { notes: record.notes } : {}), ...(record.model ? { model: record.model } : {}), signal });
-    const plan = buildFoundationPlan(result.draft.operations, rootId, { uiSpec: !!this.approvedDirection(record) });
+    const plan = buildFoundationPlan(result.draft.operations, rootId, { uiSpec: !!this.approvedDirection(record), brownfield: !!record.repository });
     const changeSet = this.deps.planning.submit(projectId, { title: result.draft.title || 'Inicio del proyecto', rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)].filter(Boolean).join('\n'), operations: plan.operations }, `inception:${projectId}`);
     return { stage: 'PROPOSAL' as const, status: 'WAITING_USER' as const, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage, changeSetId: changeSet.id, error: plan.problems.length ? plan.problems.join(' ') : null };
   }

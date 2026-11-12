@@ -37,7 +37,14 @@ import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-
 import { GitIsolationService } from '../../git/git-isolation-service.js';
 import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
-import { FeaturePilot } from '../../../application/execution/feature-pilot.js';
+import { NpmEnvironment } from '../../execution/npm-environment.js';
+import type { SkillProvisionPort, WorkspaceEnvironmentPort } from '../../../application/ports/agent-execution-port.js';
+import { loadBundledSkills, materializeSkill, type BundledSkill } from '../../skills/skill-bundle.js';
+import { isInterfaceWork, stackHasInterface } from '../../../domain/projects/skill-selection.js';
+import { spawnSync } from 'node:child_process';
+import { PACKAGE_NAME, environmentFor, findStackProfile, profilePackages } from '../../../domain/projects/stack-catalog.js';
+import type { ProjectEnvironmentDto } from '../../../shared/contracts/agent-view.js';
+import { FeaturePilot, unapprovedPackages } from '../../../application/execution/feature-pilot.js';
 import { FeatureMetrics, renderFeatureReport } from '../../../application/execution/feature-metrics.js';
 import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
 import { SqliteActivityRepository } from '../../persistence/repositories/sqlite-activity-repository.js';
@@ -61,7 +68,7 @@ import { summarizeScan } from '../../../shared/contracts/repository-scan.js';
 import type { InceptionAnswerDto, StartInceptionInput } from '../../../shared/contracts/inception-view.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort;repositoryScanner?:RepositoryScannerPort;/** Tests: the ChangeSet planner (otherwise the wired engine's). */changeSetPlanner?:ChangeSetPlannerPort}={}) {
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort;repositoryScanner?:RepositoryScannerPort;/** Tests: the ChangeSet planner (otherwise the wired engine's). */changeSetPlanner?:ChangeSetPlannerPort;/** Tests: what installs the dependencies (otherwise npm). */environmentInstaller?:Omit<WorkspaceEnvironmentPort,'forProject'>;/** Tests: where the bundled skills are (otherwise next to the core). */skillsDirectory?:string}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const documentCommitter=new GitDocumentCommitter();
@@ -122,11 +129,52 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   inceptions.set(projectId,service);return service;
  };
  const getContextEngine=(projectId:string)=>{const workspace=store.openProject(projectId);return new ContextEngine(new SqliteContextRepository(workspace.database),new RepositoryContextFileStore());};
+ // Plan S2: the stack profile's dependencies, installed by the app in each run's worktree (log in executions/<id>/environment.log).
+ const installer=dependencies.environmentInstaller??new NpmEnvironment();
+ const stackRow=(projectId:string)=>store.openProject(projectId).database.prepare('SELECT stack_profile_id,approved_dependencies_json FROM projects WHERE id=?').get(projectId) as {stack_profile_id:string|null;approved_dependencies_json:string}|undefined;
+ const approvedPackages=(row:{approved_dependencies_json:string}|undefined):string[]=>{try{const value=JSON.parse(row?.approved_dependencies_json??'[]') as unknown;return Array.isArray(value)?value.filter((name):name is string=>typeof name==='string'&&PACKAGE_NAME.test(name)):[];}catch{return [];}};
+ const projectEnvironment=(projectId:string):WorkspaceEnvironmentPort=>({
+  forProject:id=>{const row=stackRow(id);return environmentFor(row?.stack_profile_id,approvedPackages(row));},
+  provision:async input=>{const result=await installer.provision(input);const directory=join(workspaceRoot,'projects',input.projectId,'executions',input.executionId);mkdirSync(directory,{recursive:true});writeFileSync(join(directory,'environment.log'),`${result.log}\n`,'utf8');return result;},
+  reconcile:input=>installer.reconcile(input),
+ });
+ const environmentView=(projectId:string):ProjectEnvironmentDto=>{const row=stackRow(projectId),profile=findStackProfile(row?.stack_profile_id);return {stackProfile:profile?{id:profile.id,title:profile.title,packages:profilePackages(profile),reviewedAt:profile.reviewedAt}:null,installs:environmentFor(row?.stack_profile_id)!==null,approvedPackages:approvedPackages(row)};};
+ const approveDependencies=(projectId:string,packages:unknown):ProjectEnvironmentDto=>{
+  const names=(Array.isArray(packages)?packages:[]).map(name=>String(name).trim()).filter(Boolean);
+  if(!names.length)throw new Error('Indica qué paquetes apruebas.');
+  const invalid=names.filter(name=>!PACKAGE_NAME.test(name));if(invalid.length)throw new Error(`Nombres de paquete no válidos: ${invalid.join(', ')}.`);
+  const row=stackRow(projectId);if(!environmentFor(row?.stack_profile_id))throw new Error('Este proyecto no sigue un perfil de stack con dependencias.');
+  const approved=[...new Set([...approvedPackages(row),...names])].sort();
+  store.openProject(projectId).database.prepare('UPDATE projects SET approved_dependencies_json=?,updated_at=? WHERE id=?').run(JSON.stringify(approved),new Date().toISOString(),projectId);
+  return environmentView(projectId);
+ };
+ // Plan S4: the skills that ship with the app. A bundle that fails its hash is never used (runs go on without skills).
+ let bundled:Promise<BundledSkill[]>|null=null;
+ const bundledSkills=()=>bundled??=loadBundledSkills(dependencies.skillsDirectory).catch(error=>{console.error(`[skills] ${error instanceof Error?error.message:String(error)}`);return [];});
+ const available=(skill:BundledSkill)=>skill.manifest.requires.every(command=>spawnSync(command,['--version'],{stdio:'ignore',timeout:5_000}).status===0);
+ const skillProvision=(projectId:string):SkillProvisionPort=>({
+  select:async input=>{
+   const db=store.openProject(projectId).database;
+   const row=db.prepare('SELECT tech_stack_json,stack_profile_id FROM projects WHERE id=?').get(input.projectId) as {tech_stack_json:string;stack_profile_id:string|null}|undefined;
+   const stack=(()=>{try{return JSON.parse(row?.tech_stack_json??'{}') as Record<string,unknown>;}catch{return {};}})();
+   const ids=input.tasks.map(task=>task.id);
+   const documentedByUiSpec=ids.length>0&&Boolean(db.prepare(`SELECT 1 FROM knowledge_entities t JOIN graph_edges e ON e.source_id=t.parent_id AND e.edge_type='DOCUMENTED_BY' JOIN artifacts a ON a.entity_id=e.target_id WHERE t.id IN (${ids.map(()=>'?').join(',')}) AND a.relative_path=? LIMIT 1`).get(...ids,UI_SPEC_PATH));
+   if(!isInterfaceWork({projectHasInterface:stackHasInterface(stack)||stackHasInterface(findStackProfile(row?.stack_profile_id)?.techStack),documentedByUiSpec,tasks:input.tasks}))return [];
+   return (await bundledSkills()).filter(skill=>skill.manifest.appliesTo==='INTERFACE'&&available(skill)).map(skill=>skill.manifest.id);
+  },
+  materialize:async input=>{
+   const skills=(await bundledSkills()).filter(skill=>input.skillIds.includes(skill.manifest.id));
+   const paths:string[]=[];for(const skill of skills)paths.push(await materializeSkill(skill,input.workingDirectory));
+   return {paths,notes:skills.map(skill=>skill.manifest.promptNote)};
+  },
+  ownedPaths:async()=>(await bundledSkills()).map(skill=>`.claude/skills/${skill.manifest.id}`),
+ });
  const getExecutionService=(projectId:string)=>{
   const cached=executionServices.get(projectId);if(cached)return cached;
   const workspace=store.openProject(projectId),repository=new SqliteAgentExecutionRepository(workspace.database,agentAdapter.providerId),contextEngine=getContextEngine(projectId);
   const contextBuilder={build:async(input:{projectId:string;focusEntityId:string;extraFocusEntityIds?:string[];repositoryRoot:string;executionId:string;sourceCommit:string})=>contextEngine.preview({projectId:input.projectId,focusEntityId:input.focusEntityId,...(input.extraFocusEntityIds?.length?{extraFocusEntityIds:input.extraFocusEntityIds}:{}),executionId:input.executionId,sourceCommit:input.sourceCommit,maxAllowedTokens:32_000,maxHops:2})};
-  const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs));
+  const environment=projectEnvironment(projectId);
+  const validator=new ExecutionValidator(workspaceRoot,(executionId,repositoryId,diffs)=>repository.recordFileDiffs(executionId,repositoryId,diffs),environment);
   // Plan changes agents propose when closing a task: stored as AGENT_EXECUTION ChangeSets, applied only under the decision policy.
   const planProposals:PlanProposalPort={
    normalize:operations=>operations.map(operation=>normalizeOperation(operation,'El agente')),
@@ -134,7 +182,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
    apply:async changeSetId=>{const result=await getPlanning(projectId).apply(changeSetId);emit('graph:revision_updated',{projectId:result.changeSet.projectId,revision:result.revision});return {revision:result.revision,resolvedIds:result.resolvedIds};},
    appliedAgentOperations:id=>new SqliteChangeSetRepository(store.openProject(id).database).list(id).filter(changeSet=>changeSet.originType==='AGENT_EXECUTION'&&changeSet.status==='APPLIED').map(changeSet=>changeSet.operations),
   };
-  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload),planProposals);
+  const service=new AgentOrchestrator(repository,contextBuilder,new ExecutionEventLog(workspaceRoot),agentAdapter,new GitIsolationService(),validator,workspaceRoot,(channel,payload)=>emit(channel,payload),planProposals,environment,skillProvision(projectId));
   executionServices.set(projectId,service);return service;
  };
  // Repairs leftovers of an interrupted ChangeSet apply before the watcher starts reporting on docs/.
@@ -285,6 +333,8 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     }
     case 'workitem:set_status': {const projectId=String(args[0]??'');return getExecutionService(projectId).setWorkItemStatus(projectId,String(args[1]??''),String(args[2]??'') as WorkItemStatus);}
     case 'policy:get': {const projectId=String(args[0]??'');return getExecutionService(projectId).getPolicy(projectId);}
+    case 'environment:get': return environmentView(String(args[0]??''));
+    case 'environment:approve_dependencies': return approveDependencies(String(args[0]??''),args[1]);
     case 'policy:update': {const projectId=String(args[0]??'');const policy=args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;return getExecutionService(projectId).updatePolicy(projectId,{writablePaths:policy?.writablePaths??[],readonlyPaths:policy?.readonlyPaths??[],deniedPaths:policy?.deniedPaths??[],allowedCommands:policy?.allowedCommands??[],...(typeof policy?.maxExecutionMinutes==='number'?{maxExecutionMinutes:policy.maxExecutionMinutes}:{}),...(typeof policy?.maxTurns==='number'||policy?.maxTurns===null?{maxTurns:policy.maxTurns}:{}),...(policy?.decisionPolicy!==undefined?{decisionPolicy:policy.decisionPolicy}:{})});}
     case 'pilot:get': {
      const projectId=String(args[0]??''),featureId=String(args[1]??'');const status=getPilot(projectId).status(projectId,featureId);const service=getExecutionService(projectId);
@@ -360,4 +410,4 @@ function planningReferenceInputs(value:unknown):PlanningReference[]{
 function summarize(project:Project):ProjectSummaryDto{return {id:project.props.id,name:project.props.name,slug:project.props.slug,description:project.props.description??null,currentRevision:project.currentRevision,createdAt:project.props.createdAt,updatedAt:project.props.updatedAt};}
 function toDocumentDto(document:import('../../../application/ports/artifact-management-port.js').ArtifactDocumentRecord):ArtifactDocumentDto {return {id:document.id,projectId:document.projectId,displayKey:document.displayKey,title:document.title,summary:document.summary,entityType:document.entityType,artifactType:document.artifactType,version:document.version,adrNumber:document.adrNumber,relativePath:document.relativePath,contentHash:document.contentHash,syncStatus:document.syncStatus};}
 function toDocumentViewDto(view:import('../../../application/artifacts/artifact-management-service.js').DocumentView):ArtifactDocumentViewDto{return {document:toDocumentDto(view.document),content:view.content};}
-function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt,coveredWorkItemIds:coveredWorkItems(execution)};}
+function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt,coveredWorkItemIds:coveredWorkItems(execution),...(unapprovedPackages(execution)?{pendingPackages:unapprovedPackages(execution)!}:{})};}

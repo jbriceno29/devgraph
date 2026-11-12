@@ -85,12 +85,19 @@ En «Planificar», al pedir una feature nueva sobre un proyecto en marcha, puede
 - Una feature que depende de otra empieza con el trabajo de las ramas de las que depende; no puede empezar mientras esas features tengan tareas abiertas.
 - Los documentos que la aplicación escribe (ChangeSets, documentos creados o guardados desde ella) se commitean solos en tu repositorio. Si editas un documento fuera de la aplicación y no lo commiteas, la ejecución se bloquea con un mensaje claro.
 
+## Stack, dependencias y skills
+
+- **Perfil de stack.** En un proyecto nuevo, el asistente de inicio elige uno de los perfiles que trae la aplicación (Node mínimo, SPA con React, API con Node, herramienta de terminal, Python mínimo). El perfil fija el stack, las reglas que siguen los agentes, los comandos de verificación y los archivos de configuración que pueden escribir; la propuesta te muestra cuál eligió y qué paquetes instala. Si quieres otro, pídelo en las notas de la propuesta. En un proyecto con código existente se respeta su stack y no se usa ningún perfil.
+- **Dependencias.** Las instala la aplicación, nunca el agente: antes de cada ejecución instala los paquetes del perfil en la copia de trabajo de esa ejecución (`npm`, sin ejecutar scripts de los paquetes). Necesitas Node.js con `npm` y conexión la primera vez; después tira de la caché de npm. `node_modules/` nunca se commitea.
+- **Paquetes nuevos.** Si el agente añade a `package.json` un paquete fuera del perfil, la ejecución se detiene con la lista; el piloto te espera. En «Agentes», en la revisión de esa ejecución, pulsa «Aprobar» para que la aplicación lo instale en adelante y reanuda; si no lo apruebas, relanza la tarea y el agente buscará otra forma.
+- **Skills.** Las tareas de interfaz de un proyecto con interfaz reciben la skill de diseño «Impeccable», que viene dentro de la aplicación (no se descarga nada). Las demás tareas no la reciben, para no gastar tokens. Tus skills personales de Claude Code nunca se usan en las ejecuciones.
+
 ## Qué pasa cuando el piloto se detiene
 
 El piloto nunca se queda mudo: pasa a uno de estos estados y lo registra con su motivo.
 
 - **Pausado:** se acercó al límite de uso de tu suscripción (umbral del 85 % por defecto). Se reanuda solo cuando se renueva la ventana, o tú lo reanudas.
-- **Esperando al usuario:** necesita una decisión tuya. Casos: una tarea falló tras todos los intentos permitidos (3 por defecto; el último puede usar un modelo más capaz si lo configuraste), la ejecución terminó pero no se acepta sola (por ejemplo, sin comandos de verificación o con una violación de la política), un conflicto de merge, una acción que la política no permite («Permitir y reintentar»), o una propuesta del agente que tu política manda revisar (queda pendiente en «Planificar» con la razón).
+- **Esperando al usuario:** necesita una decisión tuya. Casos: una tarea necesita paquetes sin aprobar (ver «Stack, dependencias y skills»), una tarea falló tras todos los intentos permitidos (3 por defecto; el último puede usar un modelo más capaz si lo configuraste), la ejecución terminó pero no se acepta sola (por ejemplo, sin comandos de verificación o con una violación de la política), un conflicto de merge, una acción que la política no permite («Permitir y reintentar»), o una propuesta del agente que tu política manda revisar (queda pendiente en «Planificar» con la razón).
 - **Detenido:** lo detuviste tú, o bajaste la feature de nivel `PILOT`.
 - **Completado:** no quedan tareas por hacer en la feature.
 

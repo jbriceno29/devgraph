@@ -14,7 +14,9 @@ export type InceptionNextAction = 'START' | 'WAIT' | 'ANSWER' | 'RETRY_QUESTIONS
 export interface InceptionQuestionDto { id: string; text: string; /** Suggested answers (may be empty: free text). */ options: string[]; /** Suggested default, one of `options` or null. */ default: string | null; why: string }
 export interface InceptionAnswerDto { questionId: string; /** Chosen option or free text; empty means «decide tú» (the default or the engine's choice). */ answer: string }
 export interface InceptionUsageDto { calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number | null }
-export interface InceptionProfileDto { description: string | null; objectives: string[]; outOfScope: string[]; techStack: Record<string, string>; rules: string[]; verificationCommands: string[] }
+/** The catalog's stack profile the proposal follows (null in brownfield, or when the proposal lacks one). */
+export interface InceptionStackProfileDto { id: string; title: string; packages: string[]; reviewedAt: string }
+export interface InceptionProfileDto { description: string | null; objectives: string[]; outOfScope: string[]; techStack: Record<string, string>; rules: string[]; verificationCommands: string[]; stackProfile: InceptionStackProfileDto | null }
 export interface InceptionFeatureDto { tempId: string; title: string; isFoundation: boolean; dependsOn: string[]; tasks: Array<{ tempId: string; title: string; initialStatus: 'READY' | 'BLOCKED' }> }
 export interface InceptionProposalDto {
   changeSetId: string; title: string; rationale: string;

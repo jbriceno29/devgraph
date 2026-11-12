@@ -136,8 +136,12 @@ export function claudeAgentEnvironment(source: NodeJS.ProcessEnv, options: { aut
   return { ...buildChildEnvironment(source, options), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
 }
 
-export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId' | 'maxTurns'>): string[] {
-  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config', ...CLAUDE_ISOLATION_ARGS];
+export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 'resumeSessionId' | 'maxTurns' | 'skills'>): string[] {
+  // Plan S4: a run that carries app skills keeps the project skills folder (where the app copied them) and gets the Skill tool;
+  // `--setting-sources project,local` still keeps the user's personal skills and plugins out (checked with CLI 2.1.318).
+  const skills = (input.skills ?? []).filter(id => /^[a-z0-9-]+$/.test(id));
+  const isolation = skills.length ? CLAUDE_ISOLATION_ARGS.filter(arg => arg !== '--disable-slash-commands') : CLAUDE_ISOLATION_ARGS;
+  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--strict-mcp-config', ...isolation];
   if (input.model) {
     if (!MODEL_PATTERN.test(input.model)) throw new Error(`Nombre de modelo inválido: ${input.model}`);
     args.push('--model', input.model);
@@ -151,7 +155,10 @@ export function buildClaudeArgs(input: Pick<AgentRunInput, 'model' | 'policy' | 
     if (!Number.isInteger(input.maxTurns)) throw new Error(`Tope de turnos inválido: ${input.maxTurns}`);
     args.push('--max-turns', String(input.maxTurns));
   }
-  args.push(...buildClaudePermissionArgs(input.policy ?? { writablePaths: [], readonlyPaths: [], deniedPaths: [], allowedCommands: [] }));
+  const permissions = buildClaudePermissionArgs(input.policy ?? { writablePaths: [], readonlyPaths: [], deniedPaths: [], allowedCommands: [] });
+  const tools = permissions.indexOf('--tools');
+  if (skills.length && tools >= 0) permissions[tools + 1] = `${permissions[tools + 1]},Skill`;
+  args.push(...permissions);
   return args;
 }
 

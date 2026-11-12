@@ -1,0 +1,14 @@
+{
+  "id": "impeccable",
+  "title": "Impeccable (diseño de interfaz)",
+  "source": {
+    "repository": "https://github.com/pbakaus/impeccable",
+    "commit": "b4bff1626c344067788c2679f048a20057c7cc5a",
+    "path": ".claude/skills/impeccable (sin scripts/ ni las referencias del modo live y de hooks, que necesitan su binario)"
+  },
+  "license": "Apache-2.0",
+  "sha256": "b3c075087ff246cd88655b462ed40090050f9a935ba523c9a7b5b790a99decaa",
+  "appliesTo": "INTERFACE",
+  "requires": [],
+  "promptNote": "Antes de crear o cambiar cualquier archivo de interfaz (componentes, estilos, HTML), lee .claude/skills/impeccable/SKILL.md y .claude/skills/impeccable/reference/craft-floor.md y sigue sus reglas; para una pantalla nueva, lee también reference/new-work.md. Su lanzador (scripts/impeccable) no existe aquí: sigue su camino «Launcher unavailable» sin anunciarlo. En este proyecto el contexto de producto es docs/VISION.md (en lugar de PRODUCT.md) y el sistema de diseño es docs/UI_SPEC.md (en lugar de DESIGN.md); no crees PRODUCT.md ni DESIGN.md salvo que la tarea lo pida."
+}

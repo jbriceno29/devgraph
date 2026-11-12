@@ -1,3 +1,4 @@
+import type { ProjectEnvironment } from '../../domain/projects/stack-catalog.js';
 import type { AgentExecution, AgentEvent, AgentProfile, AgentProvider, ExecutionFileDiff } from '../../domain/agents/models.js';
 import type { WorkItem } from '../../domain/work-management/entities.js';
 import type { ContextSnapshot } from '../../domain/knowledge/context-snapshot.js';
@@ -85,7 +86,26 @@ export interface GitIsolationPort {
   mergeIntoBase(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT'|'DIRTY';detail:string;conflicts:string[]}>;
   squashMerge(input:{repositoryRoot:string;workspaceRoot:string;projectId:string;targetBranch:string;sourceRef:string;message:string}):Promise<{ok:true;commit:string;changed:boolean}|{ok:false;reason:'CONFLICT'|'CHECKED_OUT';detail:string;conflicts:string[]}>;
 }
-export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }
+/** Plan S2: the dependencies the app (never the agent) installs in a run's worktree. */
+export type EnvironmentReconcileResult={ok:true;log:string}|{ok:false;reason:'DEPENDENCY_APPROVAL'|'ENVIRONMENT';unapproved:string[];log:string};
+export interface WorkspaceEnvironmentPort {
+  /** null when the project's stack installs nothing. */
+  forProject(projectId:string):ProjectEnvironment|null;
+  /** Before the agent runs: completes the manifest with the profile's packages and installs; commits the manifest when it changed (returns that commit). */
+  provision(input:{projectId:string;executionId:string;workingDirectory:string;projectName:string;environment:ProjectEnvironment}):Promise<{log:string;commit:string|null}>;
+  /** After the agent ran, before the checks: refuses packages outside the allowed list and reinstalls when the manifest changed. */
+  reconcile(input:{workingDirectory:string;baseManifest:string|null;environment:ProjectEnvironment}):Promise<EnvironmentReconcileResult>;
+}
+/** Plan S4: skills that ship with the app, copied into the worktree of the runs that need them. */
+export interface SkillProvisionPort {
+  /** Ids of the bundled skills this run should carry (empty for most runs). */
+  select(input:{projectId:string;tasks:Array<{id:string;title:string;summary:string}>}):Promise<string[]>;
+  /** Copies them into the worktree; returns the paths the app owns there and one prompt note per skill. */
+  materialize(input:{workingDirectory:string;skillIds:string[]}):Promise<{paths:string[];notes:string[]}>;
+  /** Where any bundled skill would live in a worktree: never the agent's work, never committed. */
+  ownedPaths():Promise<string[]>;
+}
+export interface ExecutionValidatorPort { validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string;environment?:ProjectEnvironment;/** Paths the app wrote into the worktree besides the environment (bundled skills). */ownedPaths?:string[]}):Promise<{passed:boolean;finalCommit:string|null;resultSummary:string;testSummary:unknown|null}> }
 
 export interface AgentContextBuilderPort {
   build(input: { projectId: string; focusEntityId: string; /** Other tasks of a grouped run (anchors like the focus). */ extraFocusEntityIds?: string[]; repositoryRoot: string; executionId: string; /** Commit the run starts from: the context is read from it. */ sourceCommit: string }): Promise<{ snapshot: ContextSnapshot; packageText: string }>;

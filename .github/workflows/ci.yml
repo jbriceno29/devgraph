@@ -1,0 +1,20 @@
+# Plan S6: every push and pull request runs the type check and the whole suite (unit, integration and UI).
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The integration tests create Git repositories and commit in them.
+      - run: git config --global user.name "CI" && git config --global user.email "ci@graphdev.local" && git config --global init.defaultBranch main
+      - run: npm run typecheck
+      - run: npm test

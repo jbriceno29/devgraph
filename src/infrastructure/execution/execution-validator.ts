@@ -4,16 +4,18 @@ import { lstat, mkdir, readFile, readdir, readlink, realpath, rm, stat, writeFil
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { git } from '../git/git-isolation-service.js';
 import type { AutonomyPolicy } from '../../domain/governance/models.js';
-import type { ExecutionValidatorPort } from '../../application/ports/agent-execution-port.js';
+import type { ExecutionValidatorPort, WorkspaceEnvironmentPort } from '../../application/ports/agent-execution-port.js';
+import type { ProjectEnvironment } from '../../domain/projects/stack-catalog.js';
 
 const execFileAsync=promisify(execFile);
 type GitRunner=(args:string[])=>Promise<string>;
 
 /** Captures the isolated diff, audits every changed path and runs only policy-allowlisted checks. */
 export class ExecutionValidator implements ExecutionValidatorPort {
- constructor(private readonly workspaceRoot:string,private readonly recordDiffs:(executionId:string,repositoryId:string,diffs:ExecutionFileDiff[])=>void){}
+ /** `environment` (plan S2) reconciles the dependencies the app installs; without it a run with an environment fails closed. */
+ constructor(private readonly workspaceRoot:string,private readonly recordDiffs:(executionId:string,repositoryId:string,diffs:ExecutionFileDiff[])=>void,private readonly environment:Pick<WorkspaceEnvironmentPort,'reconcile'>|null=null){}
 
- async validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string}) {
+ async validate(input:{projectId:string;executionId:string;workingDirectory:string;repositoryRoot:string;repositoryId:string;initialCommit:string;policy:AutonomyPolicy;commitMessage?:string;environment?:ProjectEnvironment;ownedPaths?:string[]}) {
   if(!/^[a-f0-9-]{36}$/i.test(input.projectId)||!/^[a-f0-9-]{36}$/i.test(input.executionId))throw new Error('Invalid identifiers for execution artifact paths.');
   const worktree=input.workingDirectory,policy=input.policy;
   // The worktree is agent-writable, so its `.git` pointer and any config it leads to are untrusted.
@@ -23,11 +25,13 @@ export class ExecutionValidator implements ExecutionValidatorPort {
   const run:GitRunner=args=>pinnedGit(worktree,gitDir,args);
 
   const tracked=splitNul(await run(['diff','--name-only','-z',input.initialCommit,'--']));
-  const untracked=splitNul(await run(['ls-files','--others','--exclude-standard','-z']));
-  const ignored=splitNul(await run(['ls-files','--others','--ignored','--exclude-standard','--directory','-z']));
+  // Plan S2: what the app installed (node_modules) is the environment, not the agent's work; the agent may not touch npm's config.
+  const environmentPaths=[...(input.environment?.paths??[]),...(input.ownedPaths??[])],isEnvironment=(path:string)=>environmentPaths.some(root=>path===root||path.startsWith(`${root}/`));
+  const untracked=splitNul(await run(['ls-files','--others','--exclude-standard','-z'])).filter(path=>!isEnvironment(safeRepoPath(path)));
+  const ignored=splitNul(await run(['ls-files','--others','--ignored','--exclude-standard','--directory','-z'])).filter(path=>!isEnvironment(safeRepoPath(path)));
   const paths=[...new Set([...tracked,...untracked])].map(safeRepoPath);
   const ignoredPaths=[...new Set(ignored.map(safeRepoPath))];
-  const policyViolations=[...new Set([...paths,...ignoredPaths])].filter(path=>isDenied(path,policy.deniedPaths)||isReadOnly(path,policy.readonlyPaths)||!matchesAny(path,policy.writablePaths));
+  const policyViolations=[...new Set([...paths,...ignoredPaths])].filter(path=>isDenied(path,policy.deniedPaths)||isReadOnly(path,policy.readonlyPaths)||!matchesAny(path,policy.writablePaths)||isEnvironment(path)||(input.environment!==undefined&&/(^|\/)\.npmrc$/i.test(path)));
   const symlinkViolations=await auditSymlinks(worktree,paths,policy);
   const violations=[...new Set([...(pointerTampered?['.git']:[]),...policyViolations,...symlinkViolations])];
 
@@ -50,11 +54,22 @@ export class ExecutionValidator implements ExecutionValidatorPort {
    await writeFile(join(executionDirectory,'test-output.log'),`${resultSummary}\n`,'utf8');
    return {passed:false,finalCommit:null,resultSummary,testSummary:{passed:false,reason:'SANDBOX_POLICY_VIOLATION',violations,patchPath:'changes.patch',testLogPath:'test-output.log'}};
   }
+  let environmentLog='';
+  if(input.environment){
+   const baseManifest=await run(['show',`${input.initialCommit}:package.json`]).catch(()=>null);
+   const reconciled=this.environment?await this.environment.reconcile({workingDirectory:worktree,baseManifest,environment:input.environment}):{ok:false as const,reason:'ENVIRONMENT' as const,unapproved:[],log:'No hay un gestor del entorno para reinstalar las dependencias.'};
+   if(!reconciled.ok){
+    await writeFile(join(executionDirectory,'test-output.log'),`${reconciled.log}\n`,'utf8');
+    const resultSummary=reconciled.reason==='DEPENDENCY_APPROVAL'?`Dependencias sin aprobar: ${reconciled.unapproved.join(', ')}. Apruébalas para que la app las instale, o pide otro enfoque.`:`No se pudo preparar el entorno: ${reconciled.log}`;
+    return {passed:false,finalCommit:null,resultSummary,testSummary:{passed:false,reason:reconciled.reason,packages:reconciled.unapproved,patchPath:'changes.patch',testLogPath:'test-output.log'}};
+   }
+   environmentLog=reconciled.log?`${reconciled.log}\n\n`:'';
+  }
   const testReport=await this.runAllowedChecks(worktree,policy.allowedCommands);
-  await writeFile(join(executionDirectory,'test-output.log'),testReport.log,'utf8');
+  await writeFile(join(executionDirectory,'test-output.log'),environmentLog+testReport.log,'utf8');
   const failed=testReport.results.find(result=>result.exitCode!==0);
   // Accepted work is committed on the execution branch so it can be reviewed and merged as a unit.
-  if(!failed&&input.commitMessage)await commitAll(run,input.commitMessage);
+  if(!failed&&input.commitMessage)await commitAll(run,input.commitMessage,environmentPaths);
   const finalCommit=(await run(['rev-parse','HEAD'])).trim();
   return {passed:!failed,finalCommit,resultSummary:failed?`Verification command failed: ${failed.command}`:'Diff audit passed.'+(testReport.results.length?' Configured checks passed.':' No verification commands are allowlisted.'),testSummary:{passed:!failed,commands:testReport.results,skipped:testReport.results.length===0,patchPath:'changes.patch',testLogPath:'test-output.log'}};
  }
@@ -101,9 +116,12 @@ export interface ExecutionFileDiff {filePath:string;changeType:'ADDED'|'MODIFIED
  * Commits every non-ignored change. Uses the repository's identity when configured, otherwise a neutral one.
  * Hooks stay disabled (see pinnedGit): the audit and the policy's checks are the gate, not repository hooks.
  */
-async function commitAll(run:GitRunner,message:string):Promise<void> {
+async function commitAll(run:GitRunner,message:string,excluded:string[]=[]):Promise<void> {
+ // The environment (node_modules) is never committed, even in a repository whose .gitignore forgot it.
+ // Git runs with --literal-pathspecs (no :(exclude) magic): stage everything, then unstage the environment.
  await run(['add','-A']);
- if(!(await run(['status','--porcelain'])).trim())return;
+ if(excluded.length)await run(['reset','--quiet','--',...excluded]);
+ if(await run(['diff','--cached','--quiet']).then(()=>true,()=>false))return;
  const hasIdentity=await run(['config','user.email']).then(value=>Boolean(value.trim()),()=>false);
  const identity=hasIdentity?[]:['-c','user.name=Graph Workspace','-c','user.email=graph-workspace@localhost'];
  await run([...identity,'commit','--no-verify','--quiet','-m',message]);

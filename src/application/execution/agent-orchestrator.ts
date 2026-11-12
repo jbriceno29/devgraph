@@ -9,7 +9,7 @@ import { GovernanceInterceptor } from '../governance/governance-interceptor.js';
 import type { AutonomyPolicy } from '../../domain/governance/models.js';
 import { manualWorkItemTransitions, type WorkItemStatus } from '../../domain/work-management/entities.js';
 import type { AgentAdapterPort } from '../ports/agent-adapter-port.js';
-import type { AgentContextBuilderPort, AgentExecutionRepositoryPort, ExecutionEventLogPort, ExecutionEventSink, ExecutionValidatorPort, GitIsolationPort } from '../ports/agent-execution-port.js';
+import type { AgentContextBuilderPort, AgentExecutionRepositoryPort, ExecutionEventLogPort, ExecutionEventSink, ExecutionValidatorPort, GitIsolationPort, SkillProvisionPort, WorkspaceEnvironmentPort } from '../ports/agent-execution-port.js';
 
 const closedStatuses=new Set(['DONE','ARCHIVED']);
 const terminalStatuses=new Set<ExecutionStatus>(['COMPLETED','FAILED','CANCELLED']);
@@ -20,7 +20,7 @@ export class AgentOrchestrator {
  private readonly deadlines=new Map<string,ReturnType<typeof setTimeout>>();
  private readonly finishedListeners:Array<(execution:AgentExecution)=>void>=[];
  private readonly governance:GovernanceInterceptor;
- constructor(private readonly repository:AgentExecutionRepositoryPort,private readonly contextBuilder:AgentContextBuilderPort,private readonly eventLog:ExecutionEventLogPort,private readonly adapter:AgentAdapterPort,private readonly isolation:GitIsolationPort,private readonly validator:ExecutionValidatorPort,private readonly workspaceRoot:string,private readonly emit:ExecutionEventSink=()=>undefined,private readonly planProposals:PlanProposalPort|null=null){this.governance=new GovernanceInterceptor(repository,adapter,(execution,event)=>this.persistAndEmit(execution,event),execution=>this.publishStatus(execution));}
+ constructor(private readonly repository:AgentExecutionRepositoryPort,private readonly contextBuilder:AgentContextBuilderPort,private readonly eventLog:ExecutionEventLogPort,private readonly adapter:AgentAdapterPort,private readonly isolation:GitIsolationPort,private readonly validator:ExecutionValidatorPort,private readonly workspaceRoot:string,private readonly emit:ExecutionEventSink=()=>undefined,private readonly planProposals:PlanProposalPort|null=null,private readonly environment:WorkspaceEnvironmentPort|null=null,private readonly skills:SkillProvisionPort|null=null){this.governance=new GovernanceInterceptor(repository,adapter,(execution,event)=>this.persistAndEmit(execution,event),execution=>this.publishStatus(execution));}
 
  listProfiles(projectId:string){return this.repository.listProfiles(projectId).map(profile=>({id:profile.id,projectId:profile.projectId,roleKey:profile.roleKey,name:profile.name,defaultProviderId:profile.defaultProviderId,providerId:profile.provider.id,providerName:profile.provider.displayName,capabilities:profile.provider.capabilities,defaultModel:profile.models?.default??null,planningModel:profile.models?.planning??null,availableModels:profile.models?.available??[]}));}
  listExecutions(projectId:string){return this.repository.listExecutions(projectId);}
@@ -70,6 +70,16 @@ export class AgentOrchestrator {
    isolated=await this.isolation.prepare({projectId:input.projectId,executionId:execution.id,workItemKey:workItem.displayKey,repositoryRoot,workspaceRoot:this.workspaceRoot,requireWorktree:policy.requireWorktreeIsolation,startPoint});
    const afterIsolation=this.repository.findExecution(execution.id);if(!afterIsolation||afterIsolation.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterIsolation??execution,repositoryRoot,isolated);
    execution={...execution,initialCommit:isolated.baseCommit,branchOrWorktree:isolated.workingDirectory,executionBranch:isolated.branchName,baseBranch:previous?previous.baseBranch:isolated.baseBranch};this.repository.updateExecution(execution);
+   // Plan S2: the app installs the stack's dependencies before the agent starts; a manifest it completes is committed apart, so the audit only sees the agent's work.
+   const environment=this.environment?.forProject(input.projectId)??null;
+   if(environment){
+    const prepared=await this.environment!.provision({projectId:input.projectId,executionId:execution.id,workingDirectory:isolated.workingDirectory,projectName:repositoryRoot.split(/[\\/]/).filter(Boolean).pop()??'proyecto',environment}).catch(error=>{throw new Error(`No se pudo preparar el entorno del proyecto: ${error instanceof Error?error.message:String(error)}`);});
+    const afterEnvironment=this.repository.findExecution(execution.id);if(!afterEnvironment||afterEnvironment.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterEnvironment??execution,repositoryRoot,isolated);
+    if(prepared.commit){execution={...execution,initialCommit:prepared.commit};this.repository.updateExecution(execution);}
+   }
+   // Plan S4: interface work carries the skills that ship with the app, copied into the worktree (never committed).
+   const skillIds=this.skills?await this.skills.select({projectId:input.projectId,tasks:group.map(task=>({id:task.id,title:task.title,summary:task.summary}))}):[];
+   const skills=skillIds.length?await this.skills!.materialize({workingDirectory:isolated.workingDirectory,skillIds}):{paths:[] as string[],notes:[] as string[]};
    const context=await this.contextBuilder.build({projectId:input.projectId,focusEntityId:workItem.id,...(groupIds.length>1?{extraFocusEntityIds:groupIds.slice(1)}:{}),repositoryRoot,executionId:execution.id,sourceCommit:isolated.baseCommit});
    const afterContext=this.repository.findExecution(execution.id);if(!afterContext||afterContext.status!=='PREPARING_CONTEXT')return await this.discardIsolation(afterContext??execution,repositoryRoot,isolated);
    if(!this.adapter.getCapabilities().supportsStreaming)throw new Error('El adaptador seleccionado no soporta eventos en streaming.');
@@ -77,9 +87,9 @@ export class AgentOrchestrator {
    execution=transitionExecution(execution,'RUNNING');this.repository.updateExecution(execution);this.publishStatus(execution);
    this.moveTask(execution,previous?'IN_REVIEW':'READY','IN_PROGRESS');
    if(previous)await this.supersede(previous,input.feedback!.trim(),repositoryRoot);
-   const prompt=buildTaskPrompt(profile.systemInstructions,group.map(task=>({displayKey:task.displayKey,title:task.title,summary:task.summary,acceptanceCriteria:task.acceptanceCriteria.map(item=>item.description)})),context.packageText,policy,previous?{feedback:input.feedback!.trim(),previousSummary:previous.resultSummary,previousCommit:startPoint}:undefined,input.retryContext,this.featurePlan(input.projectId,groupIds));
+   const prompt=(environment?`${describeEnvironment(environment)}\n\n`:'')+(skills.notes.length?`# Skills de la app\n${skills.notes.join('\n')}\n\n`:'')+buildTaskPrompt(profile.systemInstructions,group.map(task=>({displayKey:task.displayKey,title:task.title,summary:task.summary,acceptanceCriteria:task.acceptanceCriteria.map(item=>item.description)})),context.packageText,policy,previous?{feedback:input.feedback!.trim(),previousSummary:previous.resultSummary,previousCommit:startPoint}:undefined,input.retryContext,this.featurePlan(input.projectId,groupIds));
    const resumeSessionId=this.sessionToResume(input.projectId,workItem.id,profile,previous);
-   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt:resumeSessionId?`${prompt}\n\n# Sesión reanudada\nEsta sesión continúa el trabajo previo de la misma feature, que se hizo en otros directorios. Trabaja solo en el directorio actual: las rutas absolutas de mensajes anteriores ya no son válidas. Si algo de lo anterior contradice el ContextSnapshot de arriba, manda el ContextSnapshot.`:prompt,...(resumeSessionId?{resumeSessionId}:{}),...(requestedModel?{model:requestedModel}:{}),...(policy.maxTurns>0?{maxTurns:policy.maxTurns}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:policy.readonlyPaths,deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
+   const stream=this.adapter.run({executionId:execution.id,workingDirectory:isolated.workingDirectory,prompt:resumeSessionId?`${prompt}\n\n# Sesión reanudada\nEsta sesión continúa el trabajo previo de la misma feature, que se hizo en otros directorios. Trabaja solo en el directorio actual: las rutas absolutas de mensajes anteriores ya no son válidas. Si algo de lo anterior contradice el ContextSnapshot de arriba, manda el ContextSnapshot.`:prompt,...(resumeSessionId?{resumeSessionId}:{}),...(skillIds.length?{skills:skillIds}:{}),...(requestedModel?{model:requestedModel}:{}),...(policy.maxTurns>0?{maxTurns:policy.maxTurns}:{}),policy:{writablePaths:policy.writablePaths,readonlyPaths:[...policy.readonlyPaths,...(environment?.paths??[]),...skills.paths],deniedPaths:policy.deniedPaths,allowedCommands:policy.allowedCommands},...(profile.connectionConfig?{providerConfig:profile.connectionConfig}:{})});
    handedToConsumer=true;
    // A run may not exceed the policy's time limit: past it, the engine is stopped and the task made available again.
    const minutes=Number.isFinite(policy.maxExecutionMinutes)&&policy.maxExecutionMinutes>0?policy.maxExecutionMinutes:30;
@@ -272,7 +282,8 @@ export class AgentOrchestrator {
    const repositoryId=this.repository.getRepositoryId(execution.projectId);if(!repositoryId)throw new Error('No se encontró el repositorio para auditar el diff.');
    const policy=this.repository.getAutonomyPolicy(execution.projectId,execution.profileId);const repositoryRoot=this.repository.getRepositoryRoot(execution.projectId)!;
    const commitMessage=this.commitMessage(execution);
-   const result=await this.validator.validate({projectId:execution.projectId,executionId:execution.id,workingDirectory:execution.branchOrWorktree!,repositoryRoot,repositoryId,initialCommit:execution.initialCommit,policy,...(commitMessage?{commitMessage}:{})});
+   const environment=this.environment?.forProject(execution.projectId)??null;
+   const result=await this.validator.validate({projectId:execution.projectId,executionId:execution.id,workingDirectory:execution.branchOrWorktree!,repositoryRoot,repositoryId,initialCommit:execution.initialCommit,policy,...(commitMessage?{commitMessage}:{}),...(environment?{environment}:{}),...(this.skills?{ownedPaths:await this.skills.ownedPaths()}:{})});
    // The user may have cancelled while validation ran; never overwrite a terminal status.
    const latest=this.repository.findExecution(execution.id);if(!latest||latest.status!=='VALIDATING')return;
    const failure=terminal?.type==='EXECUTION_FAILED'?terminal:null;
@@ -655,4 +666,9 @@ function cleanCommands(values:string[]):string[]{
  const cleaned=[...new Set(values.map(value=>value.trim()).filter(Boolean))];
  for(const command of cleaned)if(/[;&|`$<>\n\r]/.test(command))throw new Error(`Comando no permitido: ${command}. No se admiten tuberías, redirecciones ni operadores de shell.`);
  return cleaned;
+}
+
+/** Plan S2: what the app installed and how the agent asks for more (it cannot install anything itself). */
+export function describeEnvironment(environment:{stackProfileId:string;allowedPackages:string[]}):string{
+ return `# Entorno del proyecto\nLa app ya instaló las dependencias del perfil de stack «${environment.stackProfileId}» en node_modules/ (de solo lectura): úsalas, pero no instales nada ni edites node_modules/ ni .npmrc. Paquetes disponibles o aprobados: ${environment.allowedPackages.join(', ')}. Si de verdad necesitas otro paquete, añádelo a package.json con su versión: la app lo instalará si está aprobado y, si no, detendrá la ejecución para pedírselo al usuario. Prefiere resolverlo con lo que ya hay.`;
 }

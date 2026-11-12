@@ -6,6 +6,7 @@ import type { RepositoryLocationRepositoryPort } from '../../../application/port
 import type { SqliteDatabase } from './database.js';
 import type { DocumentCommitPort } from '../../../application/ports/document-commit-port.js';
 import { seedDefaultPolicy } from '../repositories/sqlite-agent-execution-repository.js';
+import { findStackProfile } from '../../../domain/projects/stack-catalog.js';
 
 export class SqliteChangeSetApplier implements ChangeSetApplyPort {
  constructor(private readonly db:SqliteDatabase,private readonly files:TransactionalMarkdownFilePort,private readonly repositories:RepositoryLocationRepositoryPort,private readonly committer?:DocumentCommitPort){}
@@ -57,9 +58,12 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
  }
  /** Profile fields replace the project's; verification commands become the allowed commands of every project policy. */
  private applyProfile(projectId:string,op:Extract<ChangeOperation,{type:'SET_PROJECT_PROFILE'}>,now:string):void{
-  this.db.prepare('UPDATE projects SET objectives_json=?,out_of_scope_json=?,tech_stack_json=?,rules_json=?,description=COALESCE(?,description),updated_at=? WHERE id=?').run(JSON.stringify(op.objectives),JSON.stringify(op.outOfScope),JSON.stringify(op.techStack),JSON.stringify(op.rules),op.description??null,now,projectId);
+  this.db.prepare('UPDATE projects SET objectives_json=?,out_of_scope_json=?,tech_stack_json=?,rules_json=?,description=COALESCE(?,description),stack_profile_id=?,updated_at=? WHERE id=?').run(JSON.stringify(op.objectives),JSON.stringify(op.outOfScope),JSON.stringify(op.techStack),JSON.stringify(op.rules),op.description??null,op.stackProfileId??null,now,projectId);
   seedDefaultPolicy(this.db,projectId);
   this.db.prepare('UPDATE autonomy_policies SET allowed_commands_json=? WHERE project_id=?').run(JSON.stringify([...new Set(op.verificationCommands)]),projectId);
+  // Plan S1: the stack profile adds the root files its stack needs (configuration, manifest) to the writable paths.
+  const extra=findStackProfile(op.stackProfileId)?.writablePaths??[];
+  if(extra.length)for(const row of this.db.prepare('SELECT id,writable_paths_json FROM autonomy_policies WHERE project_id=?').all(projectId) as Array<{id:string;writable_paths_json:string}>){const current=JSON.parse(row.writable_paths_json) as string[];this.db.prepare('UPDATE autonomy_policies SET writable_paths_json=? WHERE id=?').run(JSON.stringify([...new Set([...current,...extra])]),row.id);}
  }
  private edge(changeSet:ChangeSet,sourceRef:string,target:string,type:'AFFECTS'|'DOCUMENTED_BY',revision:number,now:string,ids:Record<string,string>):void{const source=ids[sourceRef]??sourceRef;this.db.prepare(`INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES(?,?,?,?,?,'CHANGESET',?,NULL,NULL,?,?)`).run(randomUUID(),changeSet.projectId,source,target,type,changeSet.id,revision,now);}
  private nextKey(projectId:string,prefix:string):string{const rows=this.db.prepare('SELECT display_key FROM knowledge_entities WHERE project_id=? AND display_key LIKE ?').all(projectId,`${prefix}-%`) as Array<{display_key:string}>;const max=Math.max(0,...rows.map(r=>Number(r.display_key.slice(prefix.length+1))||0));return `${prefix}-${String(max+1).padStart(3,'0')}`;}

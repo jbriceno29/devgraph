@@ -306,13 +306,13 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
     this.db
       .prepare('UPDATE autonomy_policies SET allowed_commands_json=? WHERE project_id=?')
       .run(JSON.stringify([...new Set(op.verificationCommands)]), projectId);
-    // Plan S1: the stack profile adds the root files its stack needs (configuration, manifest) to the writable paths.
+    // The stack profile adds its root files (plan S1); an existing repository's own paths replace the defaults (REP R1).
     const extra = findStackProfile(op.stackProfileId)?.writablePaths ?? [];
-    if (extra.length)
+    if (extra.length || op.writablePaths?.length)
       for (const row of this.db
         .prepare('SELECT id,writable_paths_json FROM autonomy_policies WHERE project_id=?')
         .all(projectId) as Array<{ id: string; writable_paths_json: string }>) {
-        const current = JSON.parse(row.writable_paths_json) as string[];
+        const current = op.writablePaths?.length ? op.writablePaths : (JSON.parse(row.writable_paths_json) as string[]);
         this.db
           .prepare('UPDATE autonomy_policies SET writable_paths_json=? WHERE id=?')
           .run(JSON.stringify([...new Set([...current, ...extra])]), row.id);

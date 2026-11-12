@@ -81,6 +81,8 @@ export interface ProjectProfile {
   techStack: Record<string, string>;
   rules: string[];
   verificationCommands: string[];
+  /** Existing repository (plan REP, R1): what the agent may write, replacing the defaults for a new project. */
+  writablePaths?: string[];
 }
 export interface ChangeSet {
   id: string;

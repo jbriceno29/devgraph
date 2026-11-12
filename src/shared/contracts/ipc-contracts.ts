@@ -7,7 +7,8 @@ import type {
 } from './artifact-view.js';
 import type { ContextPackageDto, ContextSnapshotDto, PreviewContextInput } from './context-view.js';
 import type { ActivitySummaryDto } from './activity-view.js';
-import type { RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
+import type { AgentAccessProposalDto, RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
+import type { EntityInspectorDto } from './inspector-view.js';
 import type {
   InceptionReferenceDto,
   InceptionReferenceInput,
@@ -109,38 +110,7 @@ export interface GraphViewDto {
   nodes: GraphNodeView[];
   edges: GraphEdgeView[];
 }
-export interface RelationshipViewDto {
-  id: string;
-  sourceId: string;
-  sourceLabel: string;
-  targetId: string;
-  targetLabel: string;
-  type: GraphEdgeType;
-  direction: 'INCOMING' | 'OUTGOING';
-  provenance: 'USER' | 'CHANGESET' | 'EXECUTION';
-}
-export interface EntityInspectorDto {
-  entity: GraphNodeView & { summary: string };
-  attributes: Record<string, unknown>;
-  relationships: RelationshipViewDto[];
-  allowedStatusChanges?: string[];
-  outcome?: {
-    summary: string;
-    files: Array<{ path: string; status: string }>;
-    checks: Array<{ command: string; passed: boolean }>;
-    mergedCommit: string | null;
-    integrationBranch: string | null;
-    createdAt: string;
-  } /** FEATURE only, when it has an integration branch: what «Integrar» needs (no git calls). */;
-  integration?: FeatureIntegrationStateDto;
-  executionHistory: Array<{
-    id: string;
-    status: string;
-    startedAt: string | null;
-    completedAt: string | null;
-    resultSummary: string | null;
-  }>;
-}
+export type { EntityInspectorDto, RelationshipViewDto } from './inspector-view.js';
 export interface WorkspaceLoadedStateDto {
   project: ProjectSummaryDto;
   graph: GraphViewDto;
@@ -271,6 +241,7 @@ export interface WorkspaceIpcQueries {
   'execution:list_events': (executionId: string) => Promise<AgentEventRecordDto[]>;
   'execution:get_detail': (executionId: string) => Promise<ExecutionDetailDto>;
   'policy:get': (projectId: string) => Promise<ExecutionPolicyDto>;
+  'policy:propose_from_repository': (projectId: string) => Promise<AgentAccessProposalDto>;
   'environment:get': (projectId: string) => Promise<ProjectEnvironmentDto>;
   'commands:refs': (projectId: string) => Promise<{ refs: string[]; current: string | null }>;
   'commands:scripts': (projectId: string, ref: string) => Promise<ProjectScriptsDto>;
@@ -376,6 +347,8 @@ export interface WorkspaceIpcClient {
     listExecutionEvents(executionId: string): Promise<AgentEventRecordDto[]>;
     getExecutionDetail(executionId: string): Promise<ExecutionDetailDto>;
     getExecutionPolicy(projectId: string): Promise<ExecutionPolicyDto>;
+    /** Plan REP R1: writable paths and checks read from the repository (nothing is saved). Optional for older fakes. */
+    proposeAccessFromRepository?(projectId: string): Promise<AgentAccessProposalDto>;
     /** Plan S2: stack profile and approved packages. Optional so existing fakes stay valid. */
     getProjectEnvironment?(projectId: string): Promise<ProjectEnvironmentDto>;
     getCommandRefs?(projectId: string): Promise<{ refs: string[]; current: string | null }>;

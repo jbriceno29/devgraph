@@ -1,21 +1,22 @@
 import type { ProjectProfile } from '../knowledge/change-set.js';
+import { writablePathIssue } from './agent-access.js';
 
 /** Installs or runs package scripts: never a verification command (inception decision 5, the user installs). */
 const INSTALL =
   /^(?:npm|pnpm|yarn|bun)\s+(?:i|install|ci|add|exec|dlx|create|init)\b|^(?:npx|pnpx|bunx)\b|^(?:pip3?|pipx|uv|poetry|cargo|go|gem|composer|brew|apt(?:-get)?)\s+(?:install|add|get)\b|^curl\b|^wget\b/i;
 const SHELL = /[;&|`$<>\n\r]/;
-const LIMITS = { items: 20, text: 400, stackKeys: 12 };
+const LIMITS = { items: 20, paths: 40, text: 400, stackKeys: 12 };
 
 /** Errors of a proposed project profile (empty when valid). Messages are user-facing (Spanish). */
 export function profileIssues(profile: Partial<ProjectProfile>): string[] {
   const issues: string[] = [];
-  const list = (value: unknown, label: string, required = false) => {
+  const list = (value: unknown, label: string, required = false, max: number = LIMITS.items) => {
     if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
       issues.push(`${label} debe ser una lista de textos.`);
       return;
     }
     if (required && !value.some(item => item.trim())) issues.push(`${label} no puede estar vacío.`);
-    if (value.length > LIMITS.items) issues.push(`${label} admite como mucho ${LIMITS.items} elementos.`);
+    if (value.length > max) issues.push(`${label} admite como mucho ${max} elementos.`);
     if (value.some(item => item.length > LIMITS.text))
       issues.push(`Cada elemento de ${label} admite como mucho ${LIMITS.text} caracteres.`);
   };
@@ -44,6 +45,13 @@ export function profileIssues(profile: Partial<ProjectProfile>): string[] {
       issues.push(
         `Comando de verificación no permitido: ${command}. Los comandos no pueden instalar dependencias ni descargar nada.`,
       );
+  }
+  if (profile.writablePaths !== undefined) {
+    list(profile.writablePaths, 'Las rutas que puede escribir el agente', true, LIMITS.paths);
+    for (const pattern of Array.isArray(profile.writablePaths) ? profile.writablePaths : []) {
+      const issue = typeof pattern === 'string' ? writablePathIssue(pattern) : null;
+      if (issue) issues.push(issue);
+    }
   }
   if (
     profile.description !== undefined &&

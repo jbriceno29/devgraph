@@ -65,11 +65,32 @@ export interface RepositoryCorrectionDto {
   correction: string;
 }
 export const MAX_REPOSITORY_CORRECTION = 500;
+/** Why the agent may write a path (plan REP, R1): code and assets, tests, root configuration, or outputs the app creates. */
+export type AgentAccessReason = 'CODE' | 'TESTS' | 'CONFIG' | 'GENERATED' | 'USER';
+/** The user's version of the agent's access: replaces what the scan suggests. */
+export interface AgentAccessEditDto {
+  writablePaths: string[];
+  verificationCommands: string[];
+}
+/** What the repository suggests for the agent's access (no user edits). */
+export interface AgentAccessProposalDto {
+  writable: Array<{ pattern: string; reason: AgentAccessReason }>;
+  verificationCommands: string[];
+}
+/** What the agent will be able to touch and which checks verify it, as the proposal will save it in the policy. */
+export interface AgentAccessDto {
+  writable: Array<{ pattern: string; reason: AgentAccessReason }>;
+  verificationCommands: string[];
+  /** The user changed the suggestion. */
+  edited: boolean;
+}
 /** The repository part of the inception view: what was read, what the assistant inferred and what the user corrected. */
 export interface InceptionRepositoryDto {
   scan: RepositoryScanSummaryDto;
   inferences: RepositoryInferenceDto[];
   corrections: RepositoryCorrectionDto[];
+  /** Absent in views from an older core. */
+  access?: AgentAccessDto;
 }
 
 /** The view of a scan, without contents, with the serialized size of the full scan. */

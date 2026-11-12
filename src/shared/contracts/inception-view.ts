@@ -1,4 +1,9 @@
-import type { InceptionRepositoryDto, RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
+import type {
+  AgentAccessEditDto,
+  InceptionRepositoryDto,
+  RepositoryCorrectionDto,
+  RepositoryScanSummaryDto,
+} from './repository-scan.js';
 
 /**
  * Project inception («asistente de proyecto»): two gates. ASK_GOALS (up to 5 questions about goal and scope) and
@@ -226,8 +231,10 @@ export interface InceptionIpcClient {
     answers: InceptionAnswerDto[],
     notes?: string,
     options?: {
-      exploreUi?: boolean /** Brownfield: corrections of what was inferred from the repository (they replace the earlier ones). */;
+      exploreUi?: boolean /** Brownfield: corrections of the inferences (they replace the earlier ones). */;
       corrections?: RepositoryCorrectionDto[];
+      /** Brownfield (plan REP, R1): the agent's access as the user left it; null goes back to the suggestion. */
+      access?: AgentAccessEditDto | null;
     },
   ): Promise<InceptionViewDto>;
   /** Adds a prototype the user made elsewhere (an HTML file) as one more direction to look at. Only while choosing a direction. */

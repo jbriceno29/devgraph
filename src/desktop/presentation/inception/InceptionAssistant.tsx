@@ -19,7 +19,8 @@ import { ApprovedDesign } from './ApprovedDesign.js';
 import { VisualExplorationStep } from './VisualExplorationStep.js';
 import { ReferencesField, ReferencesSummary, type DraftReference } from './ReferencesField.js';
 import { RepositoryFindings, ScanSummary } from './RepositoryFindings.js';
-import type { RepositoryCorrectionDto, RepositoryScanSummaryDto } from '../../../shared/contracts/repository-scan.js';
+import { useRepositoryReview } from './use-repository-review.js';
+import type { RepositoryScanSummaryDto } from '../../../shared/contracts/repository-scan.js';
 
 /** Pasado este tiempo trabajando se avisa de que sigue en marcha (no es un error). */
 export const SLOW_AFTER_MS = 120_000;
@@ -49,15 +50,15 @@ export function InceptionAssistant({ projectId, nodes, onNavigate, onApplied }: 
   const [mode, setMode] = useState<Mode>('view'),
     [created, setCreated] = useState<InitializeRepositoryResultDto | null>(null),
     [wantDesign, setWantDesign] = useState<boolean | null>(null);
-  // Correcciones a lo detectado en el repositorio (modo brownfield), editadas junto a las respuestas.
-  const [corrections, setCorrections] = useState<Record<string, string> | null>(null);
+  // Correcciones a lo detectado en el repositorio y acceso del agente (modo brownfield), junto a las respuestas.
+  const { findings, sendAnswers, reset: resetReview } = useRepositoryReview(projectId, view);
   const heading = useRef<HTMLHeadingElement>(null),
     screenKey = view ? `${view.stage}:${view.status}:${mode}` : 'loading',
     firstScreen = useRef(true);
   // Un paso nuevo del motor vuelve a la vista normal; en el render, no en un efecto que pisaría un clic hecho justo después.
   useResetOnChange(view ? `${view.stage}:${view.status}` : null, () => {
     setMode('view');
-    setCorrections(null);
+    resetReview();
   });
   // Al cambiar de paso el foco va al título de la nueva pantalla (no en la primera carga: ahí lo pone el shell).
   useEffect(() => {
@@ -156,35 +157,6 @@ export function InceptionAssistant({ projectId, nodes, onNavigate, onApplied }: 
   const hasPlan = nodes.some(
     node => (node.type === 'FEATURE' || node.type === 'WORK_ITEM') && node.status !== 'ARCHIVED',
   );
-  const repositoryState = view.repository;
-  const editedCorrections =
-    corrections ??
-    Object.fromEntries((repositoryState?.corrections ?? []).map(item => [item.inferenceId, item.correction]));
-  const correctionList: RepositoryCorrectionDto[] = (repositoryState?.inferences ?? []).flatMap(item => {
-    const text = (editedCorrections[item.id] ?? '').trim();
-    return text ? [{ inferenceId: item.id, correction: text }] : [];
-  });
-  const findings = repositoryState && (
-    <RepositoryFindings
-      repository={repositoryState}
-      corrections={editedCorrections}
-      open
-      onCorrect={(id, text) => setCorrections({ ...editedCorrections, [id]: text })}
-    />
-  );
-  /** Envía las respuestas; en modo brownfield van también las correcciones (sustituyen a las anteriores). */
-  const sendAnswers = (
-    ipc: InceptionIpcClient,
-    answers: Parameters<InceptionIpcClient['answer']>[1],
-    design?: boolean,
-  ) => {
-    const extra = repositoryState ? { corrections: correctionList } : null;
-    return design !== undefined
-      ? ipc.answer(projectId, answers, undefined, { exploreUi: design, ...extra })
-      : extra
-        ? ipc.answer(projectId, answers, undefined, extra)
-        : ipc.answer(projectId, answers);
-  };
   let screen: ReactNode;
   if (view.status === 'WORKING') screen = <Working view={view} heading={heading} />;
   else if (view.status === 'FAILED')

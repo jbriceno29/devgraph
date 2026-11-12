@@ -4,9 +4,12 @@ import {
   MAX_SCAN_BYTES,
   type InceptionRepositoryDto,
   type RepositoryInferenceArea,
+  type RepositoryInferenceDto,
   type RepositoryScanSummaryDto,
 } from '../../../shared/contracts/repository-scan.js';
+import type { AgentAccessEditDto } from '../../../shared/contracts/repository-scan.js';
 import { control, focusRing } from '../ui.js';
+import { AgentAccessSection } from './AgentAccessSection.js';
 
 export const AREA_LABEL: Record<RepositoryInferenceArea, string> = {
   STACK: 'Stack',
@@ -88,11 +91,16 @@ export function RepositoryFindings({
   corrections,
   onCorrect,
   open = false,
+  access,
+  onAccessChange,
 }: {
   repository: InceptionRepositoryDto;
   corrections?: Record<string, string>;
   onCorrect?(inferenceId: string, text: string): void;
   open?: boolean;
+  /** The user's unsent edit of the agent's access (plan REP, R1). */
+  access?: AgentAccessEditDto | null;
+  onAccessChange?(edit: AgentAccessEditDto | null): void;
 }) {
   const id = useId();
   const given = new Map(repository.corrections.map(item => [item.inferenceId, item.correction]));
@@ -110,51 +118,76 @@ export function RepositoryFindings({
           </p>
         ) : (
           <ul aria-label="Inferencias del repositorio" className="space-y-2">
-            {repository.inferences.map(item => {
-              const value = corrections?.[item.id] ?? given.get(item.id) ?? '';
-              return (
-                <li key={item.id} className="rounded-lg border border-border bg-surface-raised p-3 text-xs leading-5">
-                  <p className="text-fg">
-                    <span className="mr-1 rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-                      {AREA_LABEL[item.area]}
-                    </span>
-                    {item.statement}
-                  </p>
-                  <p className="mt-1 text-fg-muted">
-                    Evidencia:{' '}
-                    {item.evidence.map((path, index) => (
-                      <span key={path}>
-                        {index > 0 && ', '}
-                        <code className="font-mono text-fg">{path}</code>
-                      </span>
-                    ))}
-                  </p>
-                  {onCorrect ? (
-                    <div className="mt-2">
-                      <label htmlFor={`${id}-${item.id}`} className="mb-1 block text-[11px] text-fg-muted">
-                        ¿No es así? Corrígelo (opcional)
-                      </label>
-                      <input
-                        id={`${id}-${item.id}`}
-                        type="text"
-                        maxLength={MAX_REPOSITORY_CORRECTION}
-                        value={value}
-                        onChange={event => onCorrect(item.id, event.target.value)}
-                        placeholder="Por ejemplo: en realidad usamos Vue, no React"
-                        className={control}
-                      />
-                    </div>
-                  ) : (
-                    given.get(item.id) && (
-                      <p className="mt-1 font-medium text-fg">Tu corrección: {given.get(item.id)}</p>
-                    )
-                  )}
-                </li>
-              );
-            })}
+            {repository.inferences.map(item => (
+              <Inference
+                key={item.id}
+                item={item}
+                value={corrections?.[item.id] ?? given.get(item.id) ?? ''}
+                given={given.get(item.id)}
+                {...(onCorrect ? { onCorrect: (text: string) => onCorrect(item.id, text) } : {})}
+              />
+            ))}
           </ul>
+        )}
+        {repository.access && (
+          <AgentAccessSection
+            access={repository.access}
+            {...(access !== undefined ? { edit: access } : {})}
+            {...(onAccessChange ? { onChange: onAccessChange } : {})}
+          />
         )}
       </div>
     </details>
+  );
+}
+
+function Inference({
+  item,
+  value,
+  given,
+  onCorrect,
+}: {
+  item: RepositoryInferenceDto;
+  value: string;
+  given: string | undefined;
+  onCorrect?(text: string): void;
+}) {
+  const id = useId();
+  return (
+    <li className="rounded-lg border border-border bg-surface-raised p-3 text-xs leading-5">
+      <p className="text-fg">
+        <span className="mr-1 rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent">
+          {AREA_LABEL[item.area]}
+        </span>
+        {item.statement}
+      </p>
+      <p className="mt-1 text-fg-muted">
+        Evidencia:{' '}
+        {item.evidence.map((path, index) => (
+          <span key={path}>
+            {index > 0 && ', '}
+            <code className="font-mono text-fg">{path}</code>
+          </span>
+        ))}
+      </p>
+      {onCorrect ? (
+        <div className="mt-2">
+          <label htmlFor={id} className="mb-1 block text-[11px] text-fg-muted">
+            ¿No es así? Corrígelo (opcional)
+          </label>
+          <input
+            id={id}
+            type="text"
+            maxLength={MAX_REPOSITORY_CORRECTION}
+            value={value}
+            onChange={event => onCorrect(event.target.value)}
+            placeholder="Por ejemplo: en realidad usamos Vue, no React"
+            className={control}
+          />
+        </div>
+      ) : (
+        given && <p className="mt-1 font-medium text-fg">Tu corrección: {given}</p>
+      )}
+    </li>
   );
 }

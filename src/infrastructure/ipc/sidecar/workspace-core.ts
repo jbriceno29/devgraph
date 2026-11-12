@@ -87,6 +87,8 @@ import { GitRepositoryInitializer } from '../../git/git-repository-initializer.j
 import { AppSettingsStore, inspectFolder } from '../../filesystem/project-folders.js';
 import { homedir } from 'node:os';
 import { GitRepositoryScanner } from '../../filesystem/repository-scanner.js';
+import { suggestedAccess } from '../../../application/inception/repository-access.js';
+import { parseApprovedPackages } from '../../../domain/projects/approved-packages.js';
 import { PlanningReferencesService } from '../../../application/planning/planning-references.js';
 import { normalizeTranslation } from '../../ai/reference-translation-contract.js';
 import { UI_SPEC_PATH } from '../../../shared/ui-spec.js';
@@ -296,16 +298,8 @@ export function createWorkspaceCore(
       .get(projectId) as
       | { stack_profile_id: string | null; approved_dependencies_json: string; skills_enabled: number }
       | undefined;
-  const approvedPackages = (row: { approved_dependencies_json: string } | undefined): string[] => {
-    try {
-      const value = JSON.parse(row?.approved_dependencies_json ?? '[]') as unknown;
-      return Array.isArray(value)
-        ? value.filter((name): name is string => typeof name === 'string' && PACKAGE_NAME.test(name))
-        : [];
-    } catch {
-      return [];
-    }
-  };
+  const approvedPackages = (row: { approved_dependencies_json: string } | undefined) =>
+    parseApprovedPackages(row?.approved_dependencies_json);
   const projectEnvironment = (projectId: string): WorkspaceEnvironmentPort => ({
     forProject: id => {
       const row = stackRow(id);
@@ -715,7 +709,7 @@ export function createWorkspaceCore(
         }
         case 'inception:answer': {
           const projectId = String(args[0] ?? '');
-          const options = args[3] as { exploreUi?: boolean; corrections?: unknown } | undefined;
+          const options = args[3] as { exploreUi?: boolean; corrections?: unknown; access?: unknown } | undefined;
           return getInception(projectId).answer(
             projectId,
             (Array.isArray(args[1]) ? args[1] : []) as InceptionAnswerDto[],
@@ -723,7 +717,9 @@ export function createWorkspaceCore(
             options && typeof options === 'object'
               ? {
                   ...(options.exploreUi !== undefined ? { exploreUi: options.exploreUi === true } : {}),
-                  ...(options.corrections !== undefined ? { corrections: options.corrections } : {}),
+                  ...Object.fromEntries(
+                    (['corrections', 'access'] as const).flatMap(k => (k in options ? [[k, options[k]]] : [])),
+                  ),
                 }
               : undefined,
           );
@@ -940,6 +936,8 @@ export function createWorkspaceCore(
           const projectId = String(args[0] ?? '');
           return getExecutionService(projectId).getPolicy(projectId);
         }
+        case 'policy:propose_from_repository': // Plan REP R1: writable paths and checks read from the repository.
+          return suggestedAccess(await scanner.scan(repositoryOf(String(args[0] ?? ''))));
         case 'environment:get':
           return environmentView(String(args[0] ?? ''));
         case 'environment:approve_dependencies':

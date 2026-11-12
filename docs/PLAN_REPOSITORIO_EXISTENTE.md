@@ -85,6 +85,16 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
   y una ejecución que escribe en `app/` no se revierte.
 - Corrida real con `haiku` sobre un repositorio de `~/Documents/repos` con código fuera de `src/`.
 
+**Estado de R1 (2026-11-12): hecho.**
+
+- `src/domain/projects/agent-access.ts` calcula, sin modelo, las rutas (carpetas de código y de pruebas de la raíz, configuración de la raíz y las salidas que genera la app) y las comprobaciones (`test`, `typecheck`, `lint`, `build`, con `pnpm` si hay `pnpm-lock.yaml`; omite el `test` de relleno de npm).
+- El inicio las muestra en «Qué podrá tocar el agente» (`AgentAccessSection.tsx`): se puede quitar, añadir y volver a lo detectado.
+- La edición viaja con las respuestas (`access`) y la propuesta la guarda en `SET_PROJECT_PROFILE.writablePaths`. Al aprobar, esas rutas sustituyen a las de un proyecto nuevo.
+- En Ajustes › Política, «Proponer rutas desde el repositorio» (`policy:propose_from_repository`) rellena el formulario sin guardar.
+- Pruebas: `tests/unit/agent-access.test.ts`, `tests/integration/agent-access.test.ts` (repositorio Next; una ejecución que escribe en `app/` pasa con las rutas derivadas y se revierte con las de siempre) y `tests/ui/agent-access.test.tsx`.
+- Corrida real con `haiku` sobre una copia de `salestify-web` (`app/`, `core/`, `modules/`, sin `src/`): la tarea escribió `core/format-price.js` y se completó sin reversión.
+- No se probó con modelo real el paso del inicio (usa `opus`); su cableado está cubierto con un motor falso.
+
 ### R2. Línea base de verificación (M, 1 día)
 
 - **Antes de la propuesta,** en una copia aislada de la rama actual:

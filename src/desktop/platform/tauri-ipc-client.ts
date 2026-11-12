@@ -71,6 +71,7 @@ export const workspaceIpc: WorkspaceIpcClient = {
     listExecutionEvents: executionId => invokeCore('execution:list_events', [executionId]),
     getExecutionDetail: executionId => invokeCore('execution:get_detail', [executionId]),
     getExecutionPolicy: projectId => invokeCore('policy:get', [projectId]),
+    proposeAccessFromRepository: projectId => invokeCore('policy:propose_from_repository', [projectId]),
     getProjectEnvironment: projectId => invokeCore('environment:get', [projectId]),
     getCommandRefs: projectId => invokeCore('commands:refs', [projectId]),
     getProjectScripts: (projectId, ref) => invokeCore('commands:scripts', [projectId, ref]),

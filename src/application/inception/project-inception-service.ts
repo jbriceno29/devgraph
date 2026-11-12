@@ -18,7 +18,8 @@ import {
 } from '../ports/inception-port.js';
 import type { RepositoryScannerPort } from '../ports/repository-scan-port.js';
 import { summarizeScan } from '../../shared/contracts/repository-scan.js';
-import { normalizeCorrections, normalizeInferences } from './repository-evidence.js';
+import { normalizeInferences } from './repository-evidence.js';
+import { accessView, editedRepository, withAgentAccess } from './repository-access.js';
 import { findExternalReferences } from '../../shared/prototype-safety.js';
 import { prepareReferences } from './reference-files.js';
 import {
@@ -202,8 +203,9 @@ export class ProjectInceptionService {
     answers: InceptionAnswerDto[],
     notes?: string | null,
     options?: {
-      exploreUi?: boolean /** Brownfield: the user's corrections of what was inferred from the repository (they replace the earlier ones). */;
+      exploreUi?: boolean /** Brownfield: corrections of the inferences and the agent's access (each replaces the earlier one). */;
       corrections?: unknown;
+      access?: unknown;
     },
   ): InceptionViewDto {
     const project = this.requireProject(projectId),
@@ -236,15 +238,7 @@ export class ProjectInceptionService {
     if (note && current.stage !== 'PROPOSAL')
       throw new Error('Los cambios se piden sobre una propuesta ya preparada; responde primero las preguntas.');
     const allNotes = note ? [...(current.notes ?? []), note].slice(-MAX_NOTES) : (current.notes ?? []);
-    if (Array.isArray(options?.corrections) && options.corrections.length && !current.repository)
-      throw new Error('No hay nada detectado en el repositorio que corregir.');
-    const repository =
-      current.repository && options?.corrections !== undefined && options.corrections !== null
-        ? {
-            ...current.repository,
-            corrections: normalizeCorrections(options.corrections, current.repository.inferences),
-          }
-        : current.repository;
+    const repository = editedRepository(current.repository, options);
     const normalized = current.questions.map(question => ({
       questionId: question.id,
       answer: given.get(question.id) ?? current.answers.find(answer => answer.questionId === question.id)?.answer ?? '',
@@ -872,6 +866,7 @@ export class ProjectInceptionService {
             scan: summarizeScan(record.repository.scan),
             inferences: record.repository.inferences,
             corrections: record.repository.corrections,
+            access: accessView(record.repository),
           }
         : null,
       updatedAt: record.updatedAt,
@@ -1109,7 +1104,7 @@ export class ProjectInceptionService {
         rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)]
           .filter(Boolean)
           .join('\n'),
-        operations: plan.operations,
+        operations: withAgentAccess(plan.operations, record.repository),
       },
       `inception:${projectId}`,
     );

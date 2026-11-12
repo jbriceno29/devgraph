@@ -3,36 +3,15 @@ import { useUnsavedChanges } from '../../state/unsaved-changes.js';
 import type { ExecutionPolicyDto } from '../../../shared/contracts/agent-view.js';
 import { errorText } from '../errors.js';
 import { control, primary } from '../ui.js';
-
-type Field = 'writablePaths' | 'readonlyPaths' | 'deniedPaths' | 'allowedCommands';
-const fields: Array<{ key: Field; label: string; hint: string }> = [
-  { key: 'writablePaths', label: 'Rutas escribibles', hint: 'Una por línea, p. ej. src/**' },
-  { key: 'readonlyPaths', label: 'Rutas de solo lectura', hint: 'El agente puede leerlas, no cambiarlas.' },
-  { key: 'deniedPaths', label: 'Rutas prohibidas', hint: 'Ni lectura ni escritura, p. ej. .env*' },
-  {
-    key: 'allowedCommands',
-    label: 'Comandos de verificación',
-    hint: 'Uno por línea, sin tuberías, p. ej. npm test. Se ejecutan al validar.',
-  },
-];
-
-type DecisionPolicyDto = NonNullable<ExecutionPolicyDto['decisionPolicy']>;
-type DecisionCategory = keyof DecisionPolicyDto['rules'];
-// Mirrors DECISION_CATEGORIES / DEFAULT_DECISION_POLICY in src/domain/autonomy/decision-policy.ts (the UI does not import the domain).
-const decisionCategories: Array<{ category: DecisionCategory; label: string }> = [
-  { category: 'NEW_TASK', label: 'Agregar tareas dentro de la misma feature' },
-  { category: 'TASK_DEPENDENCY', label: 'Agregar dependencias entre tareas de la feature' },
-  { category: 'TASK_STATUS', label: 'Cambiar el estado de tareas de la feature (por ejemplo, archivar una que sobra)' },
-  { category: 'DECISION_RECORD', label: 'Registrar decisiones de arquitectura (ADR)' },
-  {
-    category: 'SCOPE_CHANGE',
-    label: 'Cambiar el alcance: features, módulos, requisitos, documentos o entidades de otras features',
-  },
-];
-const defaultDecisionPolicy: DecisionPolicyDto = {
-  rules: { NEW_TASK: 'AUTO', TASK_DEPENDENCY: 'AUTO', TASK_STATUS: 'ASK', DECISION_RECORD: 'ASK', SCOPE_CHANGE: 'ASK' },
-  maxAutoTasksPerFeature: 5,
-};
+import {
+  decisionCategories,
+  defaultDecisionPolicy,
+  fields,
+  policySnapshot,
+  type DecisionPolicyDto,
+  type Field,
+} from './policy-fields.js';
+import { ProposeAccessButton } from './ProposeAccessButton.js';
 
 /** Edits the project's execution policy: what the agent may write and which checks validate its work. */
 export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
@@ -47,18 +26,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
   const [baseline, setBaseline] = useState<string | null>(null);
   const snapshot = values && JSON.stringify({ values, minutes, turns, rules, maxAutoTasks });
   useUnsavedChanges('la política de ejecución', Boolean(baseline && snapshot !== baseline));
-  const remember = (policy: ExecutionPolicyDto) => {
-    const decisions = policy.decisionPolicy ?? defaultDecisionPolicy;
-    setBaseline(
-      JSON.stringify({
-        values: toText(policy),
-        minutes: String(policy.maxExecutionMinutes ?? 30),
-        turns: String(policy.maxTurns ?? 0),
-        rules: { ...defaultDecisionPolicy.rules, ...decisions.rules },
-        maxAutoTasks: String(decisions.maxAutoTasksPerFeature),
-      }),
-    );
-  };
+  const remember = (policy: ExecutionPolicyDto) => setBaseline(policySnapshot(policy, toText(policy)));
 
   useEffect(() => {
     let current = true;
@@ -246,6 +214,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
             </div>
           </fieldset>
         )}
+        {values && <ProposeAccessButton projectId={projectId} onProposal={next => setValues({ ...values, ...next })} />}
         <button
           type="button"
           onClick={() => void save()}

@@ -11,6 +11,7 @@ import type {
   RepositoryCorrectionDto,
   RepositoryInferenceDto,
   RepositoryScanDto,
+  AgentAccessEditDto,
 } from '../../shared/contracts/repository-scan.js';
 
 /** Brownfield mode: what was read from a repository that already has code, what the assistant inferred from it and what the user corrected. */
@@ -18,6 +19,8 @@ export interface InceptionRepositoryState {
   scan: RepositoryScanDto;
   inferences: RepositoryInferenceDto[];
   corrections: RepositoryCorrectionDto[];
+  /** What the user set for the agent's access (plan REP, R1); absent: what the scan suggests. */
+  access?: AgentAccessEditDto | null;
 }
 
 /** Tokens and cost of one engine call (null fields when the engine does not report them). */

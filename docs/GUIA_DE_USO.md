@@ -92,6 +92,11 @@ En «Planificar», al pedir una feature nueva sobre un proyecto en marcha, puede
 - **Paquetes nuevos.** Si el agente añade a `package.json` un paquete fuera del perfil, la ejecución se detiene con la lista; el piloto te espera. En «Agentes», en la revisión de esa ejecución, pulsa «Aprobar» para que la aplicación lo instale en adelante y reanuda; si no lo apruebas, relanza la tarea y el agente buscará otra forma.
 - **Skills.** Las tareas de interfaz de un proyecto con interfaz reciben la skill de diseño «Impeccable», que viene dentro de la aplicación (no se descarga nada). Las demás tareas no la reciben, para no gastar tokens. Tus skills personales de Claude Code nunca se usan en las ejecuciones.
 
+## Comprobaciones que no dependen del agente
+
+- Si una ejecución borra pruebas, las salta (`skip`, `only`) o cambia una configuración de verificación existente (`tsconfig.json`, `vite.config.ts`…), termina igual pero **no se acepta sola**: la revisión en «Agentes» te dice por qué y la aceptas tú si es legítimo.
+- **Revisión independiente (opcional).** En el panel del piloto, «Revisión independiente antes de aceptar» elige un modelo que lee el cambio contra los criterios de cada tarea. Si encuentra algo, el piloto pide ajustes con esos hallazgos; si sigue sin pasar tras los intentos, te espera. Añade una llamada por ejecución (con `haiku`, alrededor de medio centavo de dólar en las pruebas). Es una segunda opinión, no una garantía.
+
 ## Qué pasa cuando el piloto se detiene
 
 El piloto nunca se queda mudo: pasa a uno de estos estados y lo registra con su motivo.

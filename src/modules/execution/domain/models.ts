@@ -17,6 +17,8 @@ export interface AgentCapabilities {
   supportsCancellation: boolean;
   supportsStructuredOutput: boolean;
   supportsWorktrees: boolean;
+  /** Plan C1: the engine can read web documentation limited to a list of domains. */
+  supportsDocumentationFetch?: boolean;
 }
 export type ExecutionReviewStatus = 'ACCEPTED' | 'CHANGES_REQUESTED' | 'MERGE_CONFLICT';
 export type ExecutionStatus =

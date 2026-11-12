@@ -41,6 +41,22 @@ export class SqliteProjectEnvironmentRepository {
       .run(enabled ? 1 : 0, new Date().toISOString(), projectId);
   }
 
+  /** Plan C1: whether runs read documentation, the user's own domains and the stack they are derived from. */
+  docs(projectId: string): { enabled: boolean; extraDomainsJson: string; techStackJson: string } | undefined {
+    const row = this.db
+      .prepare('SELECT docs_enabled,doc_domains_json,tech_stack_json FROM projects WHERE id=?')
+      .get(projectId) as { docs_enabled: number; doc_domains_json: string; tech_stack_json: string } | undefined;
+    return row
+      ? { enabled: row.docs_enabled === 1, extraDomainsJson: row.doc_domains_json, techStackJson: row.tech_stack_json }
+      : undefined;
+  }
+
+  setDocs(projectId: string, enabled: boolean, extraDomains: string[]): void {
+    this.db
+      .prepare('UPDATE projects SET docs_enabled=?,doc_domains_json=?,updated_at=? WHERE id=?')
+      .run(enabled ? 1 : 0, JSON.stringify(extraDomains), new Date().toISOString(), projectId);
+  }
+
   setApprovedDependencies(projectId: string, packages: string[]): void {
     this.db
       .prepare('UPDATE projects SET approved_dependencies_json=?,updated_at=? WHERE id=?')

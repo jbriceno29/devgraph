@@ -24,11 +24,13 @@ import type { RepositoryScannerPort } from '../modules/projects/application/port
 import type { AppSettingsStore } from '../modules/projects/infrastructure/project-folders.js';
 import type { ProjectCommands } from '../modules/environment/infrastructure/project-commands.js';
 import type { ProjectEnvironmentDto } from '../shared/contracts/agent-view.js';
+import type { ProjectDocsDto } from '../shared/contracts/project-docs.js';
 import type { ProjectWorkspaceStore } from './project-workspace-store.js';
 import { baseServices } from './compose/base.js';
 import { documentServices } from './compose/documents.js';
 import { planningServices } from './compose/planning.js';
 import { inceptionServices } from './compose/inception.js';
+import { documentationServices } from './compose/documentation.js';
 import { environmentServices } from './compose/environment.js';
 import { executionServices } from './compose/execution.js';
 import { autopilotServices } from './compose/autopilot.js';
@@ -101,6 +103,9 @@ export interface Container {
   environmentView(projectId: string): Promise<ProjectEnvironmentDto>;
   setSkills(projectId: string, enabled: unknown): Promise<ProjectEnvironmentDto>;
   approveDependencies(projectId: string, packages: unknown): Promise<ProjectEnvironmentDto>;
+  docsView(projectId: string): ProjectDocsDto;
+  docDomains(projectId: string): string[];
+  setDocs(projectId: string, input: unknown): ProjectDocsDto;
   commands: ProjectCommands;
   execution(projectId: string): AgentOrchestrator;
   executionFor(executionId: string): AgentOrchestrator;
@@ -121,6 +126,7 @@ export function createContainer(
     planningServices,
     inceptionServices,
     environmentServices,
+    documentationServices,
     executionServices,
     featureConflictServices,
   ];

@@ -59,6 +59,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `feature:integrate` ⛓ | Fusiona en la rama base una feature con todas sus tareas en `DONE` (commit de merge en un worktree temporal; rechaza un checkout con cambios sin commitear y una rama con marcadores de conflicto). Un conflicto nombra los archivos y remite a «Resolver con un agente». |
 | `repository:git_status` | Rama base, ramas locales, rama abierta por el usuario, operación de Git a medias, `index.lock`, identidad y por qué no se pueden guardar documentos ahora (`RepositoryGitStatusDto`). |
 | `repository:set_base_branch` ⛓ | Cambia la rama base del proyecto (debe existir). |
+| `project:docs` | Documentación en línea de los agentes (C1): si está activada, los dominios que recibe cada ejecución, los que salen del stack y los que añadió el usuario (`ProjectDocsDto`). |
+| `project:set_docs` ⛓ | Activa o desactiva la documentación en línea y guarda los dominios del usuario (`{ enabled, extraDomains }`); rechaza lo que no sea un nombre de dominio. |
 | `feature:check_conflicts` | Con `git merge-tree`, sin tocar nada: archivos que chocan con la rama base, con otras features sin integrar y marcadores sin resolver (`FeatureConflictsDto`). |
 | `feature:resolve_conflicts` ⛓ | Junta la rama base en la feature, commitea los marcadores y crea una tarea `READY` de la feature que los resuelve (`ResolveFeatureConflictsResultDto`). |
 | `metrics:export_report` | Exporta el informe de métricas de una feature a `reports/` y devuelve su ruta. |

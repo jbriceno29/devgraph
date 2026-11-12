@@ -2,6 +2,7 @@ import { ContextEngine } from '../../modules/context/application/context-engine.
 import { RepositoryContextFileStore } from '../../modules/context/infrastructure/repository-context-file-store.js';
 import { SqliteContextRepository } from '../../modules/context/infrastructure/sqlite-context-repository.js';
 import { AgentOrchestrator } from '../../modules/execution/application/agent-orchestrator.js';
+import { DocumentationAccess } from '../../modules/execution/application/documentation-access.js';
 import { ExecutionEventLog } from '../../modules/execution/infrastructure/execution-event-log.js';
 import { ExecutionValidator } from '../../modules/execution/infrastructure/execution-validator.js';
 import { SafeGitIsolation } from '../../modules/execution/infrastructure/safe-git-isolation.js';
@@ -93,7 +94,7 @@ function orchestrator(c: Container, projectId: string, contextEngine: ContextEng
         }),
     },
     new ExecutionEventLog(c.workspaceRoot),
-    c.agentAdapter,
+    new DocumentationAccess(c.agentAdapter, () => c.docDomains(projectId)),
     new SafeGitIsolation(() => c.baseBranch(projectId)),
     new ExecutionValidator(
       c.workspaceRoot,

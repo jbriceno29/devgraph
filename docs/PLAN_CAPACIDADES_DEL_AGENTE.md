@@ -59,6 +59,17 @@ reglas fijas:
 - Riesgo: bajo, porque solo es lectura. Una página podría traer instrucciones maliciosas. La política sigue
   mandando, y el prompt ya trata las fuentes como datos.
 
+**Estado (2026-11-12): hecho.**
+
+- Encendida por defecto en cada proyecto. Ajustes › Documentación en línea permite apagarla y añadir dominios.
+- **Dominios:**
+  - una base: `developer.mozilla.org` y `www.npmjs.com`;
+  - los que la app deduce del stack: React, Next.js, Vite, Vitest, Node, Tailwind, Drizzle, Supabase, Stripe, Python…;
+  - los del usuario.
+- La CLI recibe una regla `WebFetch(domain:…)` por dominio. Con `dontAsk` niega cualquier otro (comprobado con la CLI 2.1.318), y sin dominios no se ofrece `WebFetch`.
+- `WebSearch` sigue apagado.
+- **Corrida real con `haiku`:** una tarea con `util.styleText` leyó `https://nodejs.org/api/util.html` antes de escribir el código. La URL quedó en el registro, la validación pasó y las 3 pruebas pasan.
+
 ### C2. Variables y secretos del proyecto
 - Un almacén por proyecto: el llavero del sistema si está disponible y, si no, un archivo cifrado en el
   workspace. Nunca va en el repositorio.

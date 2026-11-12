@@ -21,6 +21,7 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; file: string }> = [
   { version: 14, file: '014_stack_profile.sql' },
   { version: 15, file: '015_review_model.sql' },
   { version: 16, file: '016_project_skills.sql' },
+  { version: 17, file: '017_doc_domains.sql' },
 ];
 const migrationPath = (file: string) => fileURLToPath(new URL(`./migrations/${file}`, import.meta.url));
 export interface OpenDatabaseOptions {

@@ -138,6 +138,7 @@ describe('canales serializados declarados por cada módulo (A1b)', () => {
           'policy:update',
           'project:create',
           'project:open',
+          'project:set_docs',
           'provider:set_auth_mode',
           'repository:configure',
           'repository:initialize',

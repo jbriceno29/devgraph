@@ -50,6 +50,8 @@ export const workspaceIpc: WorkspaceIpcClient = {
     checkFeatureConflicts: (projectId, featureId) => invokeCore('feature:check_conflicts', [projectId, featureId]),
     resolveFeatureConflicts: (projectId, featureId) => invokeCore('feature:resolve_conflicts', [projectId, featureId]),
     getRepositoryGitStatus: projectId => invokeCore('repository:git_status', [projectId]),
+    getProjectDocs: projectId => invokeCore('project:docs', [projectId]),
+    setProjectDocs: (projectId, input) => invokeCore('project:set_docs', [projectId, input]),
     setBaseBranch: (projectId, branch) => invokeCore('repository:set_base_branch', [projectId, branch]),
   },
   platform: {

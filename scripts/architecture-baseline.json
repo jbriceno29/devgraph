@@ -83,7 +83,7 @@
     "src/desktop/state/WorkspaceShell.tsx": 326,
     "src/desktop/state/project-create-form.tsx": 452,
     "src/modules/planning/infrastructure/change-set-planning-contract.ts": 377,
-    "src/modules/execution/infrastructure/claude-code-adapter.ts": 516,
+    "src/modules/execution/infrastructure/claude-code-adapter.ts": 482,
     "src/modules/inception/infrastructure/inception-contract.ts": 463,
     "src/modules/execution/infrastructure/execution-validator.ts": 423,
     "src/modules/projects/infrastructure/repository-scanner.ts": 516,

@@ -114,6 +114,28 @@ describe('normalizeClaudeEvent against real CLI fixtures', () => {
   });
 });
 
+describe('WebFetch in the run log (plan C1)', () => {
+  it('records the URL the agent read, and the URL of a denied fetch', () => {
+    const state = createClaudeStreamState('/work');
+    const started = normalizeClaudeEvent(
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 'w1', name: 'WebFetch', input: { url: 'https://example.com/x', prompt: 'p' } },
+          ],
+        },
+      },
+      state,
+    );
+    expect(started).toMatchObject([
+      { type: 'TOOL_INVOCATION_STARTED', toolName: 'WebFetch', args: { url: 'https://example.com/x' } },
+    ]);
+    const denied = normalizeClaudeEvent({ type: 'system', subtype: 'permission_denied', tool_use_id: 'w1' }, state);
+    expect(denied).toMatchObject([{ type: 'ACTION_DENIED', toolName: 'WebFetch', target: 'https://example.com/x' }]);
+  });
+});
+
 describe('Claude CLI arguments', () => {
   it('translates the default policy into minimal tools, allow and deny rules, and removes Bash', () => {
     const args = buildClaudePermissionArgs(defaultPolicy);
@@ -133,6 +155,16 @@ describe('Claude CLI arguments', () => {
     expect(args[3]).toContain('Bash(npm test),Bash(npm test *)');
     expect(args[3]).not.toContain('echo');
     expect(args[5]!.split(',')).not.toContain('Bash');
+  });
+
+  it('plan C1: exposes WebFetch only with documentation domains, one domain rule each, dropping invalid hosts', () => {
+    const args = buildClaudePermissionArgs({
+      ...defaultPolicy,
+      docDomains: ['nextjs.org', 'NEXTJS.org', 'https://evil.com/x', '*.example.com'],
+    });
+    expect(args[1]).toBe('Read,Write,Edit,Glob,Grep,WebFetch');
+    expect(args[3]!.split(',').filter(rule => rule.startsWith('WebFetch'))).toEqual(['WebFetch(domain:nextjs.org)']);
+    expect(buildClaudePermissionArgs({ ...defaultPolicy, docDomains: [] })[1]).not.toContain('WebFetch');
   });
 
   it('runs headless in dontAsk mode without MCP servers and passes the model alias', () => {

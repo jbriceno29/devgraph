@@ -77,6 +77,15 @@ Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12)
 - **Escrituras de la app en Git:** pasan por `SafeGitIsolation`, que las serializa por repositorio y traduce los errores de Git que puede provocar el usuario.
 - **Al abrir el proyecto:** se borran los worktrees de `merges/` que dejó un cierre inesperado.
 
+**Documentación en línea (C1).**
+
+- Cada ejecución puede leer documentación con `WebFetch`, solo en los dominios del proyecto. La lista suma:
+  - una base (MDN y npm);
+  - los dominios que salen del stack (`projects/domain/doc-domains.ts`);
+  - los que añade el usuario en Ajustes › Documentación en línea.
+- El orquestador no lo sabe: la composición envuelve el adaptador en `DocumentationAccess`, que añade los dominios a la política de la ejecución y una nota al prompt. Solo lo hace si el motor declara `supportsDocumentationFetch`.
+- `claude-permissions.ts` traduce cada dominio en una regla `WebFetch(domain:…)`. Con `dontAsk`, la CLI niega cualquier otro dominio, y el registro de la ejecución guarda la URL de cada lectura.
+
 ## 4. Flujo de una ejecución, de «iniciar» a «aceptar»
 
 1. **Iniciar** (`execution:start`, `AgentOrchestrator.start`). Exige: tarea `READY`, dependencias en `DONE`, perfil `DEVELOPER`, modelo disponible, repositorio configurado, sin otra ejecución activa de la tarea. (Con `revisionOf` y `feedback` es una revisión de una ejecución completada cuya tarea está en `IN_REVIEW`.)

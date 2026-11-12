@@ -3,7 +3,10 @@ import { createInterface } from 'node:readline';
 import { isAbsolute, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { AgentCapabilities, AgentEvent, ApprovalDecision } from '../domain/models.js';
-import type { AgentAdapterPort, AgentRunInput, AgentRunPolicy } from '../application/ports/agent-adapter-port.js';
+import type { AgentAdapterPort, AgentRunInput } from '../application/ports/agent-adapter-port.js';
+import { buildClaudePermissionArgs } from './claude-permissions.js';
+
+export { buildClaudePermissionArgs };
 import { buildChildEnvironment, type AgentAuthMode } from '../../../platform/claude-cli/child-environment.js';
 import { claudeCli, resolveCliExecutable } from '../../../platform/claude-cli/cli-path.js';
 
@@ -16,6 +19,7 @@ export const CLAUDE_CODE_CAPABILITIES: AgentCapabilities = {
   supportsCancellation: true,
   supportsStructuredOutput: true,
   supportsWorktrees: true,
+  supportsDocumentationFetch: true,
 };
 
 export interface ClaudeCodeAdapterOptions {
@@ -221,44 +225,6 @@ export function buildClaudeArgs(
   if (skills.length && tools >= 0) permissions[tools + 1] = `${permissions[tools + 1]},Skill`;
   args.push(...permissions);
   return args;
-}
-
-/**
- * Translates the autonomy policy into CLI permission rules.
- * - Only the tools an execution needs are exposed (`--tools`).
- * - Writable paths become `Write(...)`/`Edit(...)` allow rules; read-only and denied paths become deny rules.
- * - Denied paths are also unreadable: `Read(...)` deny rules also block `cat` through Bash.
- * - Without allowlisted commands Bash is removed, because `dontAsk` auto-approves read-only Bash in the cwd.
- * Patterns follow the validator's gitignore-like semantics: a pattern without `/` matches at any depth.
- */
-export function buildClaudePermissionArgs(policy: AgentRunPolicy): string[] {
-  const commands = policy.allowedCommands
-    .map(command => command.trim())
-    .filter(command => command && !/[,()]/.test(command));
-  const tools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', ...(commands.length ? ['Bash'] : [])];
-  const allowed = [
-    ...policy.writablePaths.flatMap(pattern => [`Write(${toRulePath(pattern)})`, `Edit(${toRulePath(pattern)})`]),
-    ...commands.flatMap(command => [`Bash(${command})`, `Bash(${command} *)`]),
-  ];
-  const disallowed = [
-    ...policy.deniedPaths.flatMap(pattern => [
-      `Read(${toRulePath(pattern)})`,
-      `Write(${toRulePath(pattern)})`,
-      `Edit(${toRulePath(pattern)})`,
-    ]),
-    ...policy.readonlyPaths.flatMap(pattern => [`Write(${toRulePath(pattern)})`, `Edit(${toRulePath(pattern)})`]),
-    ...(commands.length ? [] : ['Bash']),
-  ];
-  const args = ['--tools', tools.join(',')];
-  if (allowed.length) args.push('--allowedTools', allowed.join(','));
-  if (disallowed.length) args.push('--disallowedTools', disallowed.join(','));
-  return args;
-}
-
-function toRulePath(pattern: string): string {
-  const trimmed = pattern.trim().replace(/\/+$/, '');
-  if (trimmed.includes('/')) return trimmed.replace(/^\/+/, '');
-  return `**/${trimmed}`;
 }
 
 export interface ClaudeStreamState {
@@ -475,12 +441,12 @@ function safeArgs(toolName: string, input: Record<string, unknown>, state: Claud
       pattern: str(input.pattern),
       ...(str(input.path) ? { path: toRelative(str(input.path), state) ?? str(input.path) } : {}),
     };
-  return {};
+  return toolName === 'WebFetch' ? { url: str(input.url) } : {};
 }
 
 function describeTarget(toolName: string, input: Record<string, unknown>, state: ClaudeStreamState): string {
   const args = safeArgs(toolName, input, state);
-  return String(args.command ?? args.path ?? args.pattern ?? '');
+  return String(args.command ?? args.path ?? args.pattern ?? args.url ?? '');
 }
 
 function toRelative(path: string, state: ClaudeStreamState): string | null {

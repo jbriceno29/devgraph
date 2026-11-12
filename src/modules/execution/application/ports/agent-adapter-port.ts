@@ -23,6 +23,8 @@ export interface AgentRunPolicy {
   readonlyPaths: string[];
   deniedPaths: string[];
   allowedCommands: string[];
+  /** Plan C1: hostnames the engine may read documentation from (read only); none means no web access. */
+  docDomains?: string[];
 }
 
 export interface AgentAdapterPort {

@@ -5,7 +5,6 @@
     "src/modules/context/application/context-resolver.ts": 87,
     "src/modules/context/application/graph-traversal.ts": 133,
     "src/modules/context/application/hybrid-retrieval.ts": 12,
-    "src/modules/autopilot/application/feature-pilot.ts": 148,
     "src/modules/execution/application/governance-interceptor.ts": 8,
     "src/modules/inception/application/foundation-plan.ts": 99,
     "src/modules/inception/application/project-inception-service.ts": 159,
@@ -61,7 +60,6 @@
     "src/modules/inception/infrastructure/reference-translation-contract.ts": 1
   },
   "file-size": {
-    "src/modules/autopilot/application/feature-pilot.ts": 691,
     "src/modules/inception/application/project-inception-service.ts": 1141,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 252,
@@ -87,7 +85,6 @@
     "src/shared/contracts/ipc-contracts.ts": 382
   },
   "layers": {
-    "src/modules/autopilot/application/feature-pilot.ts": 1,
     "src/modules/inception/application/reference-files.ts": 1
   },
   "ipc-access": {

@@ -195,7 +195,12 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
   - El puerto `AgentExecutionRepositoryPort` ahora extiende ocho puertos de como mucho ocho métodos, en `ports/execution-store-port.ts` (regla 9). Los casos de uso pueden depender solo del que usan.
   - `recordTaskOutcome` se partió en `linkFiles` y `upsertCodeReference`, y `node:crypto` dejó paso a `globalThis.crypto`.
   - Pasan las 587 pruebas sin tocarlas. La corrida real con `haiku` de 3d da el mismo resultado.
-- **Pendiente:** A3c, el piloto; A3d, el inicio; A3e, el resto.
+- **A3c, el piloto (hecho):** `FeaturePilot` pasó de 691 a unas 70 líneas.
+  - Queda como fachada sobre el `PilotKernel`, repartido en `pilot-control` (autonomía, iniciar, detener, reanudar, pausar), `pilot-loop`, `pilot-acceptance` (compuertas, revisión y propuesta) y `pilot-kernel` (registro y estado).
+  - El bucle es ahora una `pass` por vuelta con pasos con nombre: `settleOpenWork`, `pickNext`, `runTask` y `afterRun`. La aceptación se reparte en `reviewRound`, `revise` y `acceptRun`.
+  - Pasan las 587 pruebas sin tocarlas.
+  - Corrida real con `haiku`: el piloto lanzó, verificó y aceptó solo dos tareas encadenadas en 24 s, y quedan 11 pruebas en verde en la rama de la feature.
+- **Pendiente:** A3d, el inicio; A3e, el resto.
 
 **Estado de A1b (2026-11-12): hecho.** `src/shared/kernel/` (`graph.ts`, `artifacts.ts`) tiene el vocabulario común; el dominio ya no importa `shared/contracts` y los contratos lo reexportan. El informe de métricas pasó a `shared/contracts/metrics-view.ts` (los contratos ya no importan módulos). Cada `ipc.ts` marca con `serial(...)` los canales que mutan estado; el router expone `isSerialized` y el despachador ya no tiene lista propia. Pruebas nuevas: los canales serializados son exactamente los de antes y todo canal que llama el cliente de Tauri tiene handler. En la línea base de capas solo quedan los tres usos de `node:crypto`/`node:path` en `application/` (Clock/IdGenerator en A3).
 

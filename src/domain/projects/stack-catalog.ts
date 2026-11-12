@@ -218,8 +218,10 @@ export function applyStackProfile(proposed: ProjectProfile, profile: StackProfil
 
 /** Plan S2: what the app installs in a run's worktree and what the agent may add without asking. */
 export interface ProjectEnvironment {
-  stackProfileId: string;
-  packageManager: 'npm';
+  /** null: the project follows no catalog profile (an existing repository): the app installs what its manifest declares. */
+  stackProfileId: string | null;
+  /** `npm` for a catalog profile; `detect` reads the repository's lockfile (npm or pnpm). */
+  packageManager: 'npm' | 'detect';
   dependencies: string[];
   devDependencies: string[];
   /** The profile's packages plus the ones the user approved. */
@@ -231,13 +233,24 @@ export interface ProjectEnvironment {
 /** Package names npm accepts (lowercase, optional scope); also what the user may approve. */
 export const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 
-/** The environment of a project, or null when its profile installs nothing (or it follows no profile). */
+/** The environment of a project: its profile's packages, the repository's own manifest when it follows no profile, or null when its profile installs nothing. */
 export function environmentFor(
   stackProfileId: string | null | undefined,
   approved: readonly string[] = [],
 ): ProjectEnvironment | null {
   const profile = findStackProfile(stackProfileId);
-  if (!profile || profile.packageManager !== 'npm') return null;
+  const valid = approved.filter(name => PACKAGE_NAME.test(name));
+  // An existing repository (no profile): what its package.json already declares is its environment; new packages ask.
+  if (!profile)
+    return {
+      stackProfileId: null,
+      packageManager: 'detect',
+      dependencies: [],
+      devDependencies: [],
+      allowedPackages: [...new Set(valid)],
+      paths: ['node_modules'],
+    };
+  if (profile.packageManager !== 'npm') return null;
   return {
     stackProfileId: profile.id,
     packageManager: 'npm',

@@ -204,6 +204,8 @@ export class AgentOrchestrator {
       this.repository.updateExecution(execution);
       // Plan S2: the app installs the stack's dependencies before the agent starts; a manifest it completes is committed apart, so the audit only sees the agent's work.
       const environment = this.environment?.forProject(input.projectId) ?? null;
+      // Whether the agent gets the environment section of the prompt: only when something was installed.
+      let installedEnvironment = false;
       if (environment) {
         const prepared = await this.environment!.provision({
           projectId: input.projectId,
@@ -219,6 +221,7 @@ export class AgentOrchestrator {
         const afterEnvironment = this.repository.findExecution(execution.id);
         if (!afterEnvironment || afterEnvironment.status !== 'PREPARING_CONTEXT')
           return await this.discardIsolation(afterEnvironment ?? execution, repositoryRoot, isolated);
+        installedEnvironment = prepared.installed !== false;
         if (prepared.commit) {
           execution = { ...execution, initialCommit: prepared.commit };
           this.repository.updateExecution(execution);
@@ -254,7 +257,7 @@ export class AgentOrchestrator {
       this.moveTask(execution, previous ? 'IN_REVIEW' : 'READY', 'IN_PROGRESS');
       if (previous) await this.supersede(previous, input.feedback!.trim(), repositoryRoot);
       const prompt =
-        (environment ? `${describeEnvironment(environment)}\n\n` : '') +
+        (environment && installedEnvironment ? `${describeEnvironment(environment)}\n\n` : '') +
         (skills.notes.length ? `# Skills de la app\n${skills.notes.join('\n')}\n\n` : '') +
         buildTaskPrompt(
           profile.systemInstructions,
@@ -1519,6 +1522,13 @@ function cleanCommands(values: string[]): string[] {
 }
 
 /** Plan S2: what the app installed and how the agent asks for more (it cannot install anything itself). */
-export function describeEnvironment(environment: { stackProfileId: string; allowedPackages: string[] }): string {
-  return `# Entorno del proyecto\nLa app ya instaló las dependencias del perfil de stack «${environment.stackProfileId}» en node_modules/ (de solo lectura): úsalas, pero no instales nada ni edites node_modules/ ni .npmrc. Paquetes disponibles o aprobados: ${environment.allowedPackages.join(', ')}. Si de verdad necesitas otro paquete, añádelo a package.json con su versión: la app lo instalará si está aprobado y, si no, detendrá la ejecución para pedírselo al usuario. Prefiere resolverlo con lo que ya hay.`;
+export function describeEnvironment(environment: { stackProfileId: string | null; allowedPackages: string[] }): string {
+  const what =
+    environment.stackProfileId === null
+      ? 'las dependencias que declara package.json (si las hay)'
+      : `las dependencias del perfil de stack «${environment.stackProfileId}»`;
+  const allowed = environment.allowedPackages.length
+    ? `Paquetes ${environment.stackProfileId === null ? 'aprobados además de los que ya declara el proyecto' : 'disponibles o aprobados'}: ${environment.allowedPackages.join(', ')}. `
+    : '';
+  return `# Entorno del proyecto\nLa app ya instaló ${what} en node_modules/ (de solo lectura): úsalas, pero no instales nada ni edites node_modules/ ni .npmrc. ${allowed}Si de verdad necesitas otro paquete, añádelo a package.json con su versión: la app lo instalará si está aprobado y, si no, detendrá la ejecución para pedírselo al usuario. Prefiere resolverlo con lo que ya hay.`;
 }

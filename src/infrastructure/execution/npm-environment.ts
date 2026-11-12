@@ -13,7 +13,18 @@ const execFileAsync = promisify(execFile);
 /** Lifecycle scripts of third-party packages never run; nor do audits or funding notices, which only add network calls and noise. */
 const SAFE_FLAGS = ['--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'];
 const MANIFEST = 'package.json',
-  LOCKFILE = 'package-lock.json';
+  LOCKFILE = 'package-lock.json',
+  PNPM_LOCKFILE = 'pnpm-lock.yaml';
+type Manager = 'npm' | 'pnpm';
+/** Each manager's install: `frozen` reproduces the lockfile exactly, `update` follows the manifest and rewrites the lockfile. Scripts never run. */
+const INSTALL: Record<Manager, { frozen: string[]; update: string[]; lockfile: string }> = {
+  npm: { frozen: ['ci', ...SAFE_FLAGS], update: ['install', ...SAFE_FLAGS], lockfile: LOCKFILE },
+  pnpm: {
+    frozen: ['install', '--frozen-lockfile', '--ignore-scripts', '--reporter=silent'],
+    update: ['install', '--ignore-scripts', '--reporter=silent'],
+    lockfile: PNPM_LOCKFILE,
+  },
+};
 type Manifest = {
   name?: string;
   dependencies?: Record<string, string>;
@@ -26,6 +37,8 @@ type Manifest = {
 export interface NpmEnvironmentOptions {
   /** The npm executable (default: `npm` from PATH). */
   npm?: string;
+  /** The pnpm executable (default: `pnpm` from PATH), for repositories with pnpm-lock.yaml. */
+  pnpm?: string;
   timeoutMs?: number;
   environment?: NodeJS.ProcessEnv;
 }
@@ -41,11 +54,13 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
     workingDirectory: string;
     projectName: string;
     environment: ProjectEnvironment;
-  }): Promise<{ log: string; commit: string | null }> {
+  }): Promise<{ log: string; commit: string | null; installed?: boolean }> {
     const cwd = input.workingDirectory,
       log: string[] = [];
     let manifest = await readManifest(cwd);
     if (manifest === undefined) throw new Error(`${MANIFEST} no es JSON válido; corrígelo antes de ejecutar.`);
+    // An existing repository: install exactly what it declares, with the manager its lockfile names.
+    if (input.environment.packageManager === 'detect') return this.provisionExisting(cwd, manifest);
     if (manifest === null) {
       manifest = { name: npmName(input.projectName), version: '0.1.0', private: true, type: 'module' };
       await writeFile(join(cwd, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -82,6 +97,33 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
     return { log: log.join('\n'), commit: (await git(cwd, ['rev-parse', 'HEAD'])).trim() };
   }
 
+  /** Plan S2 for a repository that follows no profile (brownfield, or created before the catalog). */
+  private async provisionExisting(
+    cwd: string,
+    manifest: Manifest | null,
+  ): Promise<{ log: string; commit: string | null; installed: boolean }> {
+    if (manifest === null)
+      return { log: `Sin ${MANIFEST}: no hay dependencias que instalar.`, commit: null, installed: false };
+    if (!declaredNames(manifest).length)
+      return { log: `${MANIFEST} no declara dependencias: nada que instalar.`, commit: null, installed: false };
+    const manager = await managerOf(cwd);
+    const lockfile = INSTALL[manager].lockfile;
+    const frozen = await exists(join(cwd, lockfile));
+    const log = [
+      `Repositorio sin perfil del catálogo: se instala lo que declara ${MANIFEST} con ${manager}${frozen ? ` (${lockfile})` : ', sin lockfile'}.`,
+    ];
+    log.push(await this.run(manager, cwd, frozen ? INSTALL[manager].frozen : INSTALL[manager].update));
+    if (frozen) return { log: log.join('\n'), commit: null, installed: true };
+    // No lockfile yet: the one just written is committed apart, so every later run installs the same versions.
+    const commit = await commitEnvironment(
+      cwd,
+      [lockfile],
+      `chore(entorno): lockfile de las dependencias (${lockfile})`,
+    );
+    if (commit) log.push(`Commit del entorno con ${lockfile}.`);
+    return { log: log.join('\n'), commit, installed: true };
+  }
+
   async reconcile(input: {
     workingDirectory: string;
     baseManifest: string | null;
@@ -108,9 +150,10 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
         log: `Dependencias sin aprobar: ${unapproved.join(', ')}.`,
       };
     try {
+      const manager = input.environment.packageManager === 'detect' ? await managerOf(cwd) : 'npm';
       return {
         ok: true,
-        log: `Dependencias cambiadas (${changed.join(', ')}); reinstaladas por la app.\n${await this.npm(cwd, ['install', ...SAFE_FLAGS])}`,
+        log: `Dependencias cambiadas (${changed.join(', ')}); reinstaladas por la app.\n${await this.run(manager, cwd, INSTALL[manager].update)}`,
       };
     } catch (error) {
       return {
@@ -122,8 +165,12 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
     }
   }
 
-  private async npm(cwd: string, args: string[]): Promise<string> {
-    const command = this.options.npm ?? 'npm';
+  private npm(cwd: string, args: string[]): Promise<string> {
+    return this.run('npm', cwd, args);
+  }
+
+  private async run(manager: Manager, cwd: string, args: string[]): Promise<string> {
+    const command = (manager === 'pnpm' ? this.options.pnpm : this.options.npm) ?? manager;
     try {
       const result = await execFileAsync(command, args, {
         cwd,
@@ -133,19 +180,47 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
         windowsHide: true,
         env: this.options.environment ?? process.env,
       });
-      return `$ npm ${args.join(' ')}\n${result.stdout}${result.stderr}`.trim();
+      return `$ ${manager} ${args.join(' ')}\n${result.stdout}${result.stderr}`.trim();
     } catch (error) {
       const failure = error as { code?: string | number; stdout?: string; stderr?: string; message?: string };
       if (failure.code === 'ENOENT')
-        throw new Error('No se encontró npm. Instala Node.js con npm para los proyectos con dependencias.');
+        throw new Error(
+          manager === 'pnpm'
+            ? 'El repositorio usa pnpm (pnpm-lock.yaml) y no se encontró pnpm. Instálalo (por ejemplo con corepack enable).'
+            : 'No se encontró npm. Instala Node.js con npm para los proyectos con dependencias.',
+        );
       throw new Error(
-        `Falló «npm ${args.join(' ')}»: ${`${failure.stderr ?? ''}${failure.stdout ?? ''}`.trim().slice(-2000) || failure.message}`,
+        `Falló «${manager} ${args.join(' ')}»: ${`${failure.stderr ?? ''}${failure.stdout ?? ''}`.trim().slice(-2000) || failure.message}`,
       );
     }
   }
 }
 
 const DEFAULT_IDENTITY = ['-c', 'user.name=Graph Workspace', '-c', 'user.email=graph-workspace@localhost'];
+
+/** The manager the repository's lockfile names. Yarn is refused with a clear message: its modes (PnP, scripts config) need their own support. */
+async function managerOf(cwd: string): Promise<Manager> {
+  if (await exists(join(cwd, PNPM_LOCKFILE))) return 'pnpm';
+  if ((await exists(join(cwd, 'yarn.lock'))) && !(await exists(join(cwd, LOCKFILE))))
+    throw new Error(
+      'El repositorio usa yarn (yarn.lock), que la app todavía no sabe instalar. Usa npm o pnpm, o instala las dependencias a mano.',
+    );
+  return 'npm';
+}
+
+/** Commits the given files in a fresh worktree (before the agent runs, so plain Git is safe; hooks off). Null when nothing changed. */
+async function commitEnvironment(cwd: string, files: string[], message: string): Promise<string | null> {
+  const present: string[] = [];
+  for (const file of files) if (await exists(join(cwd, file))) present.push(file);
+  if (!present.length || !(await git(cwd, ['status', '--porcelain', '--', ...present])).trim()) return null;
+  await git(cwd, ['add', '--', ...present]);
+  const identity = await git(cwd, ['config', 'user.email']).then(
+    value => (value.trim() ? [] : DEFAULT_IDENTITY),
+    () => DEFAULT_IDENTITY,
+  );
+  await git(cwd, [...identity, '-c', 'core.hooksPath=/dev/null', 'commit', '--no-verify', '--quiet', '-m', message]);
+  return (await git(cwd, ['rev-parse', 'HEAD'])).trim();
+}
 const SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const;
 
 /** null: no manifest; undefined: a manifest that is not a JSON object. */

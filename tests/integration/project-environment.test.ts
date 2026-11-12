@@ -23,7 +23,7 @@ afterEach(() => {
 const FAKE_NPM = `#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-fs.appendFileSync(process.env.FAKE_NPM_LOG, args.join(' ') + '\\n');
+fs.appendFileSync(process.env.FAKE_NPM_LOG, (require('node:path').basename(process.argv[1]) === 'fake-pnpm' ? 'pnpm ' : '') + args.join(' ') + '\\n');
 const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const names = args.slice(1).filter(arg => !arg.startsWith('-'));
 if (args[0] === 'install' && names.length) {
@@ -78,6 +78,8 @@ async function setup(
   behaviour: Behaviour,
   tasks: Array<[string, string, string]> = [['t1', 'TASK-001', 'READY']],
   titles: Record<string, string> = {},
+  /** profile null: an existing repository with these files (plan S2 for projects without a catalog profile). */
+  options: { profile?: string | null; files?: Record<string, string> } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), 'graphdev2-environment-'));
   roots.push(root);
@@ -92,18 +94,23 @@ async function setup(
     "import { existsSync } from 'node:fs';\nif (!existsSync('node_modules/react/index.js')) { console.error('react is not installed'); process.exit(1); }\nconsole.log('checks ok');\n",
   );
   writeFileSync(join(repo, 'src', 'base.txt'), 'ok\n');
+  for (const [file, content] of Object.entries(options.files ?? {})) writeFileSync(join(repo, file), content);
   execFileSync('git', ['add', '.'], { cwd: repo });
   execFileSync('git', ['commit', '--quiet', '-m', 'base'], { cwd: repo });
   const npm = join(root, 'fake-npm');
   writeFileSync(npm, FAKE_NPM);
   chmodSync(npm, 0o755);
+  const pnpm = join(root, 'fake-pnpm');
+  writeFileSync(pnpm, FAKE_NPM);
+  chmodSync(pnpm, 0o755);
   const npmLog = join(root, 'npm.log');
   writeFileSync(npmLog, '');
   const workspaceRoot = join(root, 'workspace');
   const adapter = new EnvironmentAdapter(behaviour);
   const core = createWorkspaceCore(workspaceRoot, () => undefined, {
     agentAdapter: adapter,
-    environmentInstaller: new NpmEnvironment({ npm, environment: { ...process.env, FAKE_NPM_LOG: npmLog } }),
+    // The same stand-in plays pnpm under another name: it logs «pnpm …» so the tests see which manager ran.
+    environmentInstaller: new NpmEnvironment({ npm, pnpm, environment: { ...process.env, FAKE_NPM_LOG: npmLog } }),
     skillsDirectory: join(process.cwd(), 'skills'),
   });
   cores.push(core);
@@ -117,7 +124,11 @@ async function setup(
     initialize: false,
   });
   try {
-    db.prepare("UPDATE projects SET stack_profile_id='web-spa-react' WHERE id=?").run(project.id);
+    if (options.profile !== null)
+      db.prepare('UPDATE projects SET stack_profile_id=? WHERE id=?').run(
+        options.profile ?? 'web-spa-react',
+        project.id,
+      );
     const insert = db.prepare(
       `INSERT INTO knowledge_entities(id,project_id,entity_type,display_key,title,summary,status,parent_id,created_revision,updated_revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,1,'now','now')`,
     );
@@ -299,6 +310,53 @@ describe('dependencies managed by the app (plan S2)', () => {
     await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
     expect(adapter.inputs[0]!.skills ?? []).toEqual([]);
     expect(adapter.skillPresent).toEqual([false]);
+  });
+
+  describe('a repository that follows no catalog profile', () => {
+    const manifest = JSON.stringify({ name: 'existente', private: true, dependencies: { react: '^19.0.0' } });
+    it('installs exactly its lockfile with npm ci, adds nothing, and tells the agent', async () => {
+      const { pilot, until, npmCalls, adapter, git } = await setup(
+        'good',
+        undefined,
+        {},
+        { profile: null, files: { 'package.json': manifest, 'package-lock.json': '{"lockfileVersion":3}' } },
+      );
+      await pilot('start', { acknowledgeCost: true });
+      const done = await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
+      expect(done.run!.status, done.run!.reason ?? '').toBe('COMPLETED');
+      expect(npmCalls()).toEqual(['ci --ignore-scripts --no-audit --no-fund --loglevel=error']);
+      expect(adapter.inputs[0]!.prompt).toContain('las dependencias que declara package.json');
+      expect(JSON.parse(git('show', 'feature/feat-001-notas:package.json')).dependencies).toEqual({ react: '^19.0.0' });
+    });
+    it('uses pnpm when the repository has pnpm-lock.yaml', async () => {
+      const { pilot, until, npmCalls } = await setup(
+        'good',
+        undefined,
+        {},
+        { profile: null, files: { 'package.json': manifest, 'pnpm-lock.yaml': 'lockfileVersion: 9\n' } },
+      );
+      await pilot('start', { acknowledgeCost: true });
+      await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
+      expect(npmCalls()).toEqual(['pnpm install --frozen-lockfile --ignore-scripts --reporter=silent']);
+    });
+    it('without a manifest installs nothing and leaves the prompt alone', async () => {
+      const { pilot, until, npmCalls, adapter } = await setup('good', undefined, {}, { profile: null });
+      await pilot('start', { acknowledgeCost: true });
+      await until(value => ['COMPLETED', 'WAITING_USER'].includes(value.run?.status ?? ''));
+      expect(npmCalls()).toEqual([]);
+      expect(adapter.inputs[0]!.prompt).not.toContain('# Entorno del proyecto');
+    });
+    it('a yarn repository gets a clear message instead of a broken run', async () => {
+      const { pilot, until } = await setup(
+        'good',
+        undefined,
+        {},
+        { profile: null, files: { 'package.json': manifest, 'yarn.lock': '# yarn' } },
+      );
+      await pilot('start', { acknowledgeCost: true });
+      const waiting = await until(value => value.run?.status === 'WAITING_USER');
+      expect(waiting.run!.reason).toContain('yarn');
+    });
   });
 
   it("never lets the agent change npm's configuration", async () => {

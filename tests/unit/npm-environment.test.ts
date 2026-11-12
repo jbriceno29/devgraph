@@ -63,7 +63,12 @@ describe('npm environment (plan S2)', () => {
     expect(npmName('Gestión de Notas!')).toBe('gestion-de-notas');
     expect(npmName('???')).toBe('proyecto');
     expect(environmentFor('minimo-node')).toBeNull();
-    expect(environmentFor('desconocido')).toBeNull();
+    expect(environmentFor('desconocido')).toMatchObject({
+      stackProfileId: null,
+      packageManager: 'detect',
+      dependencies: [],
+    });
+    expect(environmentFor(null, ['zod', 'Mal'])).toMatchObject({ allowedPackages: ['zod'] });
     expect(environmentFor('web-spa-react', ['Mal Nombre', 'zod'])!.allowedPackages).toContain('zod');
     expect(environmentFor('web-spa-react', ['Mal Nombre'])!.allowedPackages).not.toContain('Mal Nombre');
   });

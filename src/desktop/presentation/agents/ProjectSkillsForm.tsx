@@ -56,7 +56,7 @@ export function ProjectSkillsForm({ projectId }: { projectId: string }) {
             {environment.installs ? 'La app instala sus paquetes en cada ejecución.' : 'Sin dependencias externas.'}
           </>
         ) : (
-          'Este proyecto no sigue un perfil del catálogo (por ejemplo, porque ya tenía código).'
+          'Este proyecto no sigue un perfil del catálogo (por ejemplo, porque ya tenía código): la app instala en cada ejecución lo que declare su package.json, con npm o pnpm según su lockfile.'
         )}
       </p>
       {environment.approvedPackages.length > 0 && (

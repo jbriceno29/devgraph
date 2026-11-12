@@ -194,7 +194,11 @@ export interface WorkspaceEnvironmentPort {
     workingDirectory: string;
     projectName: string;
     environment: ProjectEnvironment;
-  }): Promise<{ log: string; commit: string | null }>;
+  }): Promise<{
+    log: string;
+    commit: string | null /** false when there was nothing to install (no manifest or no dependencies). */;
+    installed?: boolean;
+  }>;
   /** After the agent ran, before the checks: refuses packages outside the allowed list and reinstalls when the manifest changed. */
   reconcile(input: {
     workingDirectory: string;

@@ -1,6 +1,5 @@
 {
   "function-size": {
-    "src/modules/inception/application/foundation-plan.ts": 99,
     "src/desktop/presentation/FolderField.tsx": 31,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 505,
     "src/desktop/presentation/agents/EngineAuthForm.tsx": 21,
@@ -29,8 +28,7 @@
     "src/desktop/presentation/shell/next-step.ts": 112,
     "src/desktop/state/WorkspaceShell.tsx": 183,
     "src/desktop/state/project-create-form.tsx": 161,
-    "src/desktop/state/workspace-navigation-context.tsx": 107,
-    "src/modules/projects/infrastructure/repository-scanner.ts": 143
+    "src/desktop/state/workspace-navigation-context.tsx": 107
   },
   "file-size": {
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
@@ -47,8 +45,7 @@
     "src/desktop/presentation/planning/PlanningWorkspace.tsx": 529,
     "src/desktop/presentation/shell/ActivityInbox.tsx": 339,
     "src/desktop/state/WorkspaceShell.tsx": 326,
-    "src/desktop/state/project-create-form.tsx": 452,
-    "src/modules/projects/infrastructure/repository-scanner.ts": 516
+    "src/desktop/state/project-create-form.tsx": 452
   },
   "ipc-access": {
     "src/desktop/main.tsx": 1,

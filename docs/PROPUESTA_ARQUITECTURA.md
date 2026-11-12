@@ -181,7 +181,7 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
 
 **Estado de A1 + A2 (2026-11-12): hecho.** 111 archivos movidos con `git mv` a 10 módulos, `src/platform/` y `src/bootstrap/`; cada módulo con `index.ts` (generado con lo que usan los demás) y `ipc.ts`. `workspace-core.ts` pasó de 1 258 líneas a 50: `container.ts` + `compose/*.ts` crean los adaptadores y `ipc-router.ts` une los canales (uno repetido falla al arrancar). El SQL que había en la composición pasó a `environment/infrastructure/sqlite-project-environment.ts` y `execution/infrastructure/sqlite-review-evidence.ts`. Benchmarks, `tsconfig.core.json`, la copia de migraciones y los alias de pruebas están al día. Quedaron para A1b `shared/kernel` y la serialización declarada por handler.
 
-**Estado de A3 (2026-11-12): en curso.**
+**Estado de A3 (2026-11-12): hecho.** No queda ningún archivo del núcleo (`src/modules`, `src/bootstrap`, `src/shared`, `src/platform`) en la línea base de arquitectura; solo quedan archivos de la interfaz, que son A4.
 
 - **A3a, el orquestador (hecho):** `agent-orchestrator.ts` pasó de 1536 a unas 170 líneas.
   - Queda como fachada con la misma API para la IPC, el piloto y la composición.
@@ -210,7 +210,22 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
     - `launch` en `storeResult`.
   - Pasan las 587 pruebas sin tocarlas.
   - Corrida real con `haiku` del inicio de un repositorio existente con una prueba rota: preguntas, línea base, propuesta con «Dejar la verificación en verde», aprobación y piloto bloqueado. Un primer intento falló dentro del motor al generar la propuesta (`haiku` terminó con `tool_use`); el segundo pasó completo.
-- **Pendiente:** A3e, el resto de archivos grandes del núcleo, los prompts a `prompts/` y `Clock`/`IdGenerator`.
+- **A3e, el resto (hecho):**
+  - **Prompts:** los constructores de prompts del inicio, el planificador, la revisión y el traductor de referencias pasaron tal cual a carpetas `infrastructure/prompts/`. Se reexportan desde sus contratos.
+  - **Archivos partidos:**
+    - `ipc-contracts.ts` en DTOs (`workspace-dtos.ts`) y cliente (`ipc-client.ts`);
+    - el adaptador de Claude en `claude-stream-events.ts`;
+    - las fusiones de Git en `git-merges.ts`;
+    - el validador en `validator-audit.ts`;
+    - el aplicador de ChangeSets en `sqlite-graph-writes.ts`;
+    - el planificador en `normalize-operation.ts` y `claude-cli-call.ts`;
+    - el escáner en `repository-scan-rules.ts` y `repository-scan-contents.ts`;
+    - el plan de fundación en `foundation-summary.ts`;
+    - la creación de documentos en `new-document.ts`;
+    - la Bandeja en `activity-items.ts`.
+  - **Funciones largas:** las del contexto (`Expansion`), la actividad, el piloto de Codex, la gobernanza y el resto se partieron en pasos con nombre.
+  - **`node:crypto` y `node:path`** ya no aparecen en `application/` (se usa `globalThis.crypto`). `Clock` e `IdGenerator` como puertos quedan para cuando una prueba los necesite.
+  - **Verificación:** comportamiento idéntico; las 587 pruebas pasan sin tocarlas. Cada grupo se comprobó con `haiku`: el flujo de 3d, C1, C6, C7a, el piloto y el inicio de un repositorio existente (R2).
 
 **Estado de A1b (2026-11-12): hecho.** `src/shared/kernel/` (`graph.ts`, `artifacts.ts`) tiene el vocabulario común; el dominio ya no importa `shared/contracts` y los contratos lo reexportan. El informe de métricas pasó a `shared/contracts/metrics-view.ts` (los contratos ya no importan módulos). Cada `ipc.ts` marca con `serial(...)` los canales que mutan estado; el router expone `isSerialized` y el despachador ya no tiene lista propia. Pruebas nuevas: los canales serializados son exactamente los de antes y todo canal que llama el cliente de Tauri tiene handler. En la línea base de capas solo quedan los tres usos de `node:crypto`/`node:path` en `application/` (Clock/IdGenerator en A3).
 

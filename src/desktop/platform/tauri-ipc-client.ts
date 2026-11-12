@@ -47,6 +47,8 @@ export const workspaceIpc: WorkspaceIpcClient = {
     setAuthMode: (projectId, mode) => invokeCore('provider:set_auth_mode', [projectId, mode]),
     exportFeatureReport: (projectId, featureId) => invokeCore('metrics:export_report', [projectId, featureId]),
     integrateFeature: (projectId, featureId) => invokeCore('feature:integrate', [projectId, featureId]),
+    checkFeatureConflicts: (projectId, featureId) => invokeCore('feature:check_conflicts', [projectId, featureId]),
+    resolveFeatureConflicts: (projectId, featureId) => invokeCore('feature:resolve_conflicts', [projectId, featureId]),
   },
   platform: {
     async pickFolder({ title, defaultPath }) {

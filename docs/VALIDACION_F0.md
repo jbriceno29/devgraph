@@ -104,6 +104,9 @@ Mensaje: «No se pudo integrar FEAT-002 en main: Conflicto al integrar en main. 
 Para cerrar B2 hace falta una feature cuya rama se pueda integrar sin conflicto, por ejemplo una nueva creada
 después de integrar FEAT-001.
 
+**Con F0b (2026-11-12):** al seleccionar FEAT-002, su panel avisa del choque con `main` y ofrece «Resolver con un agente».
+El botón crea una tarea; al aceptarla, FEAT-002 se integra. Es otra forma de cerrar B2 sobre el mismo `todo-app`.
+
 ### Errores encontrados
 
 1. **Features en paralelo que escriben el mismo archivo.** El planificador creó FEAT-001 y FEAT-002 sin

@@ -9,6 +9,9 @@ import type {
 import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { WorkItemStatus } from '../knowledge/index.js';
 import type { AgentOrchestrator } from './application/agent-orchestrator.js';
+import type { CheckFeatureConflicts } from './application/check-feature-conflicts.js';
+import type { IntegrateFeature } from './application/integrate-feature.js';
+import type { ResolveFeatureConflicts } from './application/resolve-feature-conflicts.js';
 import { coveredWorkItems, type AgentExecution, type ApprovalDecision } from './domain/models.js';
 import { readableResultSummary } from './domain/result-summary.js';
 import { executionQualityFlags, unapprovedPackages } from './domain/run-summary.js';
@@ -18,6 +21,14 @@ export interface ExecutionIpcDeps {
   execution(projectId: string): AgentOrchestrator;
   executionFor(executionId: string): AgentOrchestrator;
   emit(channel: string, payload: unknown): void;
+  featureConflicts: FeatureConflictUseCases;
+}
+
+/** Plan UX, F0b: conflicts of a feature with its base branch and with other features. */
+export interface FeatureConflictUseCases {
+  check: CheckFeatureConflicts;
+  integrate: IntegrateFeature;
+  resolve: ResolveFeatureConflicts;
 }
 
 /** Runs of the agent (start, review, accept, approvals), the execution policy, the engine's auth and feature integration. */
@@ -92,7 +103,13 @@ function projectHandlers(d: ExecutionIpcDeps): IpcHandlers {
     })),
     // `pilot:updated` refreshes the feature panel and the activity (the shell's next step reads `integrations`).
     'feature:integrate': serial(async ([id, featureId]) => {
-      const result = await of(id).integrateFeature(text(id), text(featureId));
+      const result = await d.featureConflicts.integrate.execute(text(id), text(featureId));
+      d.emit('pilot:updated', { projectId: text(id), featureId: text(featureId), status: null });
+      return result;
+    }),
+    'feature:check_conflicts': ([id, featureId]) => d.featureConflicts.check.execute(text(id), text(featureId)),
+    'feature:resolve_conflicts': serial(async ([id, featureId]) => {
+      const result = await d.featureConflicts.resolve.execute(text(id), text(featureId));
       d.emit('pilot:updated', { projectId: text(id), featureId: text(featureId), status: null });
       return result;
     }),

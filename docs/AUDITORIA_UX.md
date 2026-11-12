@@ -188,6 +188,28 @@ salieron del mismo commit, crearon las dos `src/tasks.js` con diseños distintos
 
 Para la corrida real, repetir el caso de `todo-app` sobre una copia y cerrar B2 con éxito.
 
+#### Estado de F0b (2026-11-12): hecho
+
+| Parte | Qué se hizo | Dónde |
+| :--- | :--- | :--- |
+| Prevenir | Regla en `GRAPH_RULES` (asistente de inicio y planificador): si dos features crean o cambian los mismos archivos, la segunda depende de la primera. La rama de una feature ya partía del `HEAD` del momento de su primera tarea, así que eso no cambió. | `change-set-planning-contract.ts` |
+| Avisar antes | `feature:check_conflicts` usa `git merge-tree` y no toca nada. El panel de la feature (piloto e inspector) avisa de los choques con la rama base, con otras features sin integrar y de los marcadores pendientes. Si integrar fallaría, oculta «Integrar». | `check-feature-conflicts.ts`, `FeatureConflictsNotice.tsx`, `use-feature-conflicts.vm.ts` |
+| Mensaje | Un conflicto al integrar dice qué archivos chocan, que `main` no se tocó y qué pulsar. El banner ofrece «Ver FEAT-00X» tras el error. | `integrate-feature.ts`, `NextStepBanner.tsx` |
+| Salida | «Resolver con un agente» junta la rama base en la feature, commitea los marcadores y crea una tarea `READY` («Resolver conflictos con main») que se ejecuta, revisa y acepta como cualquier otra. Mientras queden marcadores, «Integrar» se rechaza. | `resolve-feature-conflicts.ts`, `git-feature-conflicts.ts`, `compose/feature-conflicts.ts` |
+
+**Pendiente:**
+
+- **«Rehacer sobre main».** Obliga a reabrir tareas hechas y a invalidar sus resultados y ejecuciones; con la resolución por agente no hace falta por ahora.
+- **Aviso en el banner antes de pulsar «Integrar».** El banner no consulta Git. Hoy el aviso previo está en el panel de la feature y el banner remite a ella tras el error.
+
+**Corrida real con `haiku`.** Reproduce el caso de `todo-app` en un repositorio de prueba: dos features sin dependencia crean `src/tasks.js` y `tests/tasks.test.js` con diseños distintos.
+
+1. El aviso apareció antes de integrar.
+2. FEAT-001 se integró.
+3. FEAT-002 se rechazó con el mensaje nuevo y `main` quedó intacto.
+4. «Resolver con un agente» creó TASK-003, `haiku` la resolvió en 30 s y se aceptó.
+5. FEAT-002 se integró. En `main` conviven `createTaskList` y `crearTarea`, sin marcadores, y pasan 19 pruebas.
+
 ## 7. Cómo repetir la revisión con la app real
 
 El arnés no forma parte del repositorio. Se reconstruye en minutos:

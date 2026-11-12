@@ -50,6 +50,7 @@ export function NextStepBanner({
           run={onIntegrateFeature}
           onDone={onDone}
           label={step.actionLabel}
+          onOpen={() => onGo(step.target)}
         />
       ) : (
         <button type="button" onClick={() => onGo(step.target)} className={button}>
@@ -65,8 +66,11 @@ function IntegrateAction({
   run,
   onDone,
   label,
+  onOpen,
 }: {
   action: NextStepAction;
+  /** After a failure: opens the feature, where its conflicts can be resolved. */
+  onOpen(): void;
   run(featureId: string): Promise<FeatureIntegrationResultDto>;
   onDone?: (() => void) | undefined;
   label: string;
@@ -107,25 +111,26 @@ function IntegrateAction({
       <p className="text-sm font-medium text-fg">
         ¿Juntar {tasks(action.doneTasks)} de {action.featureKey} {into(action.targetBranch)}?
       </p>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => void integrate()}
-          disabled={busy}
-          className={`min-h-9 px-4 text-sm ${primary}`}
-        >
-          {busy ? 'Integrando…' : 'Sí, integrar'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={busy}
-          className={`min-h-9 px-4 text-sm ${secondary}`}
-        >
-          Cancelar
-        </button>
-      </div>
+      <ConfirmButtons busy={busy} onConfirm={() => void integrate()} onCancel={() => setConfirming(false)} />
       <ErrorNotice error={error} />
+      {error !== null && (
+        <button type="button" onClick={onOpen} className={`min-h-9 px-4 text-sm ${secondary}`}>
+          Ver {action.featureKey}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ConfirmButtons({ busy, onConfirm, onCancel }: { busy: boolean; onConfirm(): void; onCancel(): void }) {
+  return (
+    <div className="flex gap-2">
+      <button type="button" onClick={onConfirm} disabled={busy} className={`min-h-9 px-4 text-sm ${primary}`}>
+        {busy ? 'Integrando…' : 'Sí, integrar'}
+      </button>
+      <button type="button" onClick={onCancel} disabled={busy} className={`min-h-9 px-4 text-sm ${secondary}`}>
+        Cancelar
+      </button>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { ContextPackageDto, ContextSnapshotDto, PreviewContextInput } from 
 import type { ActivitySummaryDto } from './activity-view.js';
 import type { AgentAccessProposalDto, RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
 import type { EntityInspectorDto } from './inspector-view.js';
+import type { FeatureIntegrationChannels, FeatureIntegrationCommands } from './feature-conflicts.js';
 import type {
   InceptionReferenceDto,
   InceptionReferenceInput,
@@ -36,7 +37,6 @@ import type {
   FeatureAutonomyDto,
   SetFeatureAutonomyInput,
   PilotRunDto,
-  FeatureIntegrationResultDto,
   FeatureIntegrationStateDto,
   ProjectEnvironmentDto,
   CommandRunDto,
@@ -130,7 +130,7 @@ export interface ChangeSetDto {
   createdAt: string;
   appliedAt?: string;
 }
-export interface WorkspaceIpcCommands {
+export interface WorkspaceIpcCommands extends FeatureIntegrationChannels {
   'project:create': (input: CreateProjectInput) => Promise<ProjectSummaryDto>;
   'project:open': (projectId: string) => Promise<WorkspaceLoadedStateDto>;
   /** Saves the folder where new projects are created (created if missing; must be writable). */
@@ -188,8 +188,6 @@ export interface WorkspaceIpcCommands {
   'pilot:stop': (projectId: string, featureId: string) => Promise<PilotRunDto | null>;
   'pilot:resume': (projectId: string, featureId: string) => Promise<PilotRunDto>;
   'metrics:export_report': (projectId: string, featureId: string) => Promise<{ path: string }>;
-  /** Merges a feature whose tasks are all DONE into the project's base branch (merge commit, temporary worktree; refuses a dirty checkout). */
-  'feature:integrate': (projectId: string, featureId: string) => Promise<FeatureIntegrationResultDto>;
   'provider:set_auth_mode': (
     projectId: string,
     mode: 'subscription' | 'api_key',
@@ -274,7 +272,7 @@ export type IpcQueryChannel = keyof WorkspaceIpcQueries;
 export type IpcEventChannel = keyof WorkspaceIpcEvents;
 
 export interface WorkspaceIpcClient {
-  commands: {
+  commands: FeatureIntegrationCommands & {
     createProject(input: CreateProjectInput): Promise<ProjectSummaryDto>;
     openProject(projectId: string): Promise<WorkspaceLoadedStateDto>;
     /** Optional so existing fakes stay valid; without it the app asks for a path in each project, as before. */
@@ -329,8 +327,6 @@ export interface WorkspaceIpcClient {
     resumePilot(projectId: string, featureId: string): Promise<PilotRunDto>;
     setAuthMode(projectId: string, mode: 'subscription' | 'api_key'): Promise<{ authMode: 'subscription' | 'api_key' }>;
     exportFeatureReport(projectId: string, featureId: string): Promise<{ path: string }>;
-    /** Optional so existing fakes stay valid; the Tauri client implements it. */
-    integrateFeature?(projectId: string, featureId: string): Promise<FeatureIntegrationResultDto>;
   };
   queries: {
     listProjects(): Promise<ProjectSummaryDto[]>;

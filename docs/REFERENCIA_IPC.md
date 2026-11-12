@@ -56,7 +56,9 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `pilot:start` ⛓ | Inicia el piloto de una feature (exige `acknowledgeCost: true`). |
 | `pilot:stop` ⛓ | Detiene el piloto. |
 | `pilot:resume` ⛓ | Reanuda un piloto pausado o en espera del usuario. |
-| `feature:integrate` ⛓ | Fusiona en la rama base una feature con todas sus tareas en `DONE` (commit de merge en un worktree temporal; rechaza un checkout con cambios sin commitear). |
+| `feature:integrate` ⛓ | Fusiona en la rama base una feature con todas sus tareas en `DONE` (commit de merge en un worktree temporal; rechaza un checkout con cambios sin commitear y una rama con marcadores de conflicto). Un conflicto nombra los archivos y remite a «Resolver con un agente». |
+| `feature:check_conflicts` | Con `git merge-tree`, sin tocar nada: archivos que chocan con la rama base, con otras features sin integrar y marcadores sin resolver (`FeatureConflictsDto`). |
+| `feature:resolve_conflicts` ⛓ | Junta la rama base en la feature, commitea los marcadores y crea una tarea `READY` de la feature que los resuelve (`ResolveFeatureConflictsResultDto`). |
 | `metrics:export_report` | Exporta el informe de métricas de una feature a `reports/` y devuelve su ruta. |
 
 ### Asistente de inicio
@@ -113,4 +115,4 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `pilot:updated` | `{projectId, featureId, status}` | Cambió el estado o la configuración del piloto. |
 | `inception:updated` | `{projectId, stage, status}` | Terminó una llamada del asistente de inicio o cambió su estado. |
 
-Nota: `feature:integrate` y el grupo `inception` son opcionales en `WorkspaceIpcClient` para que los dobles de prueba existentes sigan siendo válidos; el cliente Tauri los implementa.
+Nota: `feature:integrate`, `feature:check_conflicts`, `feature:resolve_conflicts` y el grupo `inception` son opcionales en `WorkspaceIpcClient` para que los dobles de prueba existentes sigan siendo válidos; el cliente Tauri los implementa.

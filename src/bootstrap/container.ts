@@ -19,6 +19,7 @@ import type {
 import type { ChangeReviewVerdict } from '../modules/execution/application/ports/change-review-port.js';
 import type { ReviewInput } from '../modules/execution/infrastructure/change-review-contract.js';
 import type { FeaturePilot } from '../modules/autopilot/application/feature-pilot.js';
+import type { FeatureConflictUseCases } from '../modules/execution/ipc.js';
 import type { RepositoryScannerPort } from '../modules/projects/application/ports/repository-scan-port.js';
 import type { AppSettingsStore } from '../modules/projects/infrastructure/project-folders.js';
 import type { ProjectCommands } from '../modules/environment/infrastructure/project-commands.js';
@@ -31,6 +32,7 @@ import { inceptionServices } from './compose/inception.js';
 import { environmentServices } from './compose/environment.js';
 import { executionServices } from './compose/execution.js';
 import { autopilotServices } from './compose/autopilot.js';
+import { featureConflictServices } from './compose/feature-conflicts.js';
 
 export type WorkspaceEventEmitter = (channel: string, payload: unknown) => void;
 
@@ -101,6 +103,7 @@ export interface Container {
   execution(projectId: string): AgentOrchestrator;
   executionFor(executionId: string): AgentOrchestrator;
   pilot(projectId: string): FeaturePilot;
+  featureConflicts: FeatureConflictUseCases;
   featureReport(projectId: string, featureId: string): { report: unknown; markdown: string };
   close(): void;
 }
@@ -111,7 +114,14 @@ export function createContainer(
   dependencies: CoreDependencies,
 ): Container {
   const c = baseServices(workspaceRoot, emit, dependencies) as Container;
-  const parts = [documentServices, planningServices, inceptionServices, environmentServices, executionServices];
+  const parts = [
+    documentServices,
+    planningServices,
+    inceptionServices,
+    environmentServices,
+    executionServices,
+    featureConflictServices,
+  ];
   const closers: Array<() => void> = [];
   for (const part of [...parts, autopilotServices]) {
     const { close, ...services } = part(c);

@@ -121,6 +121,7 @@ describe('canales serializados declarados por cada módulo (A1b)', () => {
           'execution:resolve_approval',
           'execution:start',
           'feature:integrate',
+          'feature:resolve_conflicts',
           'inception:answer',
           'inception:approve',
           'inception:choose_ui',

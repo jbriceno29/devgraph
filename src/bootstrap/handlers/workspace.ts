@@ -5,6 +5,7 @@ import { manualWorkItemTransitions, type WorkItemStatus } from '../../modules/kn
 import { GitRepositoryInitializer } from '../../modules/projects/infrastructure/git-repository-initializer.js';
 import { checkProjectLocation } from '../../modules/projects/infrastructure/project-location.js';
 import { toProjectSummary } from '../../modules/projects/ipc.js';
+import type { FeatureIntegrationStateDto } from '../../shared/contracts/agent-view.js';
 import type { CreateProjectInput, WorkspaceLoadedStateDto } from '../../shared/contracts/ipc-contracts.js';
 import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { Container } from '../container.js';
@@ -62,7 +63,7 @@ export function workspaceHandlers(c: Container): IpcHandlers {
         apiKeyAvailable: Boolean(process.env.ANTHROPIC_API_KEY),
         availableModels:
           service.listProfiles(projectId).find(profile => profile.roleKey === 'DEVELOPER')?.availableModels ?? [],
-        integration: service.featureIntegration(projectId, text(featureId)),
+        integration: withIds(service.featureIntegration(projectId, text(featureId)), projectId, text(featureId)),
       };
     },
     'changeset:propose_from_chat': args => proposeFromChat(c, args),
@@ -95,6 +96,9 @@ async function createProject(c: Container, raw: CreateProjectInput) {
   return toProjectSummary(project);
 }
 
+const withIds = (state: FeatureIntegrationStateDto | null, projectId: string, featureId: string) =>
+  state ? { ...state, projectId, featureId } : null;
+
 /** Resolves the entity's project from the registry without exposing its database path to the renderer. */
 function inspectorDetails(c: Container, id: string) {
   for (const project of c.store.listProjects()) {
@@ -102,7 +106,7 @@ function inspectorDetails(c: Container, id: string) {
     if (!workspace.graph.findEntityById(id)) continue;
     const details = new GetEntityInspectorDetailsUseCase(workspace.graph).execute(id);
     if (details.entity.type === 'FEATURE') {
-      const integration = c.execution(project.id).featureIntegration(project.id, id);
+      const integration = withIds(c.execution(project.id).featureIntegration(project.id, id), project.id, id);
       return integration ? { ...details, integration } : details;
     }
     if (details.entity.type === 'DECISION_RECORD')

@@ -69,6 +69,9 @@ reglas fijas:
   Comandos.
 - El validador falla si algún valor aparece escrito en el diff.
 - La app genera `.env.example` con los nombres, nunca con los valores.
+- **Pendiente de R1 (plan REP):** al leer un repositorio existente, R1 debe detectar las variables que el código
+  espera (`.env.example`, `process.env.*`) y pedirlas aquí. Sin ellas, `build` y las pruebas que tocan servicios
+  fallan en el worktree aunque el código esté bien.
 
 ### C3. Servicios del proyecto (Docker gestionado por la app)
 - El proyecto declara sus servicios: Postgres, Redis, Mailpit, MinIO o Supabase local. Pueden venir del
@@ -107,6 +110,10 @@ reglas fijas:
 - Comandos por perfil: tipos (`tsc --noEmit`), lint, pruebas unitarias, `build` y e2e. Cada uno tiene su
   propio límite de tiempo (`next build` necesita más de 120 s).
 - El resumen de Revisión muestra cada comprobación por separado.
+- **Pendiente de R1 (plan REP):** hoy R1 propone `npm run build` entre las comprobaciones de cada tarea cuando el
+  proyecto lo tiene. Aquí se separan las comprobaciones por tarea (pruebas, tipos y lint) de las que corren al
+  integrar una feature (`build`). R1 propone `build` solo para la integración, salvo que sea la única comprobación del
+  proyecto. Con C2 en marcha, `build` recibe las variables de alcance «Agentes y verificación».
 
 ### C7. Perfil «Web Next.js» y migración del ecommerce
 - Perfil de catálogo:

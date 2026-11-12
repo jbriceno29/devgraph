@@ -100,6 +100,9 @@ export interface FeatureIntegrationStateDto {
   integratedAt: string | null;
   taskCount: number;
   openTaskCount: number;
+  /** Set by the core so the panel can ask for its conflicts (absent with an older core). */
+  projectId?: string;
+  featureId?: string;
 }
 export interface AcceptExecutionResultDto {
   execution: AgentExecutionDto;

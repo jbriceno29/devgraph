@@ -3,6 +3,8 @@ import { useResetOnChange } from '../use-reset-on-change.js';
 import type { FeatureIntegrationResultDto, FeatureIntegrationStateDto } from '../../../shared/contracts/agent-view.js';
 import { ErrorNotice } from '../errors.js';
 import { primary, secondary } from '../ui.js';
+import { FeatureConflictsNotice } from './FeatureConflictsNotice.js';
+import { useFeatureConflicts } from './use-feature-conflicts.vm.js';
 
 /** Se puede integrar: tiene rama de integración y todas sus tareas están hechas o archivadas. */
 export const canIntegrate = (
@@ -33,6 +35,7 @@ export function FeatureIntegration({
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<FeatureIntegrationResultDto | null>(null),
     [error, setError] = useState<unknown>(null);
+  const conflicts = useFeatureConflicts(state);
   useResetOnChange(featureKey, () => {
     setConfirming(false);
     setResult(null);
@@ -73,7 +76,8 @@ export function FeatureIntegration({
           puedes repetirlo sin riesgo.
         </p>
       )}
-      {!confirming && (
+      <FeatureConflictsNotice featureKey={featureKey} vm={conflicts} />
+      {!confirming && !conflicts.blocksIntegration && (
         <button
           type="button"
           onClick={() => {
@@ -113,14 +117,18 @@ export function FeatureIntegration({
           </div>
         </div>
       )}
-      {result && (
-        <p role="status" className="font-medium text-success">
-          {result.alreadyIntegrated
-            ? `Ya estaba integrada ${into(result.targetBranch)}.`
-            : `Integrada ${into(result.targetBranch)}${result.commit ? ` · commit ${result.commit.slice(0, 7)}` : ''}.`}
-        </p>
-      )}
+      {result && <IntegrationResult result={result} />}
       <ErrorNotice error={error} />
     </div>
+  );
+}
+
+function IntegrationResult({ result }: { result: FeatureIntegrationResultDto }) {
+  return (
+    <p role="status" className="font-medium text-success">
+      {result.alreadyIntegrated
+        ? `Ya estaba integrada ${into(result.targetBranch)}.`
+        : `Integrada ${into(result.targetBranch)}${result.commit ? ` · commit ${result.commit.slice(0, 7)}` : ''}.`}
+    </p>
   );
 }

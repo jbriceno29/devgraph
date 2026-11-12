@@ -18,7 +18,7 @@
     "src/desktop/presentation/agents/EngineAuthForm.tsx": 21,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 161,
     "src/desktop/presentation/agents/ExecutionReview.tsx": 207,
-    "src/desktop/presentation/agents/FeatureIntegration.tsx": 49,
+    "src/desktop/presentation/agents/FeatureIntegration.tsx": 45,
     "src/desktop/presentation/agents/FeaturePilotPanel.tsx": 420,
     "src/desktop/presentation/agents/ProjectCommandsPanel.tsx": 148,
     "src/desktop/presentation/agents/ProjectSkillsForm.tsx": 28,
@@ -36,7 +36,6 @@
     "src/desktop/presentation/planning/ContextPills.tsx": 74,
     "src/desktop/presentation/planning/PlanningWorkspace.tsx": 405,
     "src/desktop/presentation/shell/ActivityInbox.tsx": 37,
-    "src/desktop/presentation/shell/NextStepBanner.tsx": 9,
     "src/desktop/presentation/shell/ProjectTree.tsx": 59,
     "src/desktop/presentation/shell/Sidebar.tsx": 128,
     "src/desktop/presentation/shell/next-step.ts": 112,
@@ -91,7 +90,7 @@
     "src/modules/execution/infrastructure/git-isolation-service.ts": 491,
     "src/modules/execution/infrastructure/sqlite-agent-execution-repository.ts": 909,
     "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373,
-    "src/shared/contracts/ipc-contracts.ts": 386
+    "src/shared/contracts/ipc-contracts.ts": 382
   },
   "layers": {
     "src/modules/execution/application/agent-orchestrator.ts": 1,

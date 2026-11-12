@@ -42,4 +42,17 @@ describe('Banner «Siguiente paso» (B2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver FEAT-001 para integrarla' }));
     expect(onGo).toHaveBeenCalledWith({ view: 'graph', workItemId: 'f' });
   });
+  it('when integrating fails (a conflict), shows the reason and offers to open the feature to resolve it', async () => {
+    const onGo = vi.fn();
+    const integrate = vi.fn(async () => {
+      throw new Error('FEAT-001 y main cambiaron los mismos archivos de forma distinta: src/tasks.js.');
+    });
+    render(<NextStepBanner step={step} onGo={onGo} onIntegrateFeature={integrate} />);
+    expect(screen.queryByRole('button', { name: 'Ver FEAT-001' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Integrar FEAT-001' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sí, integrar' }));
+    expect(await screen.findByText(/cambiaron los mismos archivos de forma distinta: src\/tasks.js/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver FEAT-001' }));
+    expect(onGo).toHaveBeenCalledWith({ view: 'graph', workItemId: 'f' });
+  });
 });

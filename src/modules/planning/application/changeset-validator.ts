@@ -15,9 +15,14 @@ export interface ValidationResult {
 const docOps = (operation: ChangeOperation) =>
   operation.type === 'UPSERT_ARTIFACT' || operation.type === 'CREATE_DECISION_RECORD';
 const createsEntity = (operation: ChangeOperation) =>
-  ['CREATE_MODULE', 'CREATE_FEATURE', 'CREATE_REQUIREMENT', 'CREATE_WORK_ITEM', 'CREATE_DECISION_RECORD'].includes(
-    operation.type,
-  ) || operation.type === 'UPSERT_ARTIFACT';
+  [
+    'CREATE_MODULE',
+    'CREATE_FEATURE',
+    'CREATE_REQUIREMENT',
+    'CREATE_WORK_ITEM',
+    'CREATE_DECISION_RECORD',
+    'CREATE_CODE_REFERENCE',
+  ].includes(operation.type) || operation.type === 'UPSERT_ARTIFACT';
 const ENTITY_TYPE: Record<string, string> = {
   CREATE_MODULE: 'MODULE',
   CREATE_FEATURE: 'FEATURE',
@@ -25,7 +30,10 @@ const ENTITY_TYPE: Record<string, string> = {
   CREATE_WORK_ITEM: 'WORK_ITEM',
   CREATE_DECISION_RECORD: 'DECISION_RECORD',
   UPSERT_ARTIFACT: 'ARTIFACT',
+  CREATE_CODE_REFERENCE: 'CODE_REFERENCE',
 };
+/** A feature may start done or partial when the repository survey found it already built (plan REP, R3). */
+const FEATURE_STATUSES = ['DRAFT', 'READY', 'BLOCKED', 'IN_PROGRESS', 'PARTIAL', 'DONE', 'ARCHIVED'];
 const WORK_ITEM_STATUSES = ['DRAFT', 'READY', 'BLOCKED', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'ARCHIVED'];
 const plannedId = (op: ChangeOperation, index: number) =>
   'tempId' in op && op.tempId ? op.tempId : `$artifact_${index}`;
@@ -109,7 +117,7 @@ function plannedEntities(changeSet: ChangeSet, currentRevision: number): Knowled
         projectId: changeSet.projectId,
         entityType: ENTITY_TYPE[op.type]!,
         displayKey: `TMP-${i + 1}`,
-        title: 'title' in op ? op.title : '',
+        title: 'title' in op ? op.title : op.type === 'CREATE_CODE_REFERENCE' ? op.filePath : '',
         summary: 'summary' in op ? op.summary : '',
         status: 'DRAFT',
         parentId,
@@ -156,8 +164,11 @@ function checkOperation(op: ChangeOperation, i: number, scope: Scope, issue: Iss
     const entity = scope.entityFor(op.entityId);
     if (!entity || entity.entityType !== 'ARTIFACT' || entity.projectId !== scope.changeSet.projectId)
       issue('INVALID_ARTIFACT_TARGET', 'El upsert debe apuntar a un Artifact existente del proyecto.');
-  } else if (createsEntity(op)) checkCreate(scope.entityFor(plannedId(op, i))!, scope, issue);
-  else if (op.type === 'CREATE_RELATIONSHIP') checkRelationship(op, i, scope, issue);
+  } else if (createsEntity(op)) {
+    checkCreate(scope.entityFor(plannedId(op, i))!, scope, issue);
+    if (op.type === 'CREATE_CODE_REFERENCE' && !safeCodePath(op.filePath))
+      issue('UNSAFE_CODE_PATH', `La ruta de código ${op.filePath} debe ser relativa y estar dentro del repositorio.`);
+  } else if (op.type === 'CREATE_RELATIONSHIP') checkRelationship(op, i, scope, issue);
   else if (op.type === 'UPDATE_ENTITY_STATUS') checkStatus(op, scope, issue);
   else if (op.type === 'DELETE_RELATIONSHIP' && !scope.edges.some(edge => edge.id === op.edgeId))
     issue('MISSING_RELATIONSHIP', `No existe la relación ${op.edgeId}.`);
@@ -223,9 +234,22 @@ function checkStatus(op: Extract<ChangeOperation, { type: 'UPDATE_ENTITY_STATUS'
       !canTransitionWorkItem(entity.status as WorkItemStatus, op.newStatus as WorkItemStatus))
   )
     issue('INVALID_STATUS_TRANSITION', `No se permite cambiar el WorkItem de ${entity.status} a ${op.newStatus}.`);
+  else if (entity.entityType === 'FEATURE' && !FEATURE_STATUSES.includes(op.newStatus))
+    issue('INVALID_STATUS_TRANSITION', `Una feature no puede quedar en el estado ${op.newStatus}.`);
   else if (entity.entityType === 'DECISION_RECORD' && !canTransitionDecision(entity.status, op.newStatus))
     issue(
       'INVALID_STATUS_TRANSITION',
       `La decisión ${entity.displayKey} no puede pasar de ${entity.status} a ${op.newStatus} (se permite: ${decisionTransitions(entity.status).join(', ') || 'ninguno'}).`,
     );
+}
+
+/** A repository-relative file path: no absolute paths, backslashes or `.`/`..` segments. */
+function safeCodePath(path: string): boolean {
+  return (
+    !!path &&
+    path.length <= 400 &&
+    !path.startsWith('/') &&
+    !path.includes('\\') &&
+    !path.split('/').some(part => part === '..' || part === '.' || !part)
+  );
 }

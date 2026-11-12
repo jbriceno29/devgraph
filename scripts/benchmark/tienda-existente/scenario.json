@@ -1,0 +1,63 @@
+{
+  "name": "tienda-existente",
+  "description": "Plan REP, R3: una tienda que ya existe (catálogo, carrito, pedidos, informes y módulos auxiliares) con sus convenciones (céntimos, resultados { ok, value | error }) y una capacidad a medias (cupones de porcentaje). Tres tareas nuevas que deben construir sobre el código existente sin decir dónde está; se compara el piloto con y sin el mapa del código.",
+  "verify": ["node --test"],
+  "judge": "node",
+  "policy": {
+    "writablePaths": ["src/**", "tests/**", "README.md"],
+    "readonlyPaths": [],
+    "deniedPaths": [".env*"],
+    "allowedCommands": ["node --test"]
+  },
+  "features": [
+    {
+      "key": "FEAT-401",
+      "title": "Siguiente hito de la tienda",
+      "summary": "Cupones de porcentaje, cancelación de pedidos y ventas por categoría."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "B1",
+      "feature": "FEAT-401",
+      "key": "TASK-401",
+      "area": "src/cart",
+      "title": "Cupones de porcentaje",
+      "summary": "Permite aplicar al carrito cupones de porcentaje: { type: 'PERCENT', value } con value entero de 1 a 100. El descuento se calcula sobre el subtotal y se redondea al céntimo como el resto de importes de la tienda. Debe usarse con la misma función con la que hoy se aplican los cupones.",
+      "criteria": [
+        "Un 10 % sobre 19,99 € deja 17,99 €",
+        "Un porcentaje fuera de 1..100 se rechaza",
+        "Los cupones fijos siguen funcionando"
+      ],
+      "dependsOn": [],
+      "reuse": {
+        "file": "src/cart/discounts.js",
+        "mustNotContain": "todavía no están implementados",
+        "uses": "percentOf|roundCents",
+        "single": "applyCoupon"
+      }
+    },
+    {
+      "id": "B2",
+      "feature": "FEAT-401",
+      "key": "TASK-402",
+      "area": "src/orders",
+      "title": "Cancelar pedidos",
+      "summary": "Un pedido se puede cancelar mientras no se haya enviado. Exporta cancelOrder(order) en la API pública; la cancelación queda en el historial del pedido.",
+      "criteria": ["Un pedido pendiente o pagado pasa a cancelado", "Un pedido enviado no se puede cancelar"],
+      "dependsOn": [],
+      "reuse": { "file": "src/orders/orders.js", "uses": "canTransition|moveTo", "single": "cancelOrder" }
+    },
+    {
+      "id": "B3",
+      "feature": "FEAT-401",
+      "key": "TASK-403",
+      "area": "src/reports",
+      "title": "Ventas por categoría",
+      "summary": "Añade un informe de ventas agrupado por categoría de producto: salesByCategory(orders, catalog) en la API pública, que devuelve los céntimos vendidos por categoría con los mismos pedidos que ya cuentan en el informe de ventas por producto.",
+      "criteria": ["Suma por categoría", "Solo cuentan los pedidos que ya cuentan como venta"],
+      "dependsOn": [],
+      "reuse": { "file": "src/reports/sales.js", "uses": "countedOrders|salesByProduct", "single": "salesByCategory" }
+    }
+  ]
+}

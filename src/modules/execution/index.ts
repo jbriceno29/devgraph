@@ -11,3 +11,4 @@ export * from './infrastructure/sqlite-agent-execution-repository.js';
 export * from './domain/run-summary.js';
 export * from './infrastructure/git-repository-state.js';
 export * from './infrastructure/safe-git-isolation.js';
+export * from './infrastructure/base-checkout.js';

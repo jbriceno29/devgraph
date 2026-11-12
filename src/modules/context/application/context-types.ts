@@ -14,6 +14,8 @@ export interface ContextCandidate {
   contentHash: string;
   relevanceScore: number;
   record?: ContextEntityRecord;
+  /** Code passed as a pointer to read in the worktree (its file is not loaded). */
+  pointer?: boolean;
 }
 export interface ResolvedContext {
   project: ContextProjectRecord;

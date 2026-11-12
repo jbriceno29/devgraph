@@ -22,7 +22,7 @@ type Rest<F> = F extends (k: InceptionKernel, ...args: infer A) => unknown ? A :
 export class ProjectInceptionService {
   private readonly k: InceptionKernel;
   constructor(deps: ProjectInceptionDependencies) {
-    this.k = { deps, running: new Map(), controllers: new Map() };
+    this.k = { deps, running: new Map(), controllers: new Map(), surveys: new Map() };
   }
 
   get(...args: Rest<typeof get>) {

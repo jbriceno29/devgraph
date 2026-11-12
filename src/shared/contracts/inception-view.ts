@@ -85,6 +85,8 @@ export interface InceptionProposalDto {
   features: InceptionFeatureDto[];
   /** The «Fundación» scaffold task (READY after approval). */
   scaffoldTaskTitle: string | null;
+  /** Plan REP, R3: what the map says already exists (it enters the graph with the proposal); absent without a map. */
+  existing?: Array<{ module: string; capabilities: Array<{ title: string; status: 'COMPLETE' | 'PARTIAL' }> }>;
 }
 /** Visual exploration (optional step between the questions and the proposal): up to MAX_UI_OPTIONS directions, each with an interactive HTML prototype. */
 export const MAX_UI_OPTIONS = 5;

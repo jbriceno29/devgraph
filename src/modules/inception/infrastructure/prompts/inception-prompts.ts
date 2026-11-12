@@ -9,6 +9,11 @@ import { GRAPH_RULES } from '../../../planning/index.js';
 import { NO_INSTALL_RULE } from '../../application/foundation-plan.js';
 import { catalogForPrompt } from '../../../projects/index.js';
 import { MAX_SCAN_BYTES, type RepositoryScanDto } from '../../../../shared/contracts/repository-scan.js';
+import { MAPPED_BROWNFIELD_RULES, codeMapBlock, surveyOf } from './code-map-prompt.js';
+
+/** The brownfield proposal rules with (b) and (e) replaced by the ones that build on the map. */
+const mappedRules = (how: string) =>
+  `${how.slice(0, how.indexOf(' (b) '))} ${MAPPED_BROWNFIELD_RULES.slice(0, MAPPED_BROWNFIELD_RULES.indexOf(' (e) '))}${how.slice(how.indexOf(' (c) '), how.indexOf(' (e) '))}${MAPPED_BROWNFIELD_RULES.slice(MAPPED_BROWNFIELD_RULES.indexOf(' (e) '))}`;
 
 export const LANGUAGE =
   'Write every user-facing text (questions, options, titles, summaries, documents, rules) in Spanish.';
@@ -89,7 +94,8 @@ export function repositoryBlock(project: InceptionProjectInput, gate: 'questions
       : gate === 'ui'
         ? ' "inferences" is what was inferred from it and "userCorrections" what the user corrected (corrections always win). Respect the existing design system (its tokens, palette, typography and component style) in at least the main direction; the others may evolve it, and say so in their summary.'
         : ' "inferences" is what was inferred from it and the user confirmed, except where "userCorrections" says otherwise: corrections ALWAYS win over the inferences and over the scan. This changes the proposal, and wins over the numbered rules above where they conflict: (a) the stack is the existing one: techStack and the ADR describe what the evidence shows, the ADR decides to keep it and its alternatives include migrating; rule 2 does not apply: do not set stackProfileId, keep the existing dependencies and never add new ones. (b) The first task of «Fundación» is NOT a scaffold from scratch: it reviews and documents the existing base without rewriting it (README with how to run and test it, and one passing smoke test with the verification command). (c) "rules" record the conventions the code already follows (folder structure, naming, module style) and, when there is a design system, its tokens and how styles are written. (d) verificationCommands use the test command the manifests already define when there is one (for example "npm test" only when package.json has a test script). (e) Modules and features build on the existing structure and never recreate what already exists.';
-  return `${intro}${how}
+  const rules = gate === 'proposal' && surveyOf(project) ? mappedRules(how) : how;
+  return `${intro}${rules}
 <<<REPOSITORY_SCAN
 ${inertJson({ scan, ...judged })}
 REPOSITORY_SCAN>>>`;
@@ -155,7 +161,7 @@ Project:
 ${brief(project)}
 
 Answers of the user:
-${JSON.stringify(qa)}${referencesBlock(project, 'proposal')}${repositoryBlock(project, 'proposal')}${visualDirectionBlock(project)}${changeRequestsBlock(notes)}`;
+${JSON.stringify(qa)}${referencesBlock(project, 'proposal')}${repositoryBlock(project, 'proposal')}${codeMapBlock(project)}${visualDirectionBlock(project)}${changeRequestsBlock(notes)}`;
 }
 
 /**

@@ -71,6 +71,11 @@ export type ChangeOperation =
       metadata?: Record<string, unknown>;
     }
   | { type: 'DELETE_RELATIONSHIP'; edgeId: string; reason: string }
+  /**
+   * Plan REP, R3: a file the repository survey cited as evidence. Only the app builds it (an engine's operations are
+   * normalized without it); an existing CODE_REFERENCE of the same path is reused, never duplicated.
+   */
+  | { type: 'CREATE_CODE_REFERENCE'; tempId: string; filePath: string; commitSha: string }
   /** Project profile (inception): goal, scope, stack, level-1 rules and verification commands. Replaces each field it carries. */
   | ({ type: 'SET_PROJECT_PROFILE' } & ProjectProfile);
 export interface ProjectProfile {

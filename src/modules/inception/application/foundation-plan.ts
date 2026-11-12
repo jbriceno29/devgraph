@@ -34,7 +34,7 @@ const KEPT: ReadonlySet<ChangeOperation['type']> = new Set([
 export function buildFoundationPlan(
   operations: ChangeOperation[],
   rootId: string,
-  options: { uiSpec?: boolean; brownfield?: boolean } = {},
+  options: { uiSpec?: boolean; brownfield?: boolean; mapped?: boolean } = {},
 ): { operations: ChangeOperation[]; problems: string[] } {
   const plan = preparePlan(operations, rootId);
   const stackProfile = applyProfile(plan, options.brownfield === true);
@@ -43,9 +43,11 @@ export function buildFoundationPlan(
   else if (!decision.alternativesMd.trim())
     plan.problems.push('El ADR del stack debe describir las alternativas consideradas.');
   const foundation = plan.features.find(feature => FOUNDATION.test(feature.title));
-  if (!foundation) plan.problems.push('Falta la feature «Fundación».');
+  // Plan REP, R3: with the map of what exists, «Fundación» is only there when the base needs work (README, smoke test).
+  if (!foundation && !options.mapped) plan.problems.push('Falta la feature «Fundación».');
   const scaffold = foundation ? plan.tasks.find(task => task.parentId === foundation.tempId) : undefined;
-  if (foundation && !scaffold) plan.problems.push('La feature «Fundación» necesita una primera tarea de scaffold.');
+  if (foundation && !scaffold && !options.mapped)
+    plan.problems.push('La feature «Fundación» necesita una primera tarea de scaffold.');
   if (scaffold) guideScaffold(scaffold, stackProfile);
   if (foundation) dependOnFoundation(plan, foundation);
   wireTasks(plan, foundation, scaffold);
@@ -170,8 +172,13 @@ function wireTasks(
   // Last tasks of a feature: no other task of the same feature depends on them.
   const sinks = (featureId: string) =>
     tasksOf(featureId).filter(task => !tasksOf(featureId).some(other => depends(plan, other.tempId, task.tempId)));
-  for (const feature of plan.features) {
-    const prerequisites = featurePrerequisites(plan, feature.tempId);
+  // Tasks under a feature the plan does not create (one the map found PARTIAL) start after «Fundación», like any other.
+  const outside = [...new Set(plan.tasks.map(task => task.parentId))].filter(id => !plan.featureIds.has(id));
+  const groups = [
+    ...plan.features.map(feature => ({ feature, prerequisites: featurePrerequisites(plan, feature.tempId) })),
+    ...outside.map(id => ({ feature: { tempId: id }, prerequisites: foundation ? [foundation.tempId] : [] })),
+  ];
+  for (const { feature, prerequisites } of groups) {
     for (const task of tasksOf(feature.tempId)) {
       if (
         task === scaffold ||

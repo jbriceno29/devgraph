@@ -173,6 +173,35 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
 - **Criterio de corte:** si el mapa no reduce la exploración ni los errores por desconocer el código, R3 se
   queda en el documento `MAPA_DEL_CODIGO.md`, sin nodos en el grafo.
 
+**Estado (2026-11-12): hecho.**
+
+- **Reconocimiento:** al leer el repositorio en «Empezar», arranca en segundo plano mientras el usuario responde.
+  - `claude -p --json-schema` con `haiku`, `Read`, `Glob` y `Grep` limitados a una copia de la rama base (`withBaseCheckout`, compartido con R2) y 40 turnos como mucho.
+  - Corre con `--setting-sources ''`: la comprobación con la CLI mostró que con `project,local` los hooks del `.claude/settings.json` del repositorio sí se ejecutan.
+  - Cada ruta se contrasta con `git ls-files` de ese commit. Se descartan las que no existen, las capacidades sin evidencia y los módulos vacíos.
+- **Vista:** «Lo que se detectó en tu repositorio» muestra el avance (leyendo, listo con el recuento, o el error). Un mapa que la app dejó a medias se lee como interrumpido y se repite al preparar la propuesta. Si falla, la propuesta se hace sin mapa.
+- **Propuesta:**
+  - Espera al mapa y lo recibe como datos, con los ids de sus módulos y capacidades.
+  - Solo añade trabajo nuevo, colgado de esos módulos. Una capacidad a medias se completa con tareas bajo su feature.
+  - «Fundación» pasa a ser opcional y ya no hay tarea de «revisar y documentar la base».
+  - La revisión muestra «Lo que ya existe» aparte del «Trabajo nuevo».
+- **Grafo:** al aprobar entran los módulos, las capacidades (features en «Hecha» o «Parcial», estado nuevo), un `CODE_REFERENCE` por archivo de evidencia (operación nueva `CREATE_CODE_REFERENCE`, que solo construye la app) con `TOUCHES_CODE` desde su capacidad y su módulo, y `docs/MAPA_DEL_CODIGO.md` con `DOCUMENTED_BY` desde cada módulo.
+  - La procedencia `SURVEY` va en `metadata.origin` de la arista: la columna `provenance` tiene un `CHECK` que obligaba a reconstruir `graph_edges`.
+- **Contexto:** una tarea bajo un módulo existente recibe sus archivos como punteros de nivel 4 (`code-pointers.ts`, como mucho 40), la feature antes que el módulo.
+- **Corrida real con `haiku`** sobre una copia de `todo-app`, con el usuario en otra rama:
+  - Mapa en 14 s: un módulo con 7 capacidades, cada una con `src/tasks.js` y su prueba.
+  - La propuesta trajo solo trabajo nuevo y, al aprobar, quedaron 7 features «Hecha», 2 `CODE_REFERENCE`, 16 `TOUCHES_CODE` y el documento.
+  - La primera tarea recibió `src/tasks.js` y `tests/tasks.test.js` como punteros, y el mapa como documento.
+  - La primera corrida reveló dos cosas, ya corregidas: aprobar fallaba cuando el modelo ponía la visión bajo la raíz y además la arista `DOCUMENTED_BY` explícita (ahora una arista repetida no se crea dos veces), y el prompt tomaba las pruebas por un módulo y anotaba como pendiente que no había pendientes.
+- **Benchmark** ([2026-11-12-tienda-existente-haiku-mapa.md](benchmarks/2026-11-12-tienda-existente-haiku-mapa.md)), tres tareas sobre una tienda existente, con y sin mapa:
+  - Misma calidad: 3 de 3 al primer intento, 6/6 pruebas ocultas y reutilización del código existente en los dos brazos.
+  - Exploración antes del primer cambio: de 30 a 16 llamadas a herramientas.
+  - Un 10 % más de costo ponderado en tokens.
+  - Por el criterio de corte, los nodos se quedan en el grafo.
+- **Pendiente:**
+  - Medir en un repositorio grande si el mapa también evita errores (con R5).
+  - Las preguntas siguen siendo las de un proyecto nuevo (R4).
+
 ### R4. Preguntas del siguiente hito (S, ½ día)
 
 - **Con repositorio, el guion de preguntas cambia.** En vez de «quién lo usa / qué problema resuelve»:

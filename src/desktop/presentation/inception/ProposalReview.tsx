@@ -6,17 +6,11 @@ import type {
   InceptionViewDto,
 } from '../../../shared/contracts/inception-view.js';
 import { changeSetStatusLabel } from '../labels.js';
+import { ExistingCode, PlanList, dependencyText } from './ProposalPlan.js';
+
+export { dependencyText };
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-const joinNames = (names: string[]) =>
-  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names.at(-1)}`;
-
-/** «Empieza cuando termine Fundación» a partir de los tempId de DEPENDS_ON. */
-export function dependencyText(feature: InceptionFeatureDto, features: InceptionFeatureDto[]): string {
-  const names = feature.dependsOn.map(id => features.find(item => item.tempId === id)?.title ?? id);
-  if (names.length) return `Empieza cuando ${names.length === 1 ? 'termine' : 'terminen'} ${joinNames(names)}`;
-  return feature.isFoundation ? 'Va primero: prepara la base del proyecto' : 'Puede empezar en cualquier momento';
-}
 /** Fundación primero y, dentro de ella, la tarea de preparación. */
 export function orderedPlan(proposal: InceptionProposalDto): InceptionFeatureDto[] {
   return [...proposal.features]
@@ -219,41 +213,16 @@ export function ProposalReview({ view, applied = false }: { view: InceptionViewD
         <Section title="Requisitos" empty={!proposal.requirements.length}>
           <List items={proposal.requirements} />
         </Section>
-        <Section title="Plan" empty={!plan.length}>
+        {proposal.existing && (
+          <Section title="Lo que ya existe">
+            <ExistingCode existing={proposal.existing} />
+          </Section>
+        )}
+        <Section title={proposal.existing ? 'Trabajo nuevo' : 'Plan'} empty={!plan.length}>
           <p className="mb-2">
             {plural(plan.length, 'feature', 'features')} con {plural(taskCount(proposal), 'tarea', 'tareas')}.
           </p>
-          <ol className="space-y-3">
-            {plan.map(feature => (
-              <li key={feature.tempId} className="rounded-lg border border-border bg-surface-raised p-3">
-                <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
-                  {feature.title}
-                  {feature.isFoundation && !/fundaci[oó]n/i.test(feature.title) && (
-                    <span className="rounded bg-accent-soft px-1.5 text-[11px] font-medium text-accent">Fundación</span>
-                  )}
-                </p>
-                <p className="text-[11px] text-fg-subtle">{dependencyText(feature, plan)}</p>
-                <ol className="mt-2 space-y-1 border-l border-border pl-3">
-                  {feature.tasks.map(task => {
-                    const first = task.title === proposal.scaffoldTaskTitle;
-                    return (
-                      <li key={task.tempId} className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="text-fg">{task.title}</span>
-                        {first && (
-                          <span className="rounded bg-success-soft px-1.5 text-[11px] font-medium text-success">
-                            Primera tarea
-                          </span>
-                        )}
-                        <span className="text-[11px] text-fg-subtle">
-                          {task.initialStatus === 'READY' ? 'lista para empezar' : 'espera a las anteriores'}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </li>
-            ))}
-          </ol>
+          <PlanList plan={plan} proposal={proposal} />
         </Section>
       </div>
     </div>

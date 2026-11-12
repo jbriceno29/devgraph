@@ -1,7 +1,11 @@
 import { join } from 'node:path';
 import { ProjectInceptionService } from '../../modules/inception/application/project-inception-service.js';
-import type { InceptionEnginePort } from '../../modules/inception/application/ports/inception-port.js';
+import type {
+  InceptionEnginePort,
+  RepositorySurveyorPort,
+} from '../../modules/inception/application/ports/inception-port.js';
 import { ClaudeInceptionEngine } from '../../modules/inception/infrastructure/claude-inception-engine.js';
+import { ClaudeRepositorySurveyor } from '../../modules/inception/infrastructure/claude-repository-surveyor.js';
 import { DesignPrototypeWriter } from '../../modules/inception/infrastructure/design-prototype-writer.js';
 import { InceptionReferenceFiles } from '../../modules/inception/infrastructure/inception-reference-files.js';
 import { SqliteInceptionRepository } from '../../modules/inception/infrastructure/sqlite-inception-repository.js';
@@ -50,6 +54,7 @@ export function inceptionServices(c: Container) {
       designFiles: new DesignPrototypeWriter(),
       scanner: c.scanner,
       baselineOf: id => c.baseline.stored(id),
+      ...optional('surveyor', surveyorFor(c, projectId)),
       models: id => ({ planning: c.connection(id).planningModel, available: c.connection(id).availableModels }),
       emit: (channel, payload) => c.emit(channel, payload),
     });
@@ -68,3 +73,26 @@ export function inceptionServices(c: Container) {
     },
   };
 }
+
+/** Plan REP, R3: the survey reads the code with Claude Code on a copy of the base branch. Tests that fake the engine get none unless they inject one. */
+function surveyorFor(c: Container, projectId: string): RepositorySurveyorPort | undefined {
+  if (c.dependencies.repositorySurveyor) return c.dependencies.repositorySurveyor;
+  if (c.dependencies.inceptionEngine) return undefined;
+  const checkout = {
+    workspaceRoot: c.workspaceRoot,
+    repositoryOf: (id: string) => c.repositoryPath(id),
+    configuredBase: (id: string) => c.baseBranch(id),
+  };
+  return {
+    survey: input => {
+      if (c.agentAdapter.providerId !== 'claude-code')
+        throw new Error('La lectura del código todavía solo funciona con Claude Code.');
+      return new ClaudeRepositorySurveyor(c.engineDirectory(projectId), checkout, {
+        authMode: c.connection(projectId).authMode,
+      }).survey(input);
+    },
+  };
+}
+
+const optional = <K extends string, V>(key: K, value: V | undefined) =>
+  (value === undefined ? {} : { [key]: value }) as Partial<Record<K, V>>;

@@ -10,6 +10,7 @@ import {
 import type { AgentAccessEditDto } from '../../../shared/contracts/repository-scan.js';
 import { control, focusRing } from '../ui.js';
 import { AgentAccessSection } from './AgentAccessSection.js';
+import { CodeMapStatus } from './CodeMapStatus.js';
 
 export const AREA_LABEL: Record<RepositoryInferenceArea, string> = {
   STACK: 'Stack',
@@ -132,6 +133,7 @@ export function RepositoryFindings({
             ))}
           </ul>
         )}
+        <CodeMapStatus survey={repository.survey} />
         {repository.access && (
           <AgentAccessSection
             access={repository.access}

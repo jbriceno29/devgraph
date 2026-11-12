@@ -15,8 +15,10 @@ import type {
   InceptionRepositoryState,
   InceptionUiOption,
   ReferenceTranslatorPort,
+  RepositorySurveyorPort,
   UiOptionDraft,
 } from './ports/inception-port.js';
+import type { RepositorySurveyStateDto } from '../../../shared/contracts/repository-survey.js';
 
 /** The ChangeSet flow the inception reuses (validation, review and application are the same as any other proposal). */
 export interface InceptionPlanningPort {
@@ -43,6 +45,8 @@ export interface ProjectInceptionDependencies {
   /** Brownfield mode: reads the configured repository when the inception starts; when it already has code, the assistant works from that evidence. */
   scanner?: RepositoryScannerPort;
   baselineOf?(projectId: string): import('./ports/inception-port.js').PlanBaseline | null;
+  /** Plan REP, R3: the read-only survey of what exists; without it the proposal is planned from the scan alone. */
+  surveyor?: RepositorySurveyorPort;
   emit?(channel: 'inception:updated' | 'graph:revision_updated', payload: unknown): void;
 }
 
@@ -74,6 +78,8 @@ export interface InceptionKernel {
   readonly deps: ProjectInceptionDependencies;
   readonly running: Map<string, Promise<void>>;
   readonly controllers: Map<string, AbortController>;
+  /** Plan REP, R3: the survey running in the background, by project (it outlives the questions call). */
+  readonly surveys: Map<string, { promise: Promise<RepositorySurveyStateDto>; controller: AbortController }>;
 }
 
 export function proposalView(k: InceptionKernel, changeSetId: string): InceptionProposalDto | null {

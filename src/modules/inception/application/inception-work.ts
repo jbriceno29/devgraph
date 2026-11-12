@@ -16,6 +16,8 @@ import type {
   InceptionRepositoryState,
 } from './ports/inception-port.js';
 import { withAgentAccess } from './repository-access.js';
+import { awaitSurvey } from './inception-survey.js';
+import { surveyOperations, withoutMapCollisions } from './survey-plan.js';
 
 export function launch(
   k: InceptionKernel,
@@ -172,6 +174,9 @@ export async function proposalWork(
 ) {
   const projectId = record.projectId,
     rootId = projectRootId(k, projectId);
+  // Plan REP, R3: the proposal waits for the map of what exists and hangs the new work on it.
+  const survey = await awaitSurvey(k, record, signal);
+  const repository = record.repository && survey ? { ...record.repository, survey } : record.repository;
   const result = await k.deps.engine.propose({
     project: projectInput(
       k,
@@ -180,7 +185,7 @@ export async function proposalWork(
       props,
       record.references ?? [],
       approvedDirection(k, record),
-      record.repository,
+      repository,
     ),
     questions: record.questions,
     answers: record.answers,
@@ -188,9 +193,11 @@ export async function proposalWork(
     ...(record.model ? { model: record.model } : {}),
     signal,
   });
-  const plan = buildFoundationPlan(result.draft.operations, rootId, {
+  const map = survey?.survey ? surveyOperations(survey.survey, rootId) : [];
+  const plan = buildFoundationPlan(withoutMapCollisions(result.draft.operations), rootId, {
     uiSpec: !!approvedDirection(k, record),
     brownfield: !!record.repository,
+    mapped: map.length > 0,
   });
   const changeSet = k.deps.planning.submit(
     projectId,
@@ -199,7 +206,7 @@ export async function proposalWork(
       rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)]
         .filter(Boolean)
         .join('\n'),
-      operations: withAgentAccess(plan.operations, record.repository, k.deps.baselineOf?.(record.projectId)),
+      operations: withAgentAccess([...plan.operations, ...map], record.repository, k.deps.baselineOf?.(projectId)),
     },
     `inception:${projectId}`,
   );
@@ -230,6 +237,9 @@ function storeResult(
     usage: usage ? [...latest.usage, usage] : latest.usage,
     updatedAt: new Date().toISOString(),
   };
+  // The survey (plan REP, R3) runs on its own: a gate's result never overwrites its progress.
+  if (rest.repository && latest.repository?.survey)
+    next.repository = { ...rest.repository, survey: latest.repository.survey };
   if (!('error' in rest)) next.error = null;
   let stored = next;
   try {

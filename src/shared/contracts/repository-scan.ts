@@ -1,3 +1,4 @@
+import type { RepositorySurveyStateDto } from './repository-survey.js';
 /**
  * Brownfield mode: what the app reads from a repository that already has code, so the inception assistant can infer the stack and
  * the design system WITH EVIDENCE. Only metadata, manifests, folder structure and style files are read: `.gitignore` is respected,
@@ -91,6 +92,8 @@ export interface InceptionRepositoryDto {
   corrections: RepositoryCorrectionDto[];
   /** Absent in views from an older core. */
   access?: AgentAccessDto;
+  /** Plan REP, R3: the read-only survey of what already exists (absent before it starts, or in an older core). */
+  survey?: RepositorySurveyStateDto | null;
 }
 
 /** The view of a scan, without contents, with the serialized size of the full scan. */

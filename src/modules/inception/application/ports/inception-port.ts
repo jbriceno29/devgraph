@@ -13,6 +13,7 @@ import type {
   RepositoryScanDto,
   AgentAccessEditDto,
 } from '../../../../shared/contracts/repository-scan.js';
+import type { RepositorySurveyStateDto } from '../../../../shared/contracts/repository-survey.js';
 
 /** Brownfield mode: what was read from a repository that already has code, what the assistant inferred from it and what the user corrected. */
 export interface InceptionRepositoryState {
@@ -21,6 +22,8 @@ export interface InceptionRepositoryState {
   corrections: RepositoryCorrectionDto[];
   /** What the user set for the agent's access (plan REP, R1); absent: what the scan suggests. */
   access?: AgentAccessEditDto | null;
+  /** Plan REP, R3: the read-only survey of what already exists; it runs while the user answers. */
+  survey?: RepositorySurveyStateDto | null;
 }
 
 /** Tokens and cost of one engine call (null fields when the engine does not report them). */
@@ -197,4 +200,19 @@ export interface DesignPrototypeWriterPort {
 export interface PlanBaseline {
   checks: Array<{ command: string; passed: boolean; tail: string }>;
   knownFailing: string[];
+}
+
+/**
+ * Plan REP, R3: a read-only reconnaissance run over a throwaway copy of the base branch (Read, Glob and Grep inside it;
+ * no writes, no commands, no settings or hooks of the repository). `raw` is the engine's inventory, unchecked; `tracked`
+ * is what `git ls-files` lists at that commit, so the service keeps only evidence that exists.
+ */
+export interface RepositorySurveyorPort {
+  survey(input: {
+    projectId: string;
+    /** What the scan already read (manifests, structure), so the run starts from it. */
+    scan: InceptionRepositoryState['scan'];
+    model?: string;
+    signal?: AbortSignal;
+  }): Promise<{ raw: unknown; tracked: string[]; ref: string; commit: string; usage: InceptionEngineUsage | null }>;
 }

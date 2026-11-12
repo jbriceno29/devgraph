@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { SqliteDatabase } from '../../../platform/sqlite/database.js';
-import { seedDefaultPolicy } from '../../execution/index.js';
 import type { StagedMarkdownFile } from '../../planning/index.js';
-import { findStackProfile } from '../../projects/index.js';
 import type { ChangeOperation, ChangeSet } from '../domain/change-set.js';
+import { upsertCodeReference } from './sqlite-code-reference-writes.js';
+import { applyProjectProfile } from './sqlite-project-profile-writes.js';
 
 export type CreateOperation = Extract<
   ChangeOperation,
@@ -45,14 +45,25 @@ const KEY_PREFIX: Record<string, string> = {
   DECISION_RECORD: 'ADR',
   ARTIFACT: 'DOC',
 };
-const EDGE_INSERT = `INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES(?,?,?,?,?,'CHANGESET',?,NULL,?,?,?)`;
+/**
+ * An edge that already exists (or that the same ChangeSet already created, for example the DOCUMENTED_BY implied by a
+ * document's parent plus an explicit one, seen in a real run) is not created twice: the second write does nothing.
+ */
+const EDGE_INSERT = `INSERT INTO graph_edges(id,project_id,source_id,target_id,edge_type,provenance,changeset_id,execution_id,metadata_json,created_revision,created_at) VALUES(?,?,?,?,?,'CHANGESET',?,NULL,?,?,?) ON CONFLICT(project_id,source_id,target_id,edge_type) DO NOTHING`;
 
 /** Every write a ChangeSet makes in the graph, inside the applier's transaction (A3: split out of the applier). */
 export class SqliteGraphWrites {
   constructor(private readonly db: SqliteDatabase) {}
 
   /** A new entity: its row, its key (MOD-001, TASK-004…), its type-specific row and its search text. */
-  insertCreate(op: CreateOperation, ctx: ApplyContext): void {
+  insertCreate(
+    op: CreateOperation | Extract<ChangeOperation, { type: 'CREATE_CODE_REFERENCE' }>,
+    ctx: ApplyContext,
+  ): void {
+    if (op.type === 'CREATE_CODE_REFERENCE') {
+      ctx.ids[op.tempId] = upsertCodeReference(this.db, op, { ...ctx, projectId: ctx.changeSet.projectId });
+      return;
+    }
     const entityId = globalThis.crypto.randomUUID();
     if ('tempId' in op && op.tempId) ctx.ids[op.tempId] = entityId;
     const type = ENTITY_TYPE[op.type];
@@ -172,7 +183,7 @@ export class SqliteGraphWrites {
         );
     } else if (op.type === 'DELETE_RELATIONSHIP')
       this.db.prepare('DELETE FROM graph_edges WHERE id=? AND project_id=?').run(ctx.resolve(op.edgeId), projectId);
-    else if (op.type === 'SET_PROJECT_PROFILE') this.applyProfile(projectId, op, ctx.now);
+    else if (op.type === 'SET_PROJECT_PROFILE') applyProjectProfile(this.db, projectId, op, ctx.now);
     else if (op.type === 'UPDATE_ENTITY_STATUS')
       this.db
         .prepare('UPDATE knowledge_entities SET status=?,updated_revision=?,updated_at=? WHERE id=? AND project_id=?')
@@ -213,43 +224,6 @@ export class SqliteGraphWrites {
     }
   }
 
-  /** Profile fields replace the project's; verification commands become the allowed commands of every project policy. */
-  private applyProfile(
-    projectId: string,
-    op: Extract<ChangeOperation, { type: 'SET_PROJECT_PROFILE' }>,
-    now: string,
-  ): void {
-    this.db
-      .prepare(
-        'UPDATE projects SET objectives_json=?,out_of_scope_json=?,tech_stack_json=?,rules_json=?,description=COALESCE(?,description),stack_profile_id=?,updated_at=? WHERE id=?',
-      )
-      .run(
-        JSON.stringify(op.objectives),
-        JSON.stringify(op.outOfScope),
-        JSON.stringify(op.techStack),
-        JSON.stringify(op.rules),
-        op.description ?? null,
-        op.stackProfileId ?? null,
-        now,
-        projectId,
-      );
-    seedDefaultPolicy(this.db, projectId);
-    this.db
-      .prepare('UPDATE autonomy_policies SET allowed_commands_json=? WHERE project_id=?')
-      .run(JSON.stringify([...new Set(op.verificationCommands)]), projectId);
-    // The stack profile adds its root files (plan S1); an existing repository's own paths replace the defaults (REP R1).
-    const extra = findStackProfile(op.stackProfileId)?.writablePaths ?? [];
-    if (extra.length || op.writablePaths?.length)
-      for (const row of this.db
-        .prepare('SELECT id,writable_paths_json FROM autonomy_policies WHERE project_id=?')
-        .all(projectId) as Array<{ id: string; writable_paths_json: string }>) {
-        const current = op.writablePaths?.length ? op.writablePaths : (JSON.parse(row.writable_paths_json) as string[]);
-        this.db
-          .prepare('UPDATE autonomy_policies SET writable_paths_json=? WHERE id=?')
-          .run(JSON.stringify([...new Set([...current, ...extra])]), row.id);
-      }
-  }
-
   private edge(ctx: ApplyContext, sourceRef: string, target: string, type: 'AFFECTS' | 'DOCUMENTED_BY'): void {
     const source = ctx.ids[sourceRef] ?? sourceRef;
     this.db
@@ -276,11 +250,18 @@ export class SqliteGraphWrites {
   }
 }
 
-export function isCreate(op: ChangeOperation): op is CreateOperation {
+export function isCreate(
+  op: ChangeOperation,
+): op is CreateOperation | Extract<ChangeOperation, { type: 'CREATE_CODE_REFERENCE' }> {
   return (
-    ['CREATE_MODULE', 'CREATE_FEATURE', 'CREATE_REQUIREMENT', 'CREATE_WORK_ITEM', 'CREATE_DECISION_RECORD'].includes(
-      op.type,
-    ) ||
+    [
+      'CREATE_MODULE',
+      'CREATE_FEATURE',
+      'CREATE_REQUIREMENT',
+      'CREATE_WORK_ITEM',
+      'CREATE_DECISION_RECORD',
+      'CREATE_CODE_REFERENCE',
+    ].includes(op.type) ||
     (op.type === 'UPSERT_ARTIFACT' && (!op.entityId || !!op.tempId))
   );
 }

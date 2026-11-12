@@ -78,11 +78,13 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
     return files;
   }
 
+  /** Documents and code references (plan REP, R3) belong to the project's repository. */
   private repositoryFor(changeSet: ChangeSet, files: StagedMarkdownFile[], repositoryRoot: string | null) {
     if (files.length && !repositoryRoot)
       throw new Error('Configura el repositorio Git para aplicar cambios con documentos Markdown.');
-    const repo = files.length ? this.repositories.findPrimaryForProject(changeSet.projectId) : null;
-    if (files.length && !repo) throw new Error('No hay repositorio configurado para guardar los documentos.');
+    const needed = files.length > 0 || changeSet.operations.some(op => op.type === 'CREATE_CODE_REFERENCE');
+    const repo = needed ? this.repositories.findPrimaryForProject(changeSet.projectId) : null;
+    if (needed && !repo) throw new Error('No hay repositorio configurado para guardar los documentos.');
     return repo;
   }
 

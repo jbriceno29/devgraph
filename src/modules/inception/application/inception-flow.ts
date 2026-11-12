@@ -20,6 +20,7 @@ import {
 } from './inception-kernel.js';
 import { view } from './inception-snapshot.js';
 import { exploreWork, launch, proposalWork, scanRepository, translateReferences } from './inception-work.js';
+import { abortSurvey, startSurvey } from './inception-survey.js';
 import { EMPTY_UI_STATE, type InceptionRecord, type InceptionReference } from './ports/inception-port.js';
 import { prepareReferences } from './reference-files.js';
 import { editedRepository } from './repository-access.js';
@@ -178,6 +179,7 @@ export function restart(k: InceptionKernel, projectId: string): InceptionViewDto
   const current = findRecord(k, projectId);
   if (current?.stage === 'APPLIED') throw new Error('El inicio ya se aplicó; los cambios al plan van por Planificar.');
   k.controllers.get(projectId)?.abort();
+  abortSurvey(k, projectId);
   if (current?.changeSetId) {
     const pending = k.deps.planning.find(current.changeSetId);
     if (pending && !['APPLIED', 'REJECTED'].includes(pending.status)) k.deps.planning.reject(pending.id);
@@ -191,6 +193,7 @@ export function restart(k: InceptionKernel, projectId: string): InceptionViewDto
 /** App shutdown: aborts every running call (their processes are stopped); the record stays WORKING and reads as interrupted on the next open. */
 export function shutdown(k: InceptionKernel): void {
   for (const controller of k.controllers.values()) controller.abort();
+  for (const projectId of [...k.surveys.keys()]) abortSurvey(k, projectId);
 }
 
 /** Resolves when the background engine call (if any) has finished. */
@@ -233,6 +236,8 @@ async function askGoals(
     brief = record.brief;
   // Brownfield: a repository that already has code is read first (nothing runs), and everything after works from that evidence.
   const repository = await scanRepository(k, record, signal);
+  // Plan REP, R3: the survey reads the code in the background while the user answers; the proposal waits for it.
+  if (repository && !signal.aborted) startSurvey(k, { ...record, repository });
   const understood = await translateReferences(k, record, signal);
   const result = await k.deps.engine.askGoals({
     project: projectInput(k, projectId, brief, project.props, understood, undefined, repository),

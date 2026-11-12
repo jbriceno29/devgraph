@@ -11,6 +11,14 @@ import { get } from './inception-flow.js';
 import { type InceptionKernel, proposalView } from './inception-kernel.js';
 import type { InceptionRecord } from './ports/inception-port.js';
 import { accessView } from './repository-access.js';
+import { SURVEY_INTERRUPTED } from './inception-survey.js';
+
+/** Plan REP, R3: a survey left RUNNING by a closed app reads as interrupted; preparing the proposal runs it again. */
+function surveyView(k: InceptionKernel, record: InceptionRecord) {
+  const survey = record.repository?.survey ?? null;
+  if (survey?.status !== 'RUNNING' || k.surveys.has(record.projectId)) return survey;
+  return { ...survey, status: 'FAILED' as const, error: `${SURVEY_INTERRUPTED} Se repetirá al preparar la propuesta.` };
+}
 
 export function view(k: InceptionKernel, projectId: string, record: InceptionRecord | null): InceptionViewDto {
   const repositoryPath = k.deps.repositoryPath(projectId);
@@ -50,6 +58,7 @@ export function view(k: InceptionKernel, projectId: string, record: InceptionRec
           inferences: record.repository.inferences,
           corrections: record.repository.corrections,
           access: accessView(record.repository),
+          survey: surveyView(k, record),
         }
       : null,
     updatedAt: record.updatedAt,

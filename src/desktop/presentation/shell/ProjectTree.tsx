@@ -10,6 +10,7 @@ export const STATUS_LOOK: Record<string, { label: string; dot: string }> = {
   IN_PROGRESS: { label: 'En curso', dot: 'bg-status-in-progress' },
   IN_REVIEW: { label: 'En revisión', dot: 'bg-status-in-review' },
   DONE: { label: 'Hecha', dot: 'bg-status-done' },
+  PARTIAL: { label: 'Parcial', dot: 'border-2 border-status-done' },
   ARCHIVED: { label: 'Archivada', dot: 'bg-status-archived' },
 };
 const typeLabel: Record<string, string> = { MODULE: 'Módulo', FEATURE: 'Feature', WORK_ITEM: 'Tarea' };

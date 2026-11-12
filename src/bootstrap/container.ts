@@ -7,6 +7,7 @@ import type { ChangeSetPlannerPort } from '../modules/planning/application/ports
 import type { ProjectInceptionService } from '../modules/inception/application/project-inception-service.js';
 import type {
   InceptionEnginePort,
+  RepositorySurveyorPort,
   ReferenceTranslatorPort,
 } from '../modules/inception/application/ports/inception-port.js';
 import type { ContextEngine } from '../modules/context/application/context-engine.js';
@@ -44,6 +45,8 @@ export interface CoreDependencies {
   agentAdapter?: AgentAdapterPort;
   inceptionEngine?: InceptionEnginePort;
   referenceTranslator?: ReferenceTranslatorPort;
+  /** Plan REP, R3: the read-only survey of an existing repository (tests inject a fake; with a fake inception engine and none, there is no survey). */
+  repositorySurveyor?: RepositorySurveyorPort;
   repositoryScanner?: RepositoryScannerPort;
   /** Tests: the ChangeSet planner (otherwise the wired engine's). */
   changeSetPlanner?: ChangeSetPlannerPort;

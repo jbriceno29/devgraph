@@ -3,6 +3,7 @@ import type { ContextRepositoryPort } from './ports/context-engine-port.js';
 import type { ResolvedContext } from './context-types.js';
 import { candidateForRecord } from './context-resolver.js';
 import type { GraphRelationship } from '../../knowledge/index.js';
+import { addMappedCode, addModifiedCode, isMappedCode } from './code-pointers.js';
 
 export class GraphTraversal {
   constructor(private readonly repository: ContextRepositoryPort) {}
@@ -29,7 +30,8 @@ export class GraphTraversal {
     expansion.followEdges();
     expansion.followDependencies();
     expansion.addFeatureMemory();
-    expansion.addModifiedCode();
+    addModifiedCode(context);
+    addMappedCode(context);
     expansion.addProjectDocuments();
     return context;
   }
@@ -126,6 +128,8 @@ class Expansion {
       if (anchorIds.has(edge.targetId) && this.entityType(edge.sourceId) === 'WORK_ITEM')
         this.add(edge.sourceId, edge, distance, 3);
     }
+    // Code an anchor touches (the survey's map, plan REP R3) goes as pointers in addMappedCode, not as whole files.
+    if (isMappedCode(edge)) return;
     if (edge.edgeType === 'VERIFIED_BY' || edge.edgeType === 'TOUCHES_CODE') {
       if (anchorIds.has(edge.sourceId))
         this.add(edge.targetId, edge, distance, this.entityType(edge.targetId) === 'CODE_REFERENCE' ? 4 : 3);
@@ -224,37 +228,6 @@ class Expansion {
       if (!memory) continue;
       candidate.content += memory;
       context.candidates.push(candidate);
-    }
-  }
-
-  /** The code the informing tasks' accepted runs modified (at most 40 files), as pointers to read in the worktree. */
-  addModifiedCode(): void {
-    const { context } = this;
-    const informing = new Set(
-      context.candidates
-        .filter(
-          candidate =>
-            candidate.record?.entity.entityType === 'WORK_ITEM' && candidate.sourceId !== context.focus.entity.id,
-        )
-        .map(candidate => candidate.sourceId),
-    );
-    let codeReferences = 0;
-    for (const edge of context.relationships) {
-      if (codeReferences >= 40) break;
-      if (edge.edgeType !== 'MODIFIES' || !informing.has(edge.sourceId)) continue;
-      const target = context.entities.get(edge.targetId);
-      if (
-        !target ||
-        target.entity.entityType !== 'CODE_REFERENCE' ||
-        target.entity.status === 'REMOVED' ||
-        context.candidates.some(candidate => candidate.sourceId === edge.targetId)
-      )
-        continue;
-      const source = context.entities.get(edge.sourceId);
-      const candidate = candidateForRecord(target, 'GRAPH_EDGE', 3, 4, 0, 'MODIFIES');
-      candidate.content = `Archivo ${String(target.attributes.file_path ?? target.entity.title)} (commit ${String(target.attributes.commit_sha ?? '').slice(0, 12)}), modificado por ${source?.entity.displayKey ?? 'una tarea'}: ${source?.entity.title ?? ''}. Léelo en el worktree si lo necesitas.`;
-      context.candidates.push(candidate);
-      codeReferences += 1;
     }
   }
 

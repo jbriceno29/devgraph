@@ -51,9 +51,9 @@ export class HybridRetrieval {
     if (!record) return true;
     const { entity, attributes } = record;
     const path = entity.entityType === 'CODE_REFERENCE' ? attributes.file_path : attributes.relative_path;
-    // Code a previous task modified is passed as a pointer: it lives on the integration branch the agent works on,
+    // Code a previous task modified, or that the map places under an anchor (plan REP, R3), is passed as a pointer: it lives on the integration branch the agent works on,
     // not necessarily in the user's checkout, and the agent can read it in its worktree. This keeps the context lean.
-    if (entity.entityType === 'CODE_REFERENCE' && candidate.viaEdgeType === 'MODIFIES') {
+    if (entity.entityType === 'CODE_REFERENCE' && (candidate.viaEdgeType === 'MODIFIES' || candidate.pointer)) {
       candidate.contentHash = this.files.hashContent(candidate.content);
       return true;
     }

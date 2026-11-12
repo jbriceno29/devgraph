@@ -287,7 +287,10 @@ describe('planner prompt', () => {
       relationships: [],
     });
     expect(prompt).toContain('put the ARTIFACT under PROJECT_ROOT and add CREATE_RELATIONSHIP DOCUMENTED_BY');
-    expect(prompt).toContain('DEPENDS_ON between two WORK_ITEMs');
+    expect(prompt).toContain(
+      'DEPENDS_ON from WORK_ITEM/FEATURE/MODULE to WORK_ITEM/FEATURE/MODULE (allowed pairs: WORK_ITEM→WORK_ITEM, FEATURE→FEATURE, MODULE→MODULE)',
+    );
+    expect(prompt).toContain('DECISION_RECORD→ARTIFACT');
   });
 });
 

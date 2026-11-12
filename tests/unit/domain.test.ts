@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GraphTopologyService } from '@domain/graph/graph-topology-service.js';
+import { describeEdgeRules, GraphTopologyService } from '@domain/graph/graph-topology-service.js';
 import type { KnowledgeEntity, GraphRelationship } from '@domain/graph/knowledge-entity.js';
 import { transitionWorkItem, canTransitionWorkItem, type WorkItem } from '@domain/work-management/entities.js';
 import { transitionExecution, canTransitionExecution, type AgentExecution } from '@domain/agents/models.js';
@@ -30,9 +30,12 @@ const edge = (id: string, sourceId: string, targetId: string): GraphRelationship
 });
 describe('GraphTopologyService', () => {
   const service = new GraphTopologyService();
-  it('rejects incompatible edge types and self references', () => {
+  it('rejects incompatible edge types with Spanish allowed-pairs explanation and rejects self references', () => {
     expect(() => service.validateEdge(base('m', 'MODULE'), base('r', 'REQUIREMENT'), 'DEPENDS_ON', [])).toThrowError(
       DomainError,
+    );
+    expect(() => service.validateEdge(base('m', 'MODULE'), base('r', 'REQUIREMENT'), 'DEPENDS_ON', [])).toThrowError(
+      /La relación «depende de» no puede ir de el módulo «m» a el requisito «r»\. Se permite: tarea → tarea, feature → feature, módulo → módulo\./,
     );
     expect(() => service.validateEdge(base('w', 'WORK_ITEM'), base('w', 'WORK_ITEM'), 'DEPENDS_ON', [])).toThrowError(
       /itself/,
@@ -49,16 +52,27 @@ describe('GraphTopologyService', () => {
       ]),
     ).toThrowError(expect.objectContaining({ code: 'CYCLE_DETECTED' }));
   });
-  it('accepts acyclic compatible dependencies', () => {
+  it('accepts acyclic compatible dependencies and DECISION_RECORD affecting an ARTIFACT', () => {
     expect(() => service.validateEdge(base('b', 'WORK_ITEM'), base('a', 'WORK_ITEM'), 'DEPENDS_ON', [])).not.toThrow();
+    expect(() =>
+      service.validateEdge(base('adr', 'DECISION_RECORD'), base('spec', 'ARTIFACT'), 'AFFECTS', []),
+    ).not.toThrow();
   });
-  it('rejects hierarchy cycles and invalid parents', () => {
+  it('rejects hierarchy cycles and invalid parents with Spanish explanation', () => {
     const a = { ...base('a', 'MODULE'), parentId: 'b' },
       b = { ...base('b', 'MODULE'), parentId: 'a' };
     expect(() => service.validateParent(a, b, [a, b])).toThrowError(/cycle/i);
     expect(() => service.validateParent(base('f', 'FEATURE'), base('r', 'PROJECT_ROOT'), [])).toThrowError(
-      /cannot be placed/i,
+      /la feature «f» no puede ir dentro de el proyecto «r»/i,
     );
+  });
+  it('describes planner edge rules directly from EDGE_COMPATIBILITY', () => {
+    const rules = describeEdgeRules(['DEPENDS_ON', 'AFFECTS', 'DOCUMENTED_BY']);
+    expect(rules).toContain(
+      'DEPENDS_ON from WORK_ITEM/FEATURE/MODULE to WORK_ITEM/FEATURE/MODULE (allowed pairs: WORK_ITEM→WORK_ITEM, FEATURE→FEATURE, MODULE→MODULE)',
+    );
+    expect(rules).toContain('DECISION_RECORD→ARTIFACT');
+    expect(rules).toContain('DOCUMENTED_BY from PROJECT_ROOT/MODULE/FEATURE/REQUIREMENT/WORK_ITEM to ARTIFACT');
   });
 });
 describe('domain state machines', () => {

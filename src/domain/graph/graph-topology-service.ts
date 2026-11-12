@@ -2,7 +2,8 @@ import { DomainError } from '../../shared/types/domain-error.js';
 import type { GraphEdgeType, KnowledgeEntityType } from '../../shared/contracts/graph-view.js';
 import type { KnowledgeEntity, GraphRelationship } from './knowledge-entity.js';
 type Pair = readonly [KnowledgeEntityType, KnowledgeEntityType];
-const COMPATIBILITY: Readonly<Record<GraphEdgeType, readonly Pair[]>> = {
+/** Which entity types each edge may join (source → target). The planner prompt is built from this same table. */
+export const EDGE_COMPATIBILITY: Readonly<Record<GraphEdgeType, readonly Pair[]>> = {
   DEPENDS_ON: [
     ['WORK_ITEM', 'WORK_ITEM'],
     ['FEATURE', 'FEATURE'],
@@ -19,6 +20,8 @@ const COMPATIBILITY: Readonly<Record<GraphEdgeType, readonly Pair[]>> = {
     ['DECISION_RECORD', 'FEATURE'],
     ['DECISION_RECORD', 'WORK_ITEM'],
     ['DECISION_RECORD', 'REQUIREMENT'],
+    // An architecture decision may constrain a document (e.g. an ADR that changes docs/UI_SPEC.md); a real ecommerce plan proposed it.
+    ['DECISION_RECORD', 'ARTIFACT'],
   ],
   SUPERSEDES: [['DECISION_RECORD', 'DECISION_RECORD']],
   DOCUMENTED_BY: [
@@ -80,7 +83,7 @@ export class GraphTopologyService {
     if (!valid)
       throw new DomainError(
         'INCOMPATIBLE_PARENT',
-        `${entity.entityType} cannot be placed under ${parent?.entityType ?? 'NULL'}.`,
+        `${ENTITY_LABEL[entity.entityType] ?? entity.entityType} «${entity.title}» no puede ir dentro de ${parent ? `${ENTITY_LABEL[parent.entityType] ?? parent.entityType} «${parent.title}»` : 'la raíz sin padre'}.`,
       );
     let cursor = parent;
     const visited = new Set<string>([entity.id]);
@@ -99,11 +102,8 @@ export class GraphTopologyService {
     if (source.id === target.id) throw new DomainError('SELF_REFERENCE', 'An edge cannot connect an entity to itself.');
     if (source.projectId !== target.projectId)
       throw new DomainError('CROSS_PROJECT_EDGE', 'Both edge endpoints must belong to the same project.');
-    if (!COMPATIBILITY[type].some(([s, t]) => s === source.entityType && t === target.entityType))
-      throw new DomainError(
-        'INCOMPATIBLE_EDGE',
-        `${type} is not allowed from ${source.entityType} to ${target.entityType}.`,
-      );
+    if (!EDGE_COMPATIBILITY[type].some(([s, t]) => s === source.entityType && t === target.entityType))
+      throw new DomainError('INCOMPATIBLE_EDGE', incompatibleEdgeMessage(type, source, target));
     if (DAG_EDGE_TYPES.has(type)) {
       const adjacency = new Map<string, string[]>();
       for (const edge of edges)
@@ -126,4 +126,45 @@ export class GraphTopologyService {
     }
   }
 }
-export const edgeCompatibilityMatrix = COMPATIBILITY;
+export const edgeCompatibilityMatrix = EDGE_COMPATIBILITY;
+
+/** User-facing (Spanish) names of entity and edge types, for validation messages. */
+const ENTITY_LABEL: Partial<Record<KnowledgeEntityType, string>> = {
+  PROJECT_ROOT: 'el proyecto',
+  MODULE: 'el módulo',
+  FEATURE: 'la feature',
+  REQUIREMENT: 'el requisito',
+  WORK_ITEM: 'la tarea',
+  DECISION_RECORD: 'la decisión (ADR)',
+  ARTIFACT: 'el documento',
+  CODE_REFERENCE: 'el archivo de código',
+  MILESTONE: 'el hito',
+};
+const EDGE_LABEL: Record<GraphEdgeType, string> = {
+  DEPENDS_ON: 'depende de',
+  IMPLEMENTS: 'implementa',
+  SATISFIES: 'satisface',
+  AFFECTS: 'afecta a',
+  SUPERSEDES: 'reemplaza a',
+  DOCUMENTED_BY: 'documentado en',
+  VERIFIED_BY: 'verificado por',
+  TOUCHES_CODE: 'toca el código',
+  MODIFIES: 'modifica',
+  GENERATED_BY: 'generado por',
+  SCOPED_IN: 'en el hito',
+};
+const plain = (type: KnowledgeEntityType) => (ENTITY_LABEL[type] ?? type).replace(/^(el|la) /, '');
+function incompatibleEdgeMessage(type: GraphEdgeType, source: KnowledgeEntity, target: KnowledgeEntity): string {
+  const allowed = EDGE_COMPATIBILITY[type].map(([from, to]) => `${plain(from)} → ${plain(to)}`).join(', ');
+  return `La relación «${EDGE_LABEL[type]}» no puede ir de ${ENTITY_LABEL[source.entityType] ?? source.entityType} «${source.title}» a ${ENTITY_LABEL[target.entityType] ?? target.entityType} «${target.title}». Se permite: ${allowed}.`;
+}
+
+/** The edge rules as the planner prompt states them: one clause per edge type the planner may create. */
+export function describeEdgeRules(types: readonly GraphEdgeType[]): string {
+  return types
+    .map(
+      type =>
+        `${type} from ${[...new Set(EDGE_COMPATIBILITY[type].map(([from]) => from))].join('/')} to ${[...new Set(EDGE_COMPATIBILITY[type].map(([, to]) => to))].join('/')} (allowed pairs: ${EDGE_COMPATIBILITY[type].map(([from, to]) => `${from}→${to}`).join(', ')})`,
+    )
+    .join('; ');
+}

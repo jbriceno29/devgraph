@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, changeRequestsBlock, parseUiOptions, referencesBlock, visualDirectionBlock } from '../../src/infrastructure/ai/inception-contract.js';
+import { buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, changeRequestsBlock, inlineScriptsCompile, parseUiOptions, referencesBlock, visualDirectionBlock } from '../../src/infrastructure/ai/inception-contract.js';
 
 const project={name:'Tareas',description:null,brief:'Una lista de tareas.',rootId:'root-1'};
 const questions=[{id:'q1',text:'¿Quién la usa?',options:['Solo yo'],default:'Solo yo',why:'Alcance.'}];
@@ -88,6 +88,15 @@ describe('inception prompts: visual exploration',()=>{
   expect(prompt).toMatch(/no external resources of any kind/);
   expect(prompt).toMatch(/INTERACTIVE/);
   expect(prompt).toMatch(/no localStorage[\s\S]*event\.preventDefault\(\)/);
+  expect(prompt).toMatch(/never assign location or reload/);
+  expect(prompt).toMatch(/differ in structure, not only in colour/);
+  expect(prompt).toMatch(/3 to 5 views reachable/);
+  expect(prompt).toMatch(/create, edit and delete/);
+  expect(prompt).toMatch(/empty[\s\S]*loading[\s\S]*error[\s\S]*success/);
+  expect(prompt).toMatch(/<label> for every field[\s\S]*:focus-visible/);
+  expect(prompt).toMatch(/not minified[\s\S]*double-quoted attributes/);
+  expect(prompt).toMatch(/under 16000 characters/);
+  expect(prompt).toMatch(/Never put instructions or notes for the reader inside it/);
   expect(prompt).toMatch(/no graphical interface[\s\S]*terminal session/);
   expect(prompt).toMatch(/Follow their palette, typography, layout and density/);
   expect(prompt).toContain('"analysis":{"summary":"Panel azul."');
@@ -105,6 +114,25 @@ describe('inception prompts: visual exploration',()=>{
   expect(data.split('\n')).toHaveLength(1);
   expect(data).not.toMatch(/[<>]/);
   expect((JSON.parse(data) as {prototypeHtml:string}).prototypeHtml).toBe(html);
+ });
+
+ it('drops a prototype whose inline script does not compile (it would be a blank page), and ignores scripts that are not classic JavaScript',()=>{
+  const good=(script:string,attributes='')=>({...draft,prototypeHtml:`<!doctype html><html><body>${'<p>contenido</p>'.repeat(20)}<script${attributes}>${script}</script></body></html>`});
+  const result=parseUiOptions({options:[
+   {...good('const a = 1; document.title = `x ${a}`;'),title:'bien'},
+   {...good("document.body.innerHTML = '<p class=\"x\">hola</p;"),title:'rota'},
+   {...good('{"no":"es js"}',' type="application/json"'),title:'datos'},
+   {...good('import x from "./a.js"; x();',' type="module"'),title:'modulo'},
+  ],assumptions:[]},'Motor');
+  expect(result.options.map(option=>option.title)).toEqual(['bien','datos','modulo']);
+  expect(inlineScriptsCompile('<script src="a.js">const y = ;</script>')).toBe(true);
+  expect(inlineScriptsCompile('<main>sin scripts</main>')).toBe(true);
+  expect(inlineScriptsCompile('<script>function ok() { return 1 }</script><script>let = ;</script>')).toBe(false);
+  expect(()=>parseUiOptions({options:[{...good('const = 1;'),title:'rota'}]},'Motor')).toThrow(/JavaScript sin errores de sintaxis/);
+ });
+
+ it('the error state is reached from a labelled control, never by a normal action failing on its own',()=>{
+  expect(buildUiExplorationPrompt(project,questions,[])).toMatch(/«Simular error»[\s\S]*never by making a normal action fail on its own/);
  });
 
  it('parses the options, dropping the ones without a usable prototype, and fails when none is usable',()=>{

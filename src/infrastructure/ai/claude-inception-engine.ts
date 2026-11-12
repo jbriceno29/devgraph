@@ -3,6 +3,9 @@ import { ClaudeChangeSetPlanner, type ClaudeChangeSetPlannerOptions } from './cl
 import { CLAUDE_ISOLATION_ARGS } from './claude-code-adapter.js';
 import { buildProposalPrompt, buildQuestionsPrompt, buildUiExplorationPrompt, parseProposal, parseQuestions, parseUiOptions, proposalSchema, questionsSchema, uiExplorationSchema } from './inception-contract.js';
 
+/** Time limit of a design call (generating the directions, or adjusting one). */
+export const DESIGN_TIMEOUT_MS = 900_000;
+
 /** Inception gates on `claude -p --json-schema`, without tools or session, and without the user's CLI settings or skills. `signal` stops the CLI. */
 export class ClaudeInceptionEngine implements InceptionEnginePort {
   private readonly runner: ClaudeChangeSetPlanner;
@@ -19,7 +22,8 @@ export class ClaudeInceptionEngine implements InceptionEnginePort {
   }
 
   async exploreUi(input: Parameters<InceptionEnginePort['exploreUi']>[0]) {
-    const { output, usage } = await this.runner.structured(buildUiExplorationPrompt(input.project, input.questions, input.answers, input.revise), uiExplorationSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal);
+    // Writing three full prototypes takes minutes (about 4.5 in measurements, with spikes): a longer limit than the other gates, and a message that says what it was doing.
+    const { output, usage } = await this.runner.structured(buildUiExplorationPrompt(input.project, input.questions, input.answers, input.revise), uiExplorationSchema, input.model, CLAUDE_ISOLATION_ARGS, input.signal, { purpose: 'diseñar las direcciones visuales', timeoutMs: DESIGN_TIMEOUT_MS });
     return { ...parseUiOptions(output, 'Claude Code', input.revise ? 1 : 3), usage };
   }
 }

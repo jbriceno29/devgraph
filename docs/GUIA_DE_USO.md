@@ -46,7 +46,7 @@ La nota («qué conservar o evitar») ayuda a afinarlo. Después de analizarlas,
 
 ## Diseño del proyecto (opcional)
 
-Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan» (viene marcada si adjuntaste una referencia visual). Un modelo diseña 2 o 3 direcciones distintas, cada una con un prototipo que puedes **probar** (filtrar, añadir, navegar). Tarda de uno a tres minutos y cuesta unos 10 centavos de dólar. Después puedes:
+Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «Mi proyecto tiene una interfaz gráfica: quiero ver propuestas de diseño antes del plan» (viene marcada si adjuntaste una referencia visual). Un modelo diseña 2 o 3 direcciones distintas, cada una con un prototipo que puedes **probar** (filtrar, añadir, navegar). Los prototipos son completos (varias pantallas, datos de ejemplo, edición, atajos de teclado y los estados vacío, de carga, de error y de éxito), así que tarda de 5 a 7 minutos y cuesta entre medio dólar y un dólar; un ajuste a una sola dirección, un tercio de eso. Después puedes:
 
 - **Aprobar esta dirección visual y preparar el plan:** la propuesta se apoya en ella (estilo, pantallas y reglas visuales). Aprobar fija el estilo, no el plan: el plan lo apruebas en el paso siguiente.
 - **Pedir ajustes a este prototipo:** cuéntale qué cambiar; solo se regenera ese.

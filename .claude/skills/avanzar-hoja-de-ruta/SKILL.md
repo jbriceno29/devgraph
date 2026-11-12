@@ -47,7 +47,7 @@ Para y pregunta, en frases completas, solo en estos casos:
 
 - Hace falta una dependencia nueva (librería).
 - Hay que tocar datos reales del usuario, o un repositorio que no es de prueba.
-- Habría que borrar ramas, cambiar remotos o borrar archivos que no sean carpetas vacías.
+- Habría que borrar ramas, cambiar remotos o borrar archivos que no sean carpetas vacías ni archivos de prueba (pruebas obsoletas en `tests/`, repositorios y datos de las corridas reales, archivos temporales).
 - Una decisión de diseño cambia la experiencia más allá de lo que dice el plan, o el plan se contradice con el código.
 - La corrida real falla por algo fuera del alcance del paso.
 

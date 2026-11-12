@@ -10,6 +10,7 @@ import type {
 import { applyUiSpecPlan } from './ui-spec-update.js';
 import type { ChangeSet, ChangeOperation } from '../../knowledge/index.js';
 import { ChangeSetValidator } from './changeset-validator.js';
+import { withCatalogProfile } from './stack-change.js';
 
 export class ChangeSetPlanningService {
   private readonly validator = new ChangeSetValidator();
@@ -81,7 +82,7 @@ export class ChangeSetPlanningService {
       title: draft.title,
       rationale: `${draft.rationale}${used}`,
       status: 'PENDING_APPROVAL',
-      operations: plan.operations,
+      operations: plan.operations.map(withCatalogProfile),
       validationIssues: [],
       createdAt: new Date().toISOString(),
     };
@@ -127,7 +128,7 @@ export class ChangeSetPlanningService {
       title: draft.title,
       rationale: draft.rationale,
       status: 'PENDING_APPROVAL',
-      operations: draft.operations,
+      operations: draft.operations.map(withCatalogProfile),
       validationIssues: [],
       createdAt: new Date().toISOString(),
     };

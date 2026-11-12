@@ -140,6 +140,25 @@ reglas fijas:
   - marca que ADR-003 reemplaza a ADR-001,
   - y adapta `docs/UI_SPEC.md`: los tokens pasan a `@theme` de Tailwind.
 
+**Estado de C7a (2026-11-12): hecho.** La migración del ecommerce (C7b) queda pendiente.
+
+- **Perfil `web-nextjs` en el catálogo:**
+  - Next.js (App Router), React, Tailwind CSS 4, Drizzle con `postgres`, PGlite en las pruebas, Zod y Vitest con Testing Library.
+  - Verificación por tarea: `tsc --noEmit` y `vitest run`. `next build` llega con C6.
+  - Puede escribir sus archivos de configuración, `public/**` y las salidas `.next/**` y `*.tsbuildinfo`.
+  - Playwright queda para C5, porque necesita su navegador.
+- **Cambio de perfil en un proyecto ya iniciado:**
+  - El planificador conoce el catálogo, y su esquema de salida ya admite `SET_PROJECT_PROFILE`. Antes solo lo admitía el asistente de inicio, y por eso la primera corrida real propuso un ADR en su lugar.
+  - Antes de que veas la propuesta, la app la completa con el perfil (`withCatalogProfile`): stack, reglas y verificación del catálogo, y quita las reglas que traía el perfil anterior.
+  - El planificador muestra el stack y las comprobaciones junto a «Definir el perfil del proyecto».
+  - Siempre pide aprobación (`PROJECT_FOUNDATION`).
+- **Corrida real con `haiku`:**
+  1. Un proyecto Node pidió «migrar a Next.js con Postgres» y el planificador propuso `web-nextjs`.
+  2. Al aplicarlo cambiaron los comandos, las rutas y los dominios de documentación.
+  3. La app instaló 128 paquetes reales.
+  4. `haiku` montó la base con una migración SQL, una prueba con PGlite y una prueba de componente. `tsc` y `vitest` pasaron, y la ejecución se aceptó.
+  5. Un primer intento falló porque `.next` y `tsconfig.tsbuildinfo` no estaban permitidos; ya lo están, y van al `.gitignore`.
+
 ## 4. Orden propuesto
 
 | Paso | Por qué en este orden |

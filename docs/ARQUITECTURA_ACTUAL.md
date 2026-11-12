@@ -45,7 +45,7 @@ Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12)
 | `src/bootstrap/` | `workspace-core.ts` (une contenedor y router), `container.ts` y `compose/*.ts` (los únicos que crean adaptadores), `ipc-router.ts`, `request-dispatcher.ts`, `project-workspace-store.ts` y `handlers/` (flujos que cruzan módulos: abrir proyecto, inspector, propuesta desde el chat…). |
 | `modules/projects` | Proyecto, repositorio, catálogo de stacks, acceso del agente (R1), escaneo del repositorio, carpetas de proyectos. |
 | `modules/knowledge` | Grafo, topología, `ChangeSet` y su aplicación transaccional, estado de ADR y tareas, vista del grafo e inspector. |
-| `modules/planning` | Planificador de ChangeSets (Claude; Codex sin cablear), validador, referencias de Planificar, `UI_SPEC`. |
+| `modules/planning` | Planificador de ChangeSets (Claude; Codex sin cablear), validador, referencias de Planificar, `UI_SPEC`. El esquema de salida vive en `planner-schema.ts`. El cambio de stack de un proyecto ya iniciado (`stack-change.ts`) completa `SET_PROJECT_PROFILE` con el perfil del catálogo antes de guardar la propuesta. |
 | `modules/inception` | Asistente de inicio, motor y contrato, traductor de referencias, prototipos. |
 | `modules/context` | Motor de contexto (resolución, recorrido, ranking, empaquetado) y `ContextSnapshot`. |
 | `modules/execution` | `AgentOrchestrator`, gobernanza, adaptador de Claude Code (Codex sin cablear), validador del diff, worktrees, revisión. |

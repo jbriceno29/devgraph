@@ -5,7 +5,8 @@ import type { ChangeSetDto } from '../../../shared/contracts/ipc-contracts.js';
 import type { GraphEdgeView, GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import { useWorkspaceNavigation } from '../../state/workspace-navigation-context.js';
 import { ContextPills } from './ContextPills.js';
-import { changeSetStatusLabel, edgeLabel, operationLabel, shortDate } from '../labels.js';
+import { changeSetStatusLabel, shortDate } from '../labels.js';
+import { describeOperation, operationDetail } from './operation-summary.logic.js';
 import { ErrorNotice } from '../errors.js';
 import { ReferencesField, ReferencesSummary, type DraftReference } from '../inception/ReferencesField.js';
 import type { InceptionReferenceDto } from '../../../shared/contracts/inception-view.js';
@@ -29,10 +30,6 @@ const Badge = ({ status }: { status: ChangeSetDto['status'] }) => (
     {changeSetStatusLabel(status)}
   </span>
 );
-const describe = (operation: Record<string, unknown>) =>
-  operation.type === 'CREATE_RELATIONSHIP' && typeof operation.edgeType === 'string'
-    ? `Relacionar · ${edgeLabel(operation.edgeType)}`
-    : operationLabel(String(operation.type ?? 'CAMBIO'));
 
 /** Planificador: el motor propone cambios al grafo (sin tocar archivos), se previsualizan como elementos fantasma y el usuario decide si aplicarlos. */
 export function PlanningWorkspace({
@@ -387,8 +384,8 @@ export function PlanningWorkspace({
                     key={index}
                     className="rounded-md border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-fg"
                   >
-                    <span className="font-semibold text-accent">{describe(operation)}</span>
-                    {typeof operation.title === 'string' && <span> · {operation.title}</span>}
+                    <span className="font-semibold text-accent">{describeOperation(operation)}</span>
+                    {operationDetail(operation) && <span> · {operationDetail(operation)}</span>}
                   </li>
                 ))}
               </ul>

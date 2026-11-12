@@ -1,6 +1,5 @@
 {
   "function-size": {
-    "src/modules/documents/application/artifact-management-service.ts": 30,
     "src/modules/inception/application/foundation-plan.ts": 99,
     "src/desktop/presentation/FolderField.tsx": 31,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 505,
@@ -31,8 +30,7 @@
     "src/desktop/state/WorkspaceShell.tsx": 183,
     "src/desktop/state/project-create-form.tsx": 161,
     "src/desktop/state/workspace-navigation-context.tsx": 107,
-    "src/modules/projects/infrastructure/repository-scanner.ts": 143,
-    "src/modules/documents/infrastructure/transactional-markdown-file-store.ts": 18
+    "src/modules/projects/infrastructure/repository-scanner.ts": 143
   },
   "file-size": {
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,

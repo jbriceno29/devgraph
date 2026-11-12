@@ -1,4 +1,5 @@
 import type { DocumentCommitPort } from './ports/document-commit-port.js';
+import { documentEntity, draftDocument, persistDocument } from './new-document.js';
 import type { ProjectRepositoryPort } from '../../projects/index.js';
 import type {
   ArtifactRepositoryPort,
@@ -8,18 +9,10 @@ import type {
   ArtifactSyncStatusChangedEvent,
 } from './ports/artifact-management-port.js';
 import type { KnowledgeGraphRepositoryPort } from '../../knowledge/index.js';
-import type { GraphRelationship, KnowledgeEntity } from '../../knowledge/index.js';
+import type { GraphRelationship } from '../../knowledge/index.js';
 import type { GraphEdgeType, KnowledgeEntityType } from '../../../shared/contracts/graph-view.js';
 import { GraphTopologyService } from '../../knowledge/index.js';
-import {
-  artifactPath,
-  createArtifactTemplate,
-  createDecisionRecordTemplate,
-  decisionRecordPath,
-  nextDocumentNumber,
-  parseDecisionRecord,
-  type SupportedArtifactType,
-} from './artifact-templates.js';
+import { parseDecisionRecord, SupportedArtifactType } from './artifact-templates.js';
 
 export type ArtifactManagementEventListener = (event: ArtifactSyncStatusChangedEvent) => void;
 export interface DocumentView {
@@ -99,40 +92,21 @@ export class ArtifactManagementService {
     const revision = project.currentRevision + 1;
     const entityId = globalThis.crypto.randomUUID();
     const records = this.documents.listDocuments(input.projectId);
-    let relativePath: string, content: string, displayKey: string, link: GraphRelationship;
+    const { relativePath, content, displayKey, link } = draftDocument(
+      input,
+      title,
+      target.id,
+      entityId,
+      records,
+      (from, to, edge) => this.createLink(from, to, input.projectId, edge, revision, now),
+    );
     const type = input.entityType as KnowledgeEntityType;
-    if (input.entityType === 'ARTIFACT') {
-      const artifactType = input.artifactType ?? 'OTHER';
-      relativePath = artifactPath(artifactType, title);
-      content = createArtifactTemplate(artifactType, title);
-      displayKey = `DOC-${String(nextDocumentNumber(records, 'DOC')).padStart(3, '0')}`;
-      link = this.createLink(target.id, entityId, input.projectId, 'DOCUMENTED_BY', revision, now);
-    } else {
-      const adrNumber = nextDocumentNumber(records, 'ADR');
-      relativePath = decisionRecordPath(adrNumber);
-      content = createDecisionRecordTemplate(adrNumber, title);
-      displayKey = `ADR-${String(adrNumber).padStart(3, '0')}`;
-      link = this.createLink(entityId, target.id, input.projectId, 'AFFECTS', revision, now);
-    }
     if (
       this.documents.findDocumentByPath(input.projectId, relativePath) ||
       (await this.files.markdownExists(location.localPath, relativePath))
     )
       throw new Error(`Ya existe un documento en ${relativePath}.`);
-    const entity: KnowledgeEntity = {
-      id: entityId,
-      projectId: input.projectId,
-      entityType: type,
-      displayKey,
-      title,
-      summary: '',
-      status: 'DRAFT',
-      parentId: null,
-      createdRevision: revision,
-      updatedRevision: revision,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const entity = documentEntity(input, entityId, displayKey, title, revision, now);
     const topology = new GraphTopologyService();
     const relationshipSource = existingEntities.find(e => e.id === link.sourceId) ?? entity;
     const relationshipTarget = existingEntities.find(e => e.id === link.targetId) ?? entity;
@@ -140,34 +114,17 @@ export class ArtifactManagementService {
     topology.validateEdge(relationshipSource, relationshipTarget, link.edgeType, existingEdges);
     const written = await this.write(location.localPath, relativePath, content);
     try {
-      if (input.entityType === 'ARTIFACT') {
-        this.documents.createArtifact({
-          entity,
-          relativePath,
-          contentHash: written.contentHash,
-          bodyContent: content,
-          artifactType: input.artifactType ?? 'OTHER',
-          repositoryId: location.id,
-          version: 1,
-          link,
-        });
-      } else {
-        const adrNumber = nextDocumentNumber(records, 'ADR');
-        this.documents.createDecisionRecord({
-          entity,
-          relativePath,
-          contentHash: written.contentHash,
-          bodyContent: content,
-          repositoryId: location.id,
-          adrNumber,
-          contextMd: 'Describe el problema y las fuerzas que motivan esta decisión.',
-          alternativesMd: 'Alternativa: ventajas y desventajas.',
-          decisionMd: 'Describe la decisión tomada.',
-          consequencesMd: 'Consecuencias positivas y negativas.',
-          decidedAt: now,
-          link,
-        });
-      }
+      persistDocument(this.documents, {
+        input,
+        entity,
+        relativePath,
+        contentHash: written.contentHash,
+        content,
+        repositoryId: location.id,
+        records,
+        now,
+        link,
+      });
     } catch (error) {
       await this.files.removeMarkdown(location.localPath, relativePath).catch(() => undefined);
       throw error;

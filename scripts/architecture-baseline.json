@@ -41,7 +41,6 @@
     "src/desktop/state/workspace-navigation-context.tsx": 107,
     "src/modules/planning/infrastructure/change-set-planning-contract.ts": 104,
     "src/modules/planning/infrastructure/claude-change-set-planner.ts": 36,
-    "src/modules/execution/infrastructure/claude-code-adapter.ts": 139,
     "src/modules/execution/infrastructure/codex-agent-adapter.ts": 35,
     "src/modules/execution/infrastructure/execution-validator.ts": 87,
     "src/modules/projects/infrastructure/repository-scanner.ts": 143,
@@ -66,12 +65,10 @@
     "src/desktop/presentation/shell/ActivityInbox.tsx": 339,
     "src/desktop/state/WorkspaceShell.tsx": 326,
     "src/desktop/state/project-create-form.tsx": 452,
-    "src/modules/execution/infrastructure/claude-code-adapter.ts": 482,
     "src/modules/execution/infrastructure/execution-validator.ts": 386,
     "src/modules/projects/infrastructure/repository-scanner.ts": 516,
     "src/modules/execution/infrastructure/git-isolation-service.ts": 491,
-    "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373,
-    "src/shared/contracts/ipc-contracts.ts": 382
+    "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373
   },
   "ipc-access": {
     "src/desktop/main.tsx": 1,

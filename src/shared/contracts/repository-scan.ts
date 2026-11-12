@@ -66,7 +66,7 @@ export interface RepositoryCorrectionDto {
 }
 export const MAX_REPOSITORY_CORRECTION = 500;
 /** Why the agent may write a path (plan REP, R1): code and assets, tests, root configuration, or outputs the app creates. */
-export type AgentAccessReason = 'CODE' | 'TESTS' | 'CONFIG' | 'GENERATED' | 'USER';
+export type AgentAccessReason = 'CODE' | 'TESTS' | 'CONFIG' | 'DOCS' | 'GENERATED' | 'USER';
 /** The user's version of the agent's access: replaces what the scan suggests. */
 export interface AgentAccessEditDto {
   writablePaths: string[];

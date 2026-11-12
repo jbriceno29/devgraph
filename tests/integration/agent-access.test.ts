@@ -108,12 +108,11 @@ describe('acceso del agente derivado del repositorio (plan REP, R1)', () => {
         { pattern: 'lib/**', reason: 'CODE' },
         { pattern: 'next.config.mjs', reason: 'CONFIG' },
         { pattern: 'package.json', reason: 'CONFIG' },
+        { pattern: 'docs/**', reason: 'DOCS' },
         { pattern: 'node_modules/**', reason: 'GENERATED' },
       ]),
     );
-    expect(access.writable.map(path => path.pattern)).not.toEqual(
-      expect.arrayContaining(['docs/**', '.github/**', 'src/**']),
-    );
+    expect(access.writable.map(path => path.pattern)).not.toEqual(expect.arrayContaining(['.github/**', 'src/**']));
     expect(access.verificationCommands).toEqual(['npm test', 'npm run lint', 'npm run build']);
 
     // An unsafe path is refused with the reason; nothing is sent to the engine.

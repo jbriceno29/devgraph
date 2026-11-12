@@ -31,6 +31,7 @@ describe('proposeAgentAccess (plan REP, R1)', () => {
       { pattern: 'next.config.mjs', reason: 'CONFIG' },
       { pattern: 'package.json', reason: 'CONFIG' },
       { pattern: 'tsconfig.json', reason: 'CONFIG' },
+      { pattern: 'docs/**', reason: 'DOCS' },
       { pattern: 'node_modules/**', reason: 'GENERATED' },
       { pattern: 'dist/**', reason: 'GENERATED' },
       { pattern: 'target/**', reason: 'GENERATED' },

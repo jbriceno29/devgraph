@@ -10,6 +10,7 @@ export const ACCESS_REASON: Record<AgentAccessReason, string> = {
   CODE: 'código y recursos',
   TESTS: 'pruebas',
   CONFIG: 'configuración de la raíz',
+  DOCS: 'documentación (las decisiones ADR siguen siendo de solo lectura)',
   GENERATED: 'lo que la app genera al instalar y compilar',
   USER: 'añadida por ti',
 };

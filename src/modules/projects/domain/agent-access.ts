@@ -9,7 +9,7 @@ export interface RepositoryLayout {
   /** Content of the root package.json, if it was read. */
   packageJson: string | null;
 }
-export type AccessReason = 'CODE' | 'TESTS' | 'CONFIG' | 'GENERATED';
+export type AccessReason = 'CODE' | 'TESTS' | 'CONFIG' | 'DOCS' | 'GENERATED';
 export interface WritablePath {
   pattern: string;
   reason: AccessReason;
@@ -63,6 +63,8 @@ export function proposeAgentAccess(layout: RepositoryLayout): AgentAccessProposa
       writable.push({ pattern: `${name}/**`, reason: TEST_DIRS.has(name) ? 'TESTS' : 'CODE' });
     } else if (CONFIG_FILE.test(entry)) writable.push({ pattern: entry, reason: 'CONFIG' });
   }
+  // docs/ is not code, but tasks document there (the ADRs stay read-only in the policy).
+  writable.push({ pattern: 'docs/**', reason: 'DOCS' });
   for (const pattern of GENERATED_OUTPUTS) writable.push({ pattern, reason: 'GENERATED' });
   return { writable, verificationCommands: checkCommands(layout) };
 }

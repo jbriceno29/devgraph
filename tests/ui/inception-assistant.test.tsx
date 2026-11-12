@@ -496,7 +496,20 @@ describe('Asistente de inicio: exploración visual',()=>{
   expect(screen.getAllByRole('radio')).toHaveLength(2);
   cleanup();
   setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal,repositoryPath:'/home/ana/app',ui:{wanted:true,options:uiOptions,selectedOptionId:'ui-1'},updatedAt:new Date().toISOString()});
-  expect((await screen.findByText(/Dirección visual aprobada:/)).closest('p')!.textContent).toMatch(/Panel claro\. La propuesta se apoya en ella/);
+  const section=await screen.findByRole('region',{name:'Interfaz y experiencia acordadas'});
+  expect(section.textContent).toMatch(/Dirección aprobada: Panel claro\./);
+  expect(section.textContent).toMatch(/Falta docs\/UI_SPEC\.md en la propuesta/);
+ });
+
+ it('V3: with the specification in the proposal, the approved design section says where it goes and opens the prototype on request',async()=>{
+  const withSpec={...proposal,documents:[...proposal.documents,{title:'Especificación de interfaz',relativePath:'docs/UI_SPEC.md'}]};
+  const {ipc}=setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal:withSpec,repositoryPath:'/home/ana/app',ui:{wanted:true,options:uiOptions,selectedOptionId:'ui-1'},updatedAt:new Date().toISOString()});
+  const section=await screen.findByRole('region',{name:'Interfaz y experiencia acordadas'});
+  expect(section.textContent).toMatch(/Al aprobar se crea docs\/UI_SPEC\.md, vinculado a cada feature, y el prototipo se guarda en docs\/design\/prototype\.html/);
+  expect(section.querySelector('iframe')).toBeNull();
+  fireEvent.click(within(section).getByText('Ver el prototipo aprobado'));
+  expect(await within(section).findByTitle('Vista previa del prototipo')).toBeTruthy();
+  expect(ipc.inception!.getUiPrototype).toHaveBeenCalledWith('p','ui-1');
  });
 
  it('lets the user go back to the design from the proposal: the existing directions, or asking for them if the design was never requested',async()=>{

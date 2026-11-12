@@ -1,4 +1,5 @@
 import type { ChangeOperation } from '../../domain/knowledge/change-set.js';
+import { UI_SPEC_PATH, UI_SPEC_SECTIONS } from '../../shared/ui-spec.js';
 import type { InceptionFeatureDto, InceptionProposalDto } from '../../shared/contracts/inception-view.js';
 
 type Op<T extends ChangeOperation['type']> = Extract<ChangeOperation, { type: T }>;
@@ -14,7 +15,7 @@ const KEPT: ReadonlySet<ChangeOperation['type']> = new Set(['SET_PROJECT_PROFILE
  * other feature, feature dependencies mirrored on tasks (so no task starts before its prerequisites), and the initial
  * statuses (the scaffold READY, the rest BLOCKED). `problems` lists what the draft lacks; the user revises it then.
  */
-export function buildFoundationPlan(operations: ChangeOperation[], rootId: string): { operations: ChangeOperation[]; problems: string[] } {
+export function buildFoundationPlan(operations: ChangeOperation[], rootId: string, options: { uiSpec?: boolean } = {}): { operations: ChangeOperation[]; problems: string[] } {
   const problems: string[] = [];
   const ops = operations.filter(op => KEPT.has(op.type) && !(op.type === 'UPSERT_ARTIFACT' && op.entityId && !op.tempId)).map(op => ({ ...op })) as ChangeOperation[];
   for (const op of ops) if (op.type === 'CREATE_MODULE' && !op.parentId) op.parentId = rootId;
@@ -51,6 +52,16 @@ export function buildFoundationPlan(operations: ChangeOperation[], rootId: strin
       if (task === scaffold || taskDeps(task).some(edge => tasksOf(feature.tempId).some(other => other.tempId === edge.targetId))) continue;
       if (feature === foundation && scaffold) addDependency(task.tempId, scaffold.tempId);
       for (const prerequisite of prerequisites) for (const sink of sinks(prerequisite)) addDependency(task.tempId, sink.tempId);
+    }
+  }
+  if (options.uiSpec) {
+    const spec = ops.find((op): op is Op<'UPSERT_ARTIFACT'> => op.type === 'UPSERT_ARTIFACT' && op.relativePath === UI_SPEC_PATH);
+    if (!spec) problems.push(`Falta la especificación de interfaz (${UI_SPEC_PATH}) del diseño aprobado.`);
+    else {
+      const missing = UI_SPEC_SECTIONS.filter(section => !new RegExp(`^##\\s+${section}\\s*$`, 'mi').test(spec.markdownContent));
+      if (missing.length) problems.push(`${UI_SPEC_PATH} no tiene las secciones: ${missing.join(', ')}.`);
+      spec.tempId ||= '$ui_spec';
+      for (const feature of features) if (!relations.some(edge => edge.edgeType === 'DOCUMENTED_BY' && edge.sourceId === feature.tempId && edge.targetId === spec.tempId)) added.push({ type: 'CREATE_RELATIONSHIP', sourceId: feature.tempId, targetId: spec.tempId, edgeType: 'DOCUMENTED_BY' });
     }
   }
   const statuses: ChangeOperation[] = tasks.map(task => ({ type: 'UPDATE_ENTITY_STATUS', entityId: task.tempId, newStatus: taskDeps(task).length ? 'BLOCKED' : 'READY', reason: 'Estado inicial del plan del inicio del proyecto.' }));

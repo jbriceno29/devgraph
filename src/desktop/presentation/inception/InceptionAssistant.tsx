@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
-import { MAX_INCEPTION_NOTE, type InceptionUsageDto, type InceptionViewDto, type InitializeRepositoryResultDto } from '../../../shared/contracts/inception-view.js';
+import { MAX_INCEPTION_NOTE, type InceptionIpcClient, type InceptionUsageDto, type InceptionViewDto, type InitializeRepositoryResultDto } from '../../../shared/contracts/inception-view.js';
 import type { ShellTarget } from '../shell/next-step.js';
 import { ErrorNotice } from '../errors.js';
 import { control, primary, secondary } from '../ui.js';
@@ -9,6 +9,7 @@ import { useResetOnChange } from '../use-reset-on-change.js';
 import { QuestionsStep } from './QuestionsStep.js';
 import { ProposalReview, approvalBlockers, taskCount } from './ProposalReview.js';
 import { RepositoryCreated, RepositorySetup } from './RepositorySetup.js';
+import { ApprovedDesign } from './ApprovedDesign.js';
 import { VisualExplorationStep } from './VisualExplorationStep.js';
 import { ReferencesField, ReferencesSummary, type DraftReference } from './ReferencesField.js';
 
@@ -72,7 +73,7 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Generar otra propuesta" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}><button type="button" onClick={()=>setMode('view')} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button></QuestionsStep>
  </Screen>;
  else if(view.stage==='PROPOSAL'&&mode==='confirm'&&view.proposal)screen=<Confirm view={view} heading={heading} busy={busy} onCancel={()=>setMode('view')} onApprove={()=>void act(async ipc=>{const next=await ipc.approve(projectId);onApplied?.();return next;})}/>;
- else if(view.stage==='PROPOSAL')screen=<ProposalStep view={view} heading={heading} busy={busy} repository={repository} restartButton={restartButton} onApprove={()=>{setActionError(null);setMode('confirm');}} onRevise={()=>setMode('revise')} onReopenDesign={()=>void act(ipc=>ipc.reopenDesign(projectId))}/>;
+ else if(view.stage==='PROPOSAL')screen=<ProposalStep client={client} projectId={projectId} view={view} heading={heading} busy={busy} repository={repository} restartButton={restartButton} onApprove={()=>{setActionError(null);setMode('confirm');}} onRevise={()=>setMode('revise')} onReopenDesign={()=>void act(ipc=>ipc.reopenDesign(projectId))}/>;
  else screen=<Done view={view} nodes={nodes} heading={heading} onNavigate={onNavigate}/>;
 
  return <Wrapper>
@@ -155,11 +156,11 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
  </Screen>;
 }
 
-function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRevise,onReopenDesign}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void;onReopenDesign():void}) {
+function ProposalStep({client,projectId,view,heading,busy,repository,restartButton,onApprove,onRevise,onReopenDesign}:{client:InceptionIpcClient;projectId:string;view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void;onReopenDesign():void}) {
  const id=useId(),blockers=approvalBlockers(view),canApprove=view.nextAction==='APPROVE'&&!blockers.length;
  return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'proposal')} title={view.proposal?.title||'Revisa la propuesta'} intro="Léela con calma: al aprobarla se crean los documentos, la decisión de stack, las reglas y el plan.">
   <ReferencesSummary references={view.references}/>
-  {view.ui.selectedOptionId&&<p className="mb-4 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs text-fg-muted"><span className="font-medium text-fg">Dirección visual aprobada:</span> {view.ui.options.find(option=>option.id===view.ui.selectedOptionId)?.title??'—'}. La propuesta se apoya en ella.</p>}
+  {view.ui.selectedOptionId&&<ApprovedDesign view={view} client={client} projectId={projectId}/>}
   <ProposalReview view={view}/>
   {!view.repositoryPath&&<div className="mt-4 rounded-lg border border-border bg-surface-sunken p-4"><h3 className="mb-2 text-sm font-semibold text-fg">Crear un repositorio nuevo</h3>{repository}</div>}
   {!canApprove&&blockers.length>0&&<ul id={`${id}-blockers`} className="mt-4 list-disc space-y-0.5 pl-5 text-xs text-fg-muted">{blockers.map(item=><li key={item}>{item}</li>)}</ul>}

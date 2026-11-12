@@ -64,7 +64,7 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `inception:reopen_design` ⛓ | Desde la propuesta, vuelve a las direcciones de diseño ya generadas (con la elección conservada) o, si el diseño nunca se pidió, las genera ahora con las mismas respuestas; la propuesta pendiente se rechaza. |
 | `inception:revise_ui` ⛓ | Regenera una dirección con las indicaciones del usuario (`optionId`, `notes` ≤ 2000); las demás no se tocan. Responde al instante con estado `WORKING`. |
 | `inception:choose_ui` ⛓ | Aprueba una dirección y pide la propuesta sobre ella; con `null` salta el diseño. Responde al instante con estado `WORKING`. |
-| `inception:approve` ⛓ | Aplica el ChangeSet de la propuesta (exige un repositorio principal). |
+| `inception:approve` ⛓ | Aplica el ChangeSet de la propuesta (exige un repositorio principal). Si hay una dirección visual aprobada con prototipo, lo guarda antes en `docs/design/prototype.html` del repositorio (si no se puede guardar, no se aplica nada). |
 | `inception:restart` ⛓ | Olvida preguntas, respuestas, referencias (borra sus archivos) y propuesta pendiente, y detiene la llamada en curso; se rechaza una vez aplicada. |
 
 ## Consultas (solo lectura)

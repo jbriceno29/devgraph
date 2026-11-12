@@ -269,6 +269,8 @@ Antes de expandir el asistente de inicio, cerrar los 4 ajustes técnicos detecta
 3. **Revisión en UI (`src/desktop/presentation/inception/ProposalReview.tsx`):**
    - Mostrar en la revisión de la propuesta la sección **«Interfaz y experiencia acordadas (`docs/UI_SPEC.md`)»** junto con las pantallas, el patrón de navegación y el acceso a la vista previa del prototipo aprobado.
 
+**Entregado (2026-11-11).** (1) `buildProposalPrompt` exige, con una dirección aprobada, un `UPSERT_ARTIFACT` SPEC `docs/UI_SPEC.md` con las 8 secciones como encabezados de nivel 2 y reglas visuales de nivel 1 (`uiSpecRule`, constantes en `src/shared/ui-spec.ts`). (2) `buildFoundationPlan(..., {uiSpec: true})` reporta en `problems` la especificación ausente o con secciones faltantes (la propuesta queda incompleta y no se puede aprobar) y añade `DOCUMENTED_BY` de cada feature a la especificación. (3) **Desviación:** el prototipo no se inyecta como artefacto, porque el almacén de documentos solo admite `.md` bajo `docs/`; `approve` lo escribe antes de aplicar (`DesignPrototypeWriter`: dentro del repositorio, sin enlaces simbólicos, atómico), y si falla no se aplica nada. Decisión del usuario: guardarlo en el repositorio. Como el resto de `docs/`, no se hace commit solo. Una dirección de imagen no tiene prototipo que guardar. (4) La revisión muestra «Interfaz y experiencia acordadas» (`ApprovedDesign.tsx`). Verificado con sonnet real sobre un prototipo generado: 86 s, 0,24 USD, sin problemas, 4,3 k caracteres de especificación con las 8 secciones y reglas visuales con la paleta real.
+
 ---
 
 ### Etapa V4: Evolución continua y Modo Brownfield (Tamaño: M — ~1 a 1.5 días)

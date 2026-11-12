@@ -45,6 +45,7 @@ import { ActivityService } from '../../../application/activity/activity-service.
 import { ProjectInceptionService } from '../../../application/inception/project-inception-service.js';
 import type { InceptionEnginePort, ReferenceTranslatorPort } from '../../../application/ports/inception-port.js';
 import { InceptionReferenceFiles } from '../../filesystem/inception-reference-files.js';
+import { DesignPrototypeWriter } from '../../filesystem/design-prototype-writer.js';
 import { ClaudeReferenceTranslator } from '../../ai/claude-reference-translator.js';
 import { SqliteInceptionRepository } from '../../persistence/repositories/sqlite-inception-repository.js';
 import { ClaudeInceptionEngine } from '../../ai/claude-inception-engine.js';
@@ -100,7 +101,7 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const service=new ProjectInceptionService({projects:workspace.projects,graph:workspace.graph,store:new SqliteInceptionRepository(workspace.database),engine,
    planning:{submit:(id,draft,originRefId)=>getPlanning(id).submit(id,draft,originRefId,'AI_CHAT'),find:id=>new SqliteChangeSetRepository(workspace.database).findById(id),apply:async id=>{const result=await getPlanning(projectId).apply(id);return {revision:result.revision,resolvedIds:result.resolvedIds};},reject:id=>{getPlanning(projectId).reject(id);}},
    repositoryPath:id=>workspace.repositories.findPrimaryForProject(id)?.localPath??null,
-   translator,referenceFiles:new InceptionReferenceFiles(join(workspaceRoot,'projects')),
+   translator,referenceFiles:new InceptionReferenceFiles(join(workspaceRoot,'projects')),designFiles:new DesignPrototypeWriter(),
    models:id=>{const profile=providerConnection(id,workspace.database);return {planning:profile?.models.planning??null,available:profile?.models.available??[]};},
    emit:(channel,payload)=>emit(channel,payload)});
   inceptions.set(projectId,service);return service;

@@ -1,4 +1,5 @@
 import { Script } from 'node:vm';
+import { DESIGN_PROTOTYPE_PATH, UI_SPEC_PATH, UI_SPEC_SECTIONS } from '../../shared/ui-spec.js';
 import type { ChangeSetDraft } from '../../application/ports/change-set-planning-port.js';
 import type { InceptionProjectInput, UiOptionDraft } from '../../application/ports/inception-port.js';
 import { MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, type InceptionAnswerDto, type InceptionQuestionDto } from '../../shared/contracts/inception-view.js';
@@ -65,6 +66,12 @@ ${inertJson(items)}
 USER_CHANGE_REQUESTS>>>`;
 }
 
+/** The interface specification the proposal must carry when the user approved a visual direction (the app links it to every feature and saves the prototype itself). */
+export function uiSpecRule(project: InceptionProjectInput): string {
+  if (!project.direction) return '';
+  return `\n9. The user APPROVED a visual direction, so add ONE more UPSERT_ARTIFACT of artifactType SPEC (tempId $ui_spec, relativePath "${UI_SPEC_PATH}", parentId null) whose markdownContent is the interface specification, with exactly these level-2 headings in this order: ${UI_SPEC_SECTIONS.map(section => `"## ${section}"`).join(', ')}. Ground every section in the approved direction: real screen names and what each shows, the navigation pattern, the reusable components and their props, keyboard shortcuts and behaviours, the four states (empty, loading, error, success) per screen, the main user flows step by step, and in "Sistema de diseño" the concrete tokens (hex palette, typography, spacing, radius). The app saves the approved prototype itself as ${DESIGN_PROTOTYPE_PATH} and links the specification to every feature: mention that file as the visual reference, do not create it, and do not create the link. The "rules" of SET_PROJECT_PROFILE must also carry the visual conventions every agent follows (use the tokens instead of loose values, the four states on every screen, component structure and accessibility).`;
+}
+
 export function buildProposalPrompt(project: InceptionProjectInput, questions: InceptionQuestionDto[], answers: InceptionAnswerDto[], notes?: readonly string[]): string {
   const qa = questions.map(question => ({ question: question.text, answer: answers.find(answer => answer.questionId === question.id)?.answer || `(sin respuesta: decide tú${question.default ? `; sugerido: ${question.default}` : ''})` }));
   return `You are the project inception assistant of a planning workspace. Propose ONE complete foundation for this new, empty project as a ChangeSet (JSON matching the output schema). The user approves or rejects it as a whole. Do not run commands or read files. ${LANGUAGE}
@@ -77,7 +84,7 @@ Required operations, in this order:
 5. 2-6 CREATE_REQUIREMENT (parentId null) with acceptanceCriteria.
 6. One CREATE_MODULE (parentId "${project.rootId}") or very few.
 7. At most 3 CREATE_FEATURE (moduleId = a module tempId). The FIRST feature is titled "Fundación": its FIRST task is the scaffold (minimal structure, README with how to run and test, one passing smoke test with the verification command). ${NO_INSTALL_RULE} Each feature has 2-5 CREATE_WORK_ITEM (workType TASK, parentId = the feature's tempId, no subtasks, recommendedProfileRole DEVELOPER) with acceptanceCriteria.
-8. CREATE_RELATIONSHIP DEPENDS_ON from each dependent feature to its prerequisite feature (every feature depends on "Fundación"), and between tasks of the same feature in execution order (dependent → prerequisite). Optionally SATISFIES from a feature to the requirements it covers.
+8. CREATE_RELATIONSHIP DEPENDS_ON from each dependent feature to its prerequisite feature (every feature depends on "Fundación"), and between tasks of the same feature in execution order (dependent → prerequisite). Optionally SATISFIES from a feature to the requirements it covers.${uiSpecRule(project)}
 Never set entityId and never use UPDATE_ENTITY_STATUS: the app sets the initial statuses. Use temporary ids starting with $. Put the assumptions you made in "assumptions". Keep it small: the vision fits one page and the plan is the first version only.
 ${GRAPH_RULES}
 

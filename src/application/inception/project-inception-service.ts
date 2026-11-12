@@ -17,6 +17,8 @@ export interface InceptionPlanningPort {
   apply(changeSetId: string): Promise<{ revision: number; resolvedIds?: Record<string, string> }>;
   reject(changeSetId: string): void;
 }
+/** Saves the approved prototype in the repository; returns its relative path. */
+export interface DesignPrototypeWriterPort { write(repositoryPath: string, html: string): Promise<string> }
 export interface ProjectInceptionDependencies {
   projects: ProjectRepositoryPort; graph: KnowledgeGraphRepositoryPort; store: InceptionRepositoryPort; engine: InceptionEnginePort; planning: InceptionPlanningPort;
   repositoryPath(projectId: string): string | null;
@@ -25,6 +27,7 @@ export interface ProjectInceptionDependencies {
   /** Translates attached references to text, and where they are stored. Without them the assistant refuses references (it cannot read files itself). */
   translator?: ReferenceTranslatorPort;
   referenceFiles?: InceptionReferenceFilesPort;
+  designFiles?: DesignPrototypeWriterPort;
   emit?(channel: 'inception:updated' | 'graph:revision_updated', payload: unknown): void;
 }
 
@@ -252,6 +255,12 @@ export class ProjectInceptionService {
     const changeSet = this.deps.planning.find(current.changeSetId);
     if (!changeSet) throw new Error('La propuesta de inicio ya no existe; vuelve a generarla.');
     if (changeSet.status !== 'VALIDATED') throw new Error(`La propuesta no pasó la validación: ${changeSet.validationIssues.map(issue => issue.message).join(' ') || changeSet.status}. Vuelve a generarla.`);
+    // The approved prototype goes to the repository first: if it cannot be saved nothing has been applied yet.
+    const approved = current.ui.options.find(option => option.id === current.ui.selectedOptionId);
+    if (approved?.prototypeHtml && this.deps.designFiles) {
+      const root = this.deps.repositoryPath(projectId)!;
+      await this.deps.designFiles.write(root, approved.prototypeHtml).catch((error: unknown) => { throw new Error(`No se pudo guardar el prototipo aprobado: ${error instanceof Error ? error.message : String(error)}`); });
+    }
     const applied = await this.deps.planning.apply(changeSet.id);
     const scaffold = scaffoldTempId(changeSet.operations as ChangeOperation[]);
     const scaffoldTaskId = scaffold ? applied.resolvedIds?.[scaffold] ?? null : null;
@@ -419,7 +428,7 @@ export class ProjectInceptionService {
   private async proposalWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
     const projectId = record.projectId, rootId = this.rootId(projectId);
     const result = await this.deps.engine.propose({ project: this.projectInput(projectId, record.brief, props, record.references ?? [], this.approvedDirection(record)), questions: record.questions, answers: record.answers, ...(record.notes?.length ? { notes: record.notes } : {}), ...(record.model ? { model: record.model } : {}), signal });
-    const plan = buildFoundationPlan(result.draft.operations, rootId);
+    const plan = buildFoundationPlan(result.draft.operations, rootId, { uiSpec: !!this.approvedDirection(record) });
     const changeSet = this.deps.planning.submit(projectId, { title: result.draft.title || 'Inicio del proyecto', rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)].filter(Boolean).join('\n'), operations: plan.operations }, `inception:${projectId}`);
     return { stage: 'PROPOSAL' as const, status: 'WAITING_USER' as const, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage, changeSetId: changeSet.id, error: plan.problems.length ? plan.problems.join(' ') : null };
   }

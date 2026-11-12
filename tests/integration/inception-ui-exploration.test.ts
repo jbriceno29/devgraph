@@ -8,6 +8,8 @@ import type { InceptionEnginePort, InceptionProjectInput, ReferenceTranslatorPor
 import type { ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import { MAX_PROTOTYPE_CHARS, type InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 import { proposal, usage } from './inception-fixtures.js';
+import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import { UI_SPEC_SECTIONS } from '../../src/shared/ui-spec.js';
 
 const roots: string[] = []; const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];
 afterEach(() => { for (const core of cores.splice(0)) core.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -17,7 +19,7 @@ const draft = (title: string, html = page(title)): UiOptionDraft => ({ title, su
 
 class FakeEngine implements InceptionEnginePort {
   explored: Array<{ models: string | undefined; revise: boolean; project: InceptionProjectInput; notes?: string[]; option?: UiOptionDraft }> = []; proposed: InceptionProjectInput[] = [];
-  failExplore = false; failPropose = false; hang = false; reviseTitle = 'Panel ajustado';
+  failExplore = false; failPropose = false; hang = false; reviseTitle = 'Panel ajustado'; omitSpec = false;
   async askGoals() { return { questions: [{ id: 'q1', text: '¿Quién la usa?', options: ['Solo yo'], default: 'Solo yo', why: 'Alcance.' }], assumptions: [], usage }; }
   async exploreUi(input: Parameters<InceptionEnginePort['exploreUi']>[0]) {
     this.explored.push({ models: input.model, revise: Boolean(input.revise), project: input.project, ...(input.revise ? { notes: input.revise.notes, option: input.revise.option } : {}) });
@@ -29,7 +31,10 @@ class FakeEngine implements InceptionEnginePort {
   async propose(input: Parameters<InceptionEnginePort['propose']>[0]) {
     this.proposed.push(input.project);
     if (this.failPropose) throw new Error('propuesta caída');
-    return { draft: { title: 'Inicio: tareas', rationale: 'Simple.', operations: proposal().map(op => (op.type === 'CREATE_RELATIONSHIP' && op.targetId === 'ROOT' ? { ...op, targetId: input.project.rootId } : op)) }, assumptions: [], usage };
+    const operations: ChangeOperation[] = proposal().map(op => (op.type === 'CREATE_RELATIONSHIP' && op.targetId === 'ROOT' ? { ...op, targetId: input.project.rootId } : op));
+    // Like the real engine, a proposal built on an approved direction carries the interface specification.
+    if (input.project.direction && !this.omitSpec) operations.push({ type: 'UPSERT_ARTIFACT', tempId: '$ui_spec', parentId: null, artifactType: 'SPEC', title: 'Especificación de interfaz', relativePath: 'docs/UI_SPEC.md', markdownContent: UI_SPEC_SECTIONS.map(section => `## ${section}\n\nContenido de ${section}.`).join('\n\n') });
+    return { draft: { title: 'Inicio: tareas', rationale: 'Simple.', operations }, assumptions: [], usage };
   }
 }
 
@@ -167,6 +172,38 @@ describe('visual exploration before the proposal (V2)', () => {
     engine.failPropose = false;
     await call('inception:choose_ui', projectId, 'ui-1');
     expect(await settled()).toMatchObject({ stage: 'PROPOSAL', status: 'WAITING_USER', error: null });
+  });
+
+  it('V3: the approved design leaves docs/UI_SPEC.md linked to every feature and the prototype itself in docs/design/prototype.html', async () => {
+    const { root, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:choose_ui', projectId, 'ui-2'); await settled();
+    const repo = join(root, 'repo-v3');
+    await call('repository:initialize', projectId, repo);
+    expect(await call<InceptionViewDto>('inception:approve', projectId)).toMatchObject({ stage: 'APPLIED', error: null });
+    const spec = readFileSync(join(repo, 'docs', 'UI_SPEC.md'), 'utf8');
+    for (const section of UI_SPEC_SECTIONS) expect(spec).toContain(`## ${section}`);
+    expect(readFileSync(join(repo, 'docs', 'design', 'prototype.html'), 'utf8')).toBe(page('Lista minimalista'));
+    const db = openDatabase({ filename: join(root, 'workspace', 'projects', projectId, 'workspace.sqlite'), initialize: false });
+    try {
+      const linked = db.prepare("SELECT s.display_key AS feature FROM graph_edges e JOIN knowledge_entities s ON s.id=e.source_id JOIN knowledge_entities t ON t.id=e.target_id JOIN artifacts a ON a.entity_id=t.id WHERE e.edge_type='DOCUMENTED_BY' AND a.relative_path='docs/UI_SPEC.md' AND s.entity_type='FEATURE'").all() as Array<{ feature: string }>;
+      expect(linked).toHaveLength((db.prepare("SELECT COUNT(*) AS n FROM knowledge_entities WHERE entity_type='FEATURE'").get() as { n: number }).n);
+    } finally { closeDatabase(db); }
+  });
+
+  it('V3: a proposal that leaves out docs/UI_SPEC.md is reported as incomplete and cannot be approved; without a design nothing extra is demanded', async () => {
+    const { engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    engine.omitSpec = true;
+    await call('inception:choose_ui', projectId, 'ui-1');
+    const view = await settled();
+    expect(view.error).toContain('docs/UI_SPEC.md');
+    await expect(call('inception:approve', projectId)).rejects.toThrow('incompleta');
+    // Skipping the design needs no specification.
+    const skipped = await setup(); await skipped.toExploring();
+    skipped.engine.omitSpec = true;
+    await skipped.call('inception:choose_ui', skipped.projectId, null);
+    expect((await skipped.settled()).error).toBeNull();
   });
 
   it('a failed generation can be retried with the same request, and nothing else is offered', async () => {

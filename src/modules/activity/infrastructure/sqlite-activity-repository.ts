@@ -15,6 +15,21 @@ export class SqliteActivityRepository implements ActivitySourcePort {
   constructor(private readonly db: SqliteDatabase) {}
 
   snapshot(projectId: string, limit: number): ActivitySnapshot {
+    const { pendingProposals, appliedProposals } = this.proposals(projectId, limit);
+    return {
+      tasks: this.tasks(projectId, limit),
+      latestExecutions: this.latestExecutions(projectId),
+      pilots: this.pilots(projectId),
+      autonomy: this.autonomy(projectId),
+      pendingProposals,
+      appliedProposals,
+      pendingApprovals: this.pendingApprovals(projectId),
+      featureBranches: this.featureBranches(projectId),
+    };
+  }
+
+  /** Open tasks plus the latest DONE ones, each with the feature it belongs to. */
+  private tasks(projectId: string, limit: number): ActivityTaskRow[] {
     const parents = new Map(
       (
         this.db
@@ -37,7 +52,7 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         .prepare(`${taskSql} AND status='DONE' ORDER BY updated_at DESC, rowid DESC LIMIT ?`)
         .all(projectId, limit),
     ] as Array<{ id: string; display_key: string; title: string; status: string; updated_at: string }>;
-    const tasks: ActivityTaskRow[] = taskRows.map(row => ({
+    return taskRows.map(row => ({
       id: row.id,
       displayKey: row.display_key,
       title: row.title,
@@ -45,8 +60,11 @@ export class SqliteActivityRepository implements ActivitySourcePort {
       updatedAt: row.updated_at,
       featureId: featureOf(row.id),
     }));
+  }
+
+  private latestExecutions(projectId: string): ActivityExecutionRow[] {
     // Latest execution per task, counting grouped runs for every task they cover (execution_work_items).
-    const latestExecutions = (
+    return (
       this.db
         .prepare(`SELECT id,work_item_id,leader_id,status,review_status,started_at,completed_at,result_summary,covered FROM (
         SELECT e.id, c.work_item_id, e.work_item_id AS leader_id, e.status, e.review_status, e.started_at, e.completed_at, e.result_summary,
@@ -81,7 +99,10 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         resultSummary: row.result_summary,
       };
     });
-    const pilots = (
+  }
+
+  private pilots(projectId: string): ActivityPilotRow[] {
+    return (
       this.db
         .prepare(`SELECT r.id,r.feature_id,r.status,r.reason,r.started_at,r.ended_at,f.display_key,f.title FROM (
         SELECT p.*, ROW_NUMBER() OVER (PARTITION BY feature_id ORDER BY started_at DESC, rowid DESC) AS position FROM pilot_runs p WHERE project_id=?
@@ -108,7 +129,10 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         endedAt: row.ended_at,
       }),
     );
-    const autonomy: Record<string, AutonomyLevel> = Object.fromEntries(
+  }
+
+  private autonomy(projectId: string): Record<string, AutonomyLevel> {
+    return Object.fromEntries(
       (
         this.db.prepare('SELECT feature_id,level FROM feature_autonomy WHERE project_id=?').all(projectId) as Array<{
           feature_id: string;
@@ -116,6 +140,10 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         }>
       ).map(row => [row.feature_id, row.level]),
     );
+  }
+
+  /** Plan changes agents proposed: pending ones, and the latest applied. */
+  private proposals(projectId: string, limit: number) {
     const proposalSql = `SELECT c.id,c.title,c.status,c.origin_ref_id,c.created_at,c.applied_at,e.work_item_id FROM change_sets c LEFT JOIN agent_executions e ON e.id=c.origin_ref_id WHERE c.project_id=? AND c.origin_type='AGENT_EXECUTION'`;
     const mapProposal = (row: {
       id: string;
@@ -144,7 +172,11 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         .prepare(`${proposalSql} AND c.status='APPLIED' ORDER BY COALESCE(c.applied_at,c.created_at) DESC LIMIT ?`)
         .all(projectId, limit) as Parameters<typeof mapProposal>[0][]
     ).map(mapProposal);
-    const pendingApprovals = (
+    return { pendingProposals, appliedProposals };
+  }
+
+  private pendingApprovals(projectId: string): ActivityApprovalRow[] {
+    return (
       this.db
         .prepare(`SELECT a.id,a.execution_id,a.requested_action,a.reason,a.requested_at,e.work_item_id FROM approval_requests a JOIN agent_executions e ON e.id=a.execution_id
       WHERE e.project_id=? AND a.status='PENDING' AND e.status NOT IN ('COMPLETED','FAILED','CANCELLED') ORDER BY a.requested_at DESC`)
@@ -166,7 +198,10 @@ export class SqliteActivityRepository implements ActivitySourcePort {
         requestedAt: row.requested_at,
       }),
     );
-    const featureBranches = (
+  }
+
+  private featureBranches(projectId: string) {
+    return (
       this.db
         .prepare(
           `SELECT b.feature_id,b.branch_name,b.source_branch,b.integrated_at FROM feature_branches b JOIN knowledge_entities f ON f.id=b.feature_id AND f.entity_type='FEATURE' WHERE b.project_id=?`,
@@ -183,15 +218,5 @@ export class SqliteActivityRepository implements ActivitySourcePort {
       sourceBranch: row.source_branch,
       integratedAt: row.integrated_at,
     }));
-    return {
-      tasks,
-      latestExecutions,
-      pilots,
-      autonomy,
-      pendingProposals,
-      appliedProposals,
-      pendingApprovals,
-      featureBranches,
-    };
   }
 }

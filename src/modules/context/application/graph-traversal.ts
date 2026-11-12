@@ -9,8 +9,16 @@ export class GraphTraversal {
   /** Closing summary of an accepted task, or the summaries of its completed runs for tasks closed before Stage 2. */
   private taskMemory(workItemId: string, distance: number): string {
     const outcome = this.repository.findTaskOutcome(workItemId);
-    if (outcome)
-      return `\n\nResultado al cerrar la tarea (${outcome.createdAt.slice(0, 10)}${outcome.mergedCommit ? `, commit ${outcome.mergedCommit.slice(0, 12)}` : ''}):\n${condenseOutcomeSummary(outcome.summary, distance > 1)}${outcome.files.length ? `\n\nArchivos: ${outcome.files.map(file => `${file.path} (${file.status})`).join(', ')}` : ''}${outcome.checks.length ? `\nComprobaciones: ${outcome.checks.map(check => `${check.command} ${check.passed ? 'OK' : 'FALLÓ'}`).join(', ')}` : ''}`;
+    if (outcome) {
+      const commit = outcome.mergedCommit ? `, commit ${outcome.mergedCommit.slice(0, 12)}` : '';
+      const files = outcome.files.length
+        ? `\n\nArchivos: ${outcome.files.map(file => `${file.path} (${file.status})`).join(', ')}`
+        : '';
+      const checks = outcome.checks.length
+        ? `\nComprobaciones: ${outcome.checks.map(check => `${check.command} ${check.passed ? 'OK' : 'FALLÓ'}`).join(', ')}`
+        : '';
+      return `\n\nResultado al cerrar la tarea (${outcome.createdAt.slice(0, 10)}${commit}):\n${condenseOutcomeSummary(outcome.summary, distance > 1)}${files}${checks}`;
+    }
     const summaries = this.repository.listExecutionSummaries(workItemId);
     return summaries.length
       ? `\n\nResultados de ejecuciones completadas:\n${summaries.map(summary => `- ${summary.completedAt ?? ''}: ${summary.resultSummary ?? 'Sin resumen'}`).join('\n')}`

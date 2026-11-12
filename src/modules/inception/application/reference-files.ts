@@ -1,4 +1,3 @@
-import { basename } from 'node:path';
 import {
   MAX_REFERENCE_BYTES,
   MAX_REFERENCE_NOTE,
@@ -47,11 +46,19 @@ function isReadableText(content: Buffer): boolean {
 }
 
 /** Display name: no folders, no control characters, capped. */
-const cleanName = (value: unknown) =>
-  basename(String(value ?? '').replace(/\\/g, '/'))
+const cleanName = (value: unknown) => {
+  // The last path segment (what `basename` gave), without importing node:path in the application layer.
+  const name =
+    String(value ?? '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter(Boolean)
+      .pop() ?? '';
+  return name
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim()
     .slice(0, 120);
+};
 
 /**
  * Checks what the user attached before anything is written: count, kinds, notes, accepted types, sizes, valid base64 and that the content

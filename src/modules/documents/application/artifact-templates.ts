@@ -65,7 +65,29 @@ export function decisionRecordPath(adrNumber: number): string {
   return `docs/architecture/ADR/ADR-${String(adrNumber).padStart(3, '0')}.md`;
 }
 export function createDecisionRecordTemplate(adrNumber: number, title: string): string {
-  return `# ADR-${String(adrNumber).padStart(3, '0')}: ${title.trim()}\n\n- Estado: Propuesto\n- Fecha: ${new Date().toISOString().slice(0, 10)}\n\n## Contexto\n\nDescribe el problema y las fuerzas que motivan esta decisión.\n\n## Decisión\n\nDescribe la decisión tomada.\n\n## Alternativas consideradas\n\n- Alternativa: ventajas y desventajas.\n\n## Consecuencias\n\n- Consecuencias positivas y negativas.\n`;
+  return [
+    `# ADR-${String(adrNumber).padStart(3, '0')}: ${title.trim()}`,
+    '',
+    '- Estado: Propuesto',
+    `- Fecha: ${new Date().toISOString().slice(0, 10)}`,
+    '',
+    '## Contexto',
+    '',
+    'Describe el problema y las fuerzas que motivan esta decisión.',
+    '',
+    '## Decisión',
+    '',
+    'Describe la decisión tomada.',
+    '',
+    '## Alternativas consideradas',
+    '',
+    '- Alternativa: ventajas y desventajas.',
+    '',
+    '## Consecuencias',
+    '',
+    '- Consecuencias positivas y negativas.',
+    '',
+  ].join('\n');
 }
 
 export function parseDecisionRecord(markdown: string): {

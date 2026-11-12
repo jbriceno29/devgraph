@@ -50,14 +50,6 @@
     "src/modules/activity/infrastructure/sqlite-activity-repository.ts": 120,
     "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 220
   },
-  "long-string": {
-    "src/modules/documents/application/artifact-templates.ts": 1,
-    "src/modules/context/application/graph-traversal.ts": 1,
-    "src/modules/execution/infrastructure/change-review-contract.ts": 1,
-    "src/modules/planning/infrastructure/change-set-planning-contract.ts": 4,
-    "src/modules/inception/infrastructure/inception-contract.ts": 12,
-    "src/modules/inception/infrastructure/reference-translation-contract.ts": 1
-  },
   "file-size": {
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 252,
@@ -75,15 +67,11 @@
     "src/desktop/state/WorkspaceShell.tsx": 326,
     "src/desktop/state/project-create-form.tsx": 452,
     "src/modules/execution/infrastructure/claude-code-adapter.ts": 482,
-    "src/modules/inception/infrastructure/inception-contract.ts": 463,
     "src/modules/execution/infrastructure/execution-validator.ts": 386,
     "src/modules/projects/infrastructure/repository-scanner.ts": 516,
     "src/modules/execution/infrastructure/git-isolation-service.ts": 491,
     "src/modules/knowledge/infrastructure/sqlite-change-set-applier.ts": 373,
     "src/shared/contracts/ipc-contracts.ts": 382
-  },
-  "layers": {
-    "src/modules/inception/application/reference-files.ts": 1
   },
   "ipc-access": {
     "src/desktop/main.tsx": 1,

@@ -241,12 +241,12 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<SidecarState, String> {
     #[cfg(debug_assertions)]
     let (program, script, working_directory) = {
         let repository_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().ok_or("Resolve repository root")?.to_path_buf();
-        ("node".to_string(), repository_root.join("dist/main/infrastructure/ipc/sidecar/main.js"), repository_root.join("dist/main"))
+        ("node".to_string(), repository_root.join("dist/main/sidecar.js"), repository_root.join("dist/main"))
     };
     #[cfg(not(debug_assertions))]
     let (program, script, working_directory) = {
         let root = app.path().resolve(".", BaseDirectory::Resource).map_err(|error| format!("Resolve application resources: {error}"))?;
-        (root.join("node").to_string_lossy().into_owned(), root.join("core/infrastructure/ipc/sidecar/main.js"), root.join("core"))
+        (root.join("node").to_string_lossy().into_owned(), root.join("core/sidecar.js"), root.join("core"))
     };
     if !script.is_file() {
         return Err(format!("Workspace core is missing at {}. Run the Tauri development/build command so the TypeScript core is compiled.", script.display()));

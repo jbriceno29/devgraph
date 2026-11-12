@@ -28,7 +28,7 @@ flowchart LR
   Host -- "emit" --> UI
 ```
 
-- **Host Rust.** Arranca un proceso Node persistente (el *sidecar*) con `GRAPHDEV_WORKSPACE_ROOT` apuntando al directorio de datos de la aplicación. En desarrollo ejecuta `dist/main/infrastructure/ipc/sidecar/main.js`; en el paquete, el Node y el núcleo incluidos como recursos. Escribe el `stderr` del sidecar en `<datos>/logs/sidecar.log`.
+- **Host Rust.** Arranca un proceso Node persistente (el *sidecar*) con `GRAPHDEV_WORKSPACE_ROOT` apuntando al directorio de datos de la aplicación. En desarrollo ejecuta `dist/main/sidecar.js` (entrada estable `src/sidecar.ts`); en el paquete, el Node y el núcleo incluidos como recursos. Escribe el `stderr` del sidecar en `<datos>/logs/sidecar.log`.
 - **Protocolo.** Una línea JSON por petición (`{id, request:{channel,…}}`) por `stdin`; el sidecar responde por `stdout` con `{id, ok, result|error}` y emite eventos como `{type:'event', channel, payload}`, que el host reenvía a la interfaz con `emit`. El renderer no toca el sistema de archivos ni SQLite.
 - **Tiempos de espera por canal** (host): 60 s por defecto y 330 s para `changeset:propose_from_chat` (el planificador de TypeScript se rinde a los 300 s). Un tiempo agotado libera al llamador y las peticiones posteriores siguen funcionando.
 - **Concurrencia.** El despachador (`request-dispatcher.ts`) ejecuta **uno a uno y en orden** los comandos que mutan estado compartido (`SERIALIZED_CHANNELS`) y deja en paralelo las consultas y la propuesta de ChangeSet, para que una operación lenta no bloquee la interfaz. Las respuestas pueden llegar desordenadas; cada una lleva su `id`.

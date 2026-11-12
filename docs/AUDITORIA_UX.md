@@ -14,7 +14,7 @@ Fecha: 2026-11-12 · Rama: `feat/claude-code` (commit `97004b1`)
 
 - Lectura completa de `src/desktop/` (shell, 6 vistas, 5 pestañas de Agentes, inspector, asistente de inicio).
 - `npx vitest run tests/ui`: **15 archivos, 104 pruebas, todas pasan.**
-- **La app real en un navegador con datos reales.** Un arnés (puente HTTP → el núcleo compilado `dist/main/.../sidecar/main.js`) sobre una **copia** de la carpeta de datos (`~/.local/share/dev.graphdev2.workspace/projects`, sin tocar el original), Vite con `@tauri-apps/api` sustituido por el puente, y Chrome sin ventana controlado por CDP para hacer clic y capturar. Se recorrieron `todo-app` (2 features cerradas con el piloto) y `ecommerce` (creado con el asistente, 30 nodos). Las capturas están en [`docs/auditoria-ux/`](auditoria-ux/).
+- **La app real en un navegador con datos reales.** Un arnés (puente HTTP → el núcleo compilado `dist/main/sidecar.js`) sobre una **copia** de la carpeta de datos (`~/.local/share/dev.graphdev2.workspace/projects`, sin tocar el original), Vite con `@tauri-apps/api` sustituido por el puente, y Chrome sin ventana controlado por CDP para hacer clic y capturar. Se recorrieron `todo-app` (2 features cerradas con el piloto) y `ecommerce` (creado con el asistente, 30 nodos). Las capturas están en [`docs/auditoria-ux/`](auditoria-ux/).
 
 ## 2. Veredicto
 
@@ -158,7 +158,7 @@ El arnés no forma parte del repositorio. Se reconstruye en minutos:
 
 1. `npm run build:core`.
 2. Copiar `~/.local/share/dev.graphdev2.workspace/projects` a una carpeta temporal (nunca usar el original).
-3. Un proceso Node que lance `dist/main/infrastructure/ipc/sidecar/main.js` con `GRAPHDEV_WORKSPACE_ROOT` apuntando a la copia y reenvíe `POST /req` → `stdin` (`{id, request:{channel,args}}`) y los eventos de `stdout` como SSE.
+3. Un proceso Node que lance `dist/main/sidecar.js` con `GRAPHDEV_WORKSPACE_ROOT` apuntando a la copia y reenvíe `POST /req` → `stdin` (`{id, request:{channel,args}}`) y los eventos de `stdout` como SSE.
 4. Una configuración de Vite que extienda `vite.config.ts` y sustituya `@tauri-apps/api/core` (`invoke` → `fetch`) y `@tauri-apps/api/event` (`listen` → `EventSource`).
 5. Chrome sin ventana con `--remote-debugging-port` para hacer clic y capturar.
 

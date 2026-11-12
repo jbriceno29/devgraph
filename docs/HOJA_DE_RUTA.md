@@ -22,7 +22,7 @@ Ya cerrados: [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) (S
 | # | Paso | Plan | Tamaño | Estado | Por qué en este lugar |
 | --- | --- | --- | --- | --- | --- |
 | 1 | **F0** · errores de la interfaz (B1, B2, B4, B5, B6, C1 y C6 de la auditoría) | UX | ~1 día | Hecho | Hoy dan información falsa o pierden trabajo, y no dependen de nada. |
-| 2 | **A0** · guardarraíles: `CLAUDE.md`, `check:arch` con línea base y entrada estable del sidecar | ARQ | ½ día | Pendiente | Es barato y hace que todo lo nuevo nazca en su sitio. |
+| 2 | **A0** · guardarraíles: `CLAUDE.md`, `check:arch` con línea base y entrada estable del sidecar | ARQ | ½ día | Hecho | Es barato y hace que todo lo nuevo nazca en su sitio. |
 | 3 | **A1 + A2** · composición, IPC por módulo y traslado a `modules/` | ARQ | ~2 días | Pendiente | Son pasos mecánicos. Así las capacidades se escriben ya en su módulo y no se mueven dos veces. |
 | 4 | **C1 → C7a → C6** · documentación en línea, perfil Next.js con cambio de stack y verificación por stack | CAP | ~2–3 días | Pendiente | Desbloquean la migración del ecommerce a Next.js. |
 | 5 | **A3** · partir los gigantes del núcleo (orquestador, repositorio de ejecuciones, piloto, inicio) | ARQ | 2–3 días | Pendiente | Va antes de C2 y C3, que añaden lógica a la ejecución. |

@@ -1,6 +1,10 @@
+/**
+ * Entry point of the Node core (the sidecar the Tauri host starts). Its path is stable on purpose: the Rust host and
+ * the packaged resources point at `sidecar.js`, so moving the core's folders never touches them.
+ */
 import { createInterface } from 'node:readline';
-import { createWorkspaceCore } from './workspace-core.js';
-import { createRequestDispatcher } from './request-dispatcher.js';
+import { createWorkspaceCore } from './infrastructure/ipc/sidecar/workspace-core.js';
+import { createRequestDispatcher } from './infrastructure/ipc/sidecar/request-dispatcher.js';
 
 const output = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);
 const root = process.env.GRAPHDEV_WORKSPACE_ROOT;

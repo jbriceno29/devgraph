@@ -177,6 +177,8 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
 | **A4 · Interfaz MVVM** | `desktop/core` (IPC y store), carpetas por feature, View + ViewModel de las cinco pantallas grandes. Se aprovecha para cerrar B1 y B4 de la auditoría UX, que son consecuencia directa de la falta de ViewModels. | L (2–3 días) | Pruebas de UI en verde; nuevas pruebas de ViewModel para filtro y borradores; recorrido con el arnés de la auditoría. |
 | **A5 · Documentación** | `ARQUITECTURA_ACTUAL.md` → `ARQUITECTURA.md`; históricos a `docs/historico/`; rutas actualizadas (§7); línea base vacía y eliminada. | S | Ningún enlace roto (`grep` de rutas `src/` en `docs/`). |
 
+**Estado de A0 (2026-11-12): hecho.** `CLAUDE.md` en la raíz; `scripts/check-architecture.mjs` (usa el compilador de TypeScript, sin dependencias nuevas) con la línea base `scripts/architecture-baseline.json` (120 entradas al crearla), dentro de `npm test` (`tests/unit/architecture.test.ts`), como `npm run check:arch` y en CI; entrada estable `src/sidecar.ts` → `dist/main/sidecar.js` (y `core/sidecar.js` en el paquete), con `src-tauri/src/lib.rs` y `tsconfig.core.json` al día. Los benchmarks siguen importando `workspace-core.js` y `database.js` por su ruta: se actualizan en A1–A2, cuando esos archivos se muevan.
+
 La reorganización de pantallas de la auditoría UX (sus fases F1–F3) va **después de A4**: con ViewModels, mover «Piloto» dentro de la feature o unir Ejecutar y Revisión es mover Views, no reescribir lógica.
 
 ## 7. Rutas que hay que actualizar al ejecutar el plan

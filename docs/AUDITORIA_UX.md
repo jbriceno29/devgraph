@@ -140,7 +140,10 @@ Métricas: clics y tiempo por tarea, tareas completadas sin ayuda y momentos de 
 
 ### Estado de F0 (2026-11-12)
 
-Hecho, salvo la repetición del recorrido con el arnés en el navegador (pendiente).
+**Con errores encontrados en la validación manual.** B1 pasa. B2 quedó bloqueado por un conflicto real al integrar
+FEAT-002 en `todo-app`, que deja ver dos errores (features en paralelo sobre el mismo archivo y conflicto sin salida
+en la interfaz). El resto está sin validar. Detalle en [VALIDACION_F0.md](VALIDACION_F0.md#resultados-de-la-validación).
+Sigue pendiente repetir el recorrido con el arnés en el navegador.
 
 | # | Qué se hizo | Dónde |
 | :--- | :--- | :--- |

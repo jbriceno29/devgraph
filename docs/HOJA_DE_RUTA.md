@@ -22,7 +22,7 @@ Ya cerrados: [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) (S
 
 | # | Paso | Plan | Tamaño | Estado | Por qué en este lugar |
 | --- | --- | --- | --- | --- | --- |
-| 1 | **F0** · errores de la interfaz (B1, B2, B4, B5, B6, C1 y C6 de la auditoría) | UX | ~1 día | Hecho | Hoy dan información falsa o pierden trabajo, y no dependen de nada. |
+| 1 | **F0** · errores de la interfaz (B1, B2, B4, B5, B6, C1 y C6 de la auditoría) | UX | ~1 día | Con errores encontrados (validación manual, ver [VALIDACION_F0.md](VALIDACION_F0.md#resultados-de-la-validación)) | Hoy dan información falsa o pierden trabajo, y no dependen de nada. |
 | 2 | **A0** · guardarraíles: `CLAUDE.md`, `check:arch` con línea base y entrada estable del sidecar | ARQ | ½ día | Hecho | Es barato y hace que todo lo nuevo nazca en su sitio. |
 | 2b | **R1** · rutas escribibles y comandos derivados del repositorio | REP | ½ día | Hecho | Hoy un proyecto con código fuera de `src/` ve revertido el trabajo del agente sin causa visible, y «Ya tengo el código» hace fácil llegar ahí. Es puro y pequeño: A2 lo mueve sin costo. |
 | 3 | **A1 + A2** · composición, IPC por módulo y traslado a `modules/` | ARQ | ~2 días | Hecho | Son pasos mecánicos. Así las capacidades se escriben ya en su módulo y no se mueven dos veces. |

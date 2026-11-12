@@ -20,14 +20,21 @@ export async function resolveCliExecutable(spec: CliExecutableSpec, configured: 
   const variable = spec.envVars[0] ?? 'PATH';
   if (requested.includes('/') || requested.includes('\\')) {
     if (await isExecutable(requested)) return requested;
-    throw new Error(`No se pudo iniciar ${spec.displayName}: no existe un ejecutable en "${requested}". Configura ${variable} con la ruta absoluta del CLI.`);
+    throw new Error(
+      `No se pudo iniciar ${spec.displayName}: no existe un ejecutable en "${requested}". Configura ${variable} con la ruta absoluta del CLI.`,
+    );
   }
-  const directories = [...(process.env.PATH ?? '').split(delimiter).filter(Boolean), ...(spec.fallbackDirectories[process.platform] ?? [])];
+  const directories = [
+    ...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
+    ...(spec.fallbackDirectories[process.platform] ?? []),
+  ];
   for (const directory of directories) {
     const candidate = join(directory, requested);
     if (await isExecutable(candidate)) return candidate;
   }
-  throw new Error(`No se encontró el CLI de ${spec.displayName} ("${requested}"). Añade su carpeta al PATH del proceso de escritorio o configura ${variable} con la ruta absoluta. ${spec.hint}`.trim());
+  throw new Error(
+    `No se encontró el CLI de ${spec.displayName} ("${requested}"). Añade su carpeta al PATH del proceso de escritorio o configura ${variable} con la ruta absoluta. ${spec.hint}`.trim(),
+  );
 }
 
 export const codexCli: CliExecutableSpec = {
@@ -46,12 +53,22 @@ export const claudeCli: CliExecutableSpec = {
   envVars: ['GRAPHDEV_CLAUDE_PATH'],
   fallbackDirectories: {
     linux: [join(homedir(), '.local', 'bin'), join(homedir(), '.claude', 'local'), '/usr/local/bin', '/usr/bin'],
-    darwin: [join(homedir(), '.local', 'bin'), join(homedir(), '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin'],
+    darwin: [
+      join(homedir(), '.local', 'bin'),
+      join(homedir(), '.claude', 'local'),
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+    ],
     win32: [join(homedir(), '.local', 'bin'), join(process.env.APPDATA ?? homedir(), 'npm')],
   },
   hint: 'Suele estar en ~/.local/bin/claude.',
 };
 
 async function isExecutable(path: string): Promise<boolean> {
-  try { await access(path, constants.X_OK); return true; } catch { return false; }
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }

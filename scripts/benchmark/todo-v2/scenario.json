@@ -43,9 +43,7 @@
         "Sin fecha, due es null",
         "Fechas mal formadas o inexistentes se rechazan"
       ],
-      "dependsOn": [
-        "A1"
-      ]
+      "dependsOn": ["A1"]
     },
     {
       "id": "A3",
@@ -59,9 +57,7 @@
         "untag quita la etiqueta",
         "Etiquetas vacías e ids inexistentes se rechazan"
       ],
-      "dependsOn": [
-        "A1"
-      ]
+      "dependsOn": ["A1"]
     },
     {
       "id": "A4",
@@ -69,10 +65,7 @@
       "key": "TASK-204",
       "title": "Eliminar tareas",
       "summary": "Método remove(id) que elimina la tarea y devuelve una copia de ella; un id inexistente se rechaza sin modificar la lista.",
-      "criteria": [
-        "remove elimina y devuelve la tarea",
-        "Un id inexistente se rechaza"
-      ],
+      "criteria": ["remove elimina y devuelve la tarea", "Un id inexistente se rechaza"],
       "dependsOn": []
     },
     {
@@ -81,11 +74,7 @@
       "key": "TASK-205",
       "title": "Renombrar tareas",
       "summary": "Método rename(id, título) que cambia el título con la misma validación y normalización que add y devuelve una copia actualizada; un id inexistente se rechaza.",
-      "criteria": [
-        "rename normaliza el título",
-        "rename rechaza títulos vacíos",
-        "Un id inexistente se rechaza"
-      ],
+      "criteria": ["rename normaliza el título", "rename rechaza títulos vacíos", "Un id inexistente se rechaza"],
       "dependsOn": []
     },
     {
@@ -94,14 +83,8 @@
       "key": "TASK-206",
       "title": "Filtros combinables",
       "summary": "list acepta un filtro opcional con cualquier combinación de completed, priority y tag, y devuelve las tareas que cumplen todas las condiciones (siempre copias).",
-      "criteria": [
-        "Sin filtro devuelve todas",
-        "Los filtros se combinan"
-      ],
-      "dependsOn": [
-        "A1",
-        "A3"
-      ]
+      "criteria": ["Sin filtro devuelve todas", "Los filtros se combinan"],
+      "dependsOn": ["A1", "A3"]
     },
     {
       "id": "B2",
@@ -114,10 +97,7 @@
         "Orden por fecha con las tareas sin fecha al final",
         "Un criterio desconocido se rechaza"
       ],
-      "dependsOn": [
-        "A1",
-        "A2"
-      ]
+      "dependsOn": ["A1", "A2"]
     },
     {
       "id": "B3",
@@ -125,13 +105,8 @@
       "key": "TASK-208",
       "title": "Tareas vencidas",
       "summary": "Método overdue(hoy) que recibe una fecha en el mismo formato que la fecha límite y devuelve las tareas pendientes cuya fecha límite es anterior a ese día. Una fecha inválida se rechaza.",
-      "criteria": [
-        "Devuelve solo pendientes vencidas",
-        "Una fecha inválida se rechaza"
-      ],
-      "dependsOn": [
-        "A2"
-      ]
+      "criteria": ["Devuelve solo pendientes vencidas", "Una fecha inválida se rechaza"],
+      "dependsOn": ["A2"]
     },
     {
       "id": "B4",
@@ -139,13 +114,8 @@
       "key": "TASK-209",
       "title": "Resumen por prioridad",
       "summary": "src/stats.js exporta summarize(lista), que recibe la lista creada con createTaskList() (no un arreglo) y devuelve { total, completed, pending, byPriority }, donde byPriority cuenta cuántas tareas hay de cada prioridad.",
-      "criteria": [
-        "Cuenta total, completadas y pendientes",
-        "byPriority incluye todas las prioridades"
-      ],
-      "dependsOn": [
-        "B1"
-      ]
+      "criteria": ["Cuenta total, completadas y pendientes", "byPriority incluye todas las prioridades"],
+      "dependsOn": ["B1"]
     },
     {
       "id": "C1",
@@ -158,12 +128,7 @@
         "La lista cargada conserva toda la interfaz",
         "Los ids continúan"
       ],
-      "dependsOn": [
-        "A2",
-        "A3",
-        "A4",
-        "A5"
-      ]
+      "dependsOn": ["A2", "A3", "A4", "A5"]
     },
     {
       "id": "C2",
@@ -171,15 +136,8 @@
       "key": "TASK-211",
       "title": "Exportar a CSV",
       "summary": "src/csv.js exporta toCsv(lista), que devuelve un texto CSV con una fila de encabezado y una fila por tarea, con una columna por cada campo de la tarea (con el nombre del campo como encabezado). Las etiquetas van en una sola celda separadas por ';'. Los textos con comas, comillas o saltos de línea se escapan según CSV.",
-      "criteria": [
-        "Encabezado con todos los campos",
-        "Una fila por tarea",
-        "Escapado correcto"
-      ],
-      "dependsOn": [
-        "A2",
-        "A3"
-      ]
+      "criteria": ["Encabezado con todos los campos", "Una fila por tarea", "Escapado correcto"],
+      "dependsOn": ["A2", "A3"]
     },
     {
       "id": "C3",
@@ -187,12 +145,8 @@
       "key": "TASK-212",
       "title": "Importar desde CSV",
       "summary": "fromCsv(texto) en src/csv.js devuelve una lista nueva a partir de un texto generado por toCsv, con las mismas tareas y toda la interfaz de la lista.",
-      "criteria": [
-        "toCsv y fromCsv conservan las tareas"
-      ],
-      "dependsOn": [
-        "C2"
-      ]
+      "criteria": ["toCsv y fromCsv conservan las tareas"],
+      "dependsOn": ["C2"]
     },
     {
       "id": "C4",
@@ -200,14 +154,8 @@
       "key": "TASK-213",
       "title": "Validar datos externos",
       "summary": "loadTasks y fromCsv deben rechazar datos inválidos (JSON mal formado, prioridades o fechas inválidas) siguiendo la convención de errores del proyecto, sin devolver una lista parcial.",
-      "criteria": [
-        "Se rechaza un JSON mal formado",
-        "Se rechazan prioridades y fechas inválidas"
-      ],
-      "dependsOn": [
-        "C1",
-        "C3"
-      ]
+      "criteria": ["Se rechaza un JSON mal formado", "Se rechazan prioridades y fechas inválidas"],
+      "dependsOn": ["C1", "C3"]
     }
   ]
 }

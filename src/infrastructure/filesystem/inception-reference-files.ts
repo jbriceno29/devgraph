@@ -10,7 +10,10 @@ const FILE_NAME = /^(?:ref|design)-\d{1,2}\.[a-z0-9]{2,5}$/;
  * `design-<n>.<ext>` for imported design images), never by the user.
  */
 export class InceptionReferenceFiles implements InceptionReferenceFilesPort {
-  constructor(private readonly projectsRoot: string, private readonly area: 'inception' | 'planning' = 'inception') {}
+  constructor(
+    private readonly projectsRoot: string,
+    private readonly area: 'inception' | 'planning' = 'inception',
+  ) {}
   private folder(projectId: string): string {
     if (!/^[A-Za-z0-9-]{1,64}$/.test(projectId)) throw new Error('Proyecto inválido.');
     return join(this.projectsRoot, projectId, this.area, 'references');
@@ -19,11 +22,15 @@ export class InceptionReferenceFiles implements InceptionReferenceFilesPort {
     if (!FILE_NAME.test(file)) throw new Error(`Nombre de referencia no válido: ${file}`);
     return join(this.folder(projectId), file);
   }
-  read(projectId: string, file: string): Buffer { return readFileSync(this.pathOf(projectId, file)); }
+  read(projectId: string, file: string): Buffer {
+    return readFileSync(this.pathOf(projectId, file));
+  }
   save(projectId: string, file: string, content: Buffer): void {
     const target = this.pathOf(projectId, file);
     mkdirSync(this.folder(projectId), { recursive: true });
     writeFileSync(target, content);
   }
-  deleteAll(projectId: string): void { rmSync(this.folder(projectId), { recursive: true, force: true }); }
+  deleteAll(projectId: string): void {
+    rmSync(this.folder(projectId), { recursive: true, force: true });
+  }
 }

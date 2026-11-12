@@ -25,7 +25,10 @@ export interface SkillManifest {
   promptNote: string;
 }
 
-export interface BundledSkill { manifest: SkillManifest; contentDirectory: string }
+export interface BundledSkill {
+  manifest: SkillManifest;
+  contentDirectory: string;
+}
 
 /** The skills folder next to the compiled core (dist/main/skills, or resources/core/skills in the packaged app). */
 export const DEFAULT_SKILLS_DIRECTORY = fileURLToPath(new URL('../../skills/', import.meta.url));
@@ -37,10 +40,14 @@ export async function loadBundledSkills(directory = DEFAULT_SKILLS_DIRECTORY): P
     if (!entry.isDirectory()) continue;
     const root = join(directory, entry.name);
     const manifest = JSON.parse(await readFile(join(root, 'skill.json'), 'utf8')) as SkillManifest;
-    if (manifest.id !== entry.name || !/^[a-z0-9-]+$/.test(manifest.id)) throw new Error(`Skill incluida con id inválido: ${entry.name}`);
+    if (manifest.id !== entry.name || !/^[a-z0-9-]+$/.test(manifest.id))
+      throw new Error(`Skill incluida con id inválido: ${entry.name}`);
     const contentDirectory = join(root, 'content');
     const hash = await contentHash(contentDirectory);
-    if (hash !== manifest.sha256) throw new Error(`La skill ${manifest.id} no coincide con su hash: el paquete de la app está alterado o incompleto.`);
+    if (hash !== manifest.sha256)
+      throw new Error(
+        `La skill ${manifest.id} no coincide con su hash: el paquete de la app está alterado o incompleto.`,
+      );
     skills.push({ manifest, contentDirectory });
   }
   return skills.sort((left, right) => left.manifest.id.localeCompare(right.manifest.id));
@@ -50,7 +57,11 @@ export async function loadBundledSkills(directory = DEFAULT_SKILLS_DIRECTORY): P
 export async function contentHash(directory: string): Promise<string> {
   const files = (await listFiles(directory)).sort();
   const hash = createHash('sha256');
-  for (const file of files) hash.update(`${relative(directory, file).split(sep).join('/')}\0`).update(await readFile(file)).update('\0');
+  for (const file of files)
+    hash
+      .update(`${relative(directory, file).split(sep).join('/')}\0`)
+      .update(await readFile(file))
+      .update('\0');
   return hash.digest('hex');
 }
 
@@ -64,6 +75,12 @@ export async function materializeSkill(skill: BundledSkill, workingDirectory: st
 
 async function listFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(entry => entry.isDirectory() ? listFiles(join(directory, entry.name)) : Promise.resolve(entry.isFile() ? [join(directory, entry.name)] : [])));
+  const nested = await Promise.all(
+    entries.map(entry =>
+      entry.isDirectory()
+        ? listFiles(join(directory, entry.name))
+        : Promise.resolve(entry.isFile() ? [join(directory, entry.name)] : []),
+    ),
+  );
   return nested.flat();
 }

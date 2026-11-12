@@ -8,10 +8,17 @@ import { PROTOTYPE_CSP } from '../../../shared/prototype-safety.js';
  */
 export function hardenPrototype(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('meta[http-equiv], link, base, iframe, frame, frameset, object, embed, applet').forEach(element => element.remove());
-  doc.querySelectorAll('a[href], area[href]').forEach(element => { if (!(element.getAttribute('href') ?? '').startsWith('#')) element.removeAttribute('href'); });
+  doc
+    .querySelectorAll('meta[http-equiv], link, base, iframe, frame, frameset, object, embed, applet')
+    .forEach(element => element.remove());
+  doc.querySelectorAll('a[href], area[href]').forEach(element => {
+    if (!(element.getAttribute('href') ?? '').startsWith('#')) element.removeAttribute('href');
+  });
   doc.querySelectorAll('[target]').forEach(element => element.removeAttribute('target'));
-  doc.querySelectorAll('form[action], [formaction], form[target]').forEach(element => { element.removeAttribute('action'); element.removeAttribute('formaction'); });
+  doc.querySelectorAll('form[action], [formaction], form[target]').forEach(element => {
+    element.removeAttribute('action');
+    element.removeAttribute('formaction');
+  });
   const policy = doc.createElement('meta');
   policy.setAttribute('http-equiv', 'Content-Security-Policy');
   policy.setAttribute('content', PROTOTYPE_CSP);

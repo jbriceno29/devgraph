@@ -1,6 +1,20 @@
-import type { FeatureAutonomy, PilotEvent, PilotEventKind, PilotRun, PilotStatus } from '../../domain/autonomy/models.js';
+import type {
+  FeatureAutonomy,
+  PilotEvent,
+  PilotEventKind,
+  PilotRun,
+  PilotStatus,
+} from '../../domain/autonomy/models.js';
 
-export interface FeatureTaskView { id: string; displayKey: string; title: string; status: string; dependsOn: string[]; /** Task summary (grouping reads it to spot convention-fixing tasks). */ summary: string; /** Number of acceptance criteria (grouping caps their sum). */ criteriaCount: number }
+export interface FeatureTaskView {
+  id: string;
+  displayKey: string;
+  title: string;
+  status: string;
+  dependsOn: string[] /** Task summary (grouping reads it to spot convention-fixing tasks). */;
+  summary: string /** Number of acceptance criteria (grouping caps their sum). */;
+  criteriaCount: number;
+}
 
 export interface PilotRepositoryPort {
   getAutonomy(projectId: string, featureId: string): FeatureAutonomy;
@@ -16,6 +30,12 @@ export interface PilotRepositoryPort {
   findRun(runId: string): PilotRun | null;
   latestRun(featureId: string): PilotRun | null;
   listRuns(projectId: string, statuses: PilotStatus[]): PilotRun[];
-  appendEvent(runId: string, kind: PilotEventKind, message: string, workItemId: string | null, executionId: string | null): PilotEvent;
+  appendEvent(
+    runId: string,
+    kind: PilotEventKind,
+    message: string,
+    workItemId: string | null,
+    executionId: string | null,
+  ): PilotEvent;
   listEvents(runId: string, limit: number): PilotEvent[];
 }

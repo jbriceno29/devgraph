@@ -16,27 +16,63 @@ export function missingUiSpecSections(markdown: string): string[] {
  *   created here) and is not linked yet, so its agents receive it in their context (level 3), as the inception does.
  * The eight sections are checked by the ChangeSet validator, for every proposal that touches the file.
  */
-export function applyUiSpecPlan(operations: ChangeOperation[], spec: { entityId: string | null; update: boolean }, graph: { /** Ids of the features that already exist. */ features?: ReadonlySet<string>; /** Features already DOCUMENTED_BY the existing specification. */ linked?: ReadonlySet<string> } = {}): { operations: ChangeOperation[]; problems: string[] } {
+export function applyUiSpecPlan(
+  operations: ChangeOperation[],
+  spec: { entityId: string | null; update: boolean },
+  graph: {
+    /** Ids of the features that already exist. */ features?: ReadonlySet<string> /** Features already DOCUMENTED_BY the existing specification. */;
+    linked?: ReadonlySet<string>;
+  } = {},
+): { operations: ChangeOperation[]; problems: string[] } {
   const problems: string[] = [];
   let ops = operations.map(op => ({ ...op })) as ChangeOperation[];
-  let upsert = ops.find((op): op is Op<'UPSERT_ARTIFACT'> => op.type === 'UPSERT_ARTIFACT' && op.relativePath === UI_SPEC_PATH);
-  if (spec.update && !upsert) problems.push(`Pediste actualizar ${UI_SPEC_PATH}, pero la propuesta no la incluye. Pide otra propuesta.`);
+  let upsert = ops.find(
+    (op): op is Op<'UPSERT_ARTIFACT'> => op.type === 'UPSERT_ARTIFACT' && op.relativePath === UI_SPEC_PATH,
+  );
+  if (spec.update && !upsert)
+    problems.push(`Pediste actualizar ${UI_SPEC_PATH}, pero la propuesta no la incluye. Pide otra propuesta.`);
   // Same file, so the same artifact: whatever ids the model wrote, it becomes an update of the existing one.
   if (upsert && spec.entityId && (upsert.tempId || upsert.entityId !== spec.entityId)) {
     const temp = upsert.tempId ?? '';
     const { tempId: _tempId, parentId: _parentId, ...rest } = upsert;
     const replaced: Op<'UPSERT_ARTIFACT'> = { ...rest, entityId: spec.entityId };
-    ops = ops.map(op => (op === upsert ? replaced : op.type === 'CREATE_RELATIONSHIP' && temp ? { ...op, sourceId: op.sourceId === temp ? spec.entityId! : op.sourceId, targetId: op.targetId === temp ? spec.entityId! : op.targetId } : op));
+    ops = ops.map(op =>
+      op === upsert
+        ? replaced
+        : op.type === 'CREATE_RELATIONSHIP' && temp
+          ? {
+              ...op,
+              sourceId: op.sourceId === temp ? spec.entityId! : op.sourceId,
+              targetId: op.targetId === temp ? spec.entityId! : op.targetId,
+            }
+          : op,
+    );
     upsert = replaced;
   }
   if (upsert && !spec.entityId && !upsert.tempId && !upsert.entityId) upsert.tempId = '$ui_spec';
   if (upsert) upsert.artifactType = 'SPEC';
-  const target = upsert ? (upsert.entityId && !upsert.tempId ? upsert.entityId : upsert.tempId ?? null) : spec.entityId;
+  const target = upsert
+    ? upsert.entityId && !upsert.tempId
+      ? upsert.entityId
+      : (upsert.tempId ?? null)
+    : spec.entityId;
   if (target) {
-    const touched = [...ops.filter((op): op is Op<'CREATE_FEATURE'> => op.type === 'CREATE_FEATURE').map(op => op.tempId), ...ops.flatMap(op => (op.type === 'CREATE_WORK_ITEM' && graph.features?.has(op.parentId) ? [op.parentId] : []))];
+    const touched = [
+      ...ops.filter((op): op is Op<'CREATE_FEATURE'> => op.type === 'CREATE_FEATURE').map(op => op.tempId),
+      ...ops.flatMap(op => (op.type === 'CREATE_WORK_ITEM' && graph.features?.has(op.parentId) ? [op.parentId] : [])),
+    ];
     for (const feature of new Set(touched)) {
       if (target === spec.entityId && graph.linked?.has(feature)) continue;
-      if (!ops.some(op => op.type === 'CREATE_RELATIONSHIP' && op.edgeType === 'DOCUMENTED_BY' && op.sourceId === feature && op.targetId === target)) ops.push({ type: 'CREATE_RELATIONSHIP', sourceId: feature, targetId: target, edgeType: 'DOCUMENTED_BY' });
+      if (
+        !ops.some(
+          op =>
+            op.type === 'CREATE_RELATIONSHIP' &&
+            op.edgeType === 'DOCUMENTED_BY' &&
+            op.sourceId === feature &&
+            op.targetId === target,
+        )
+      )
+        ops.push({ type: 'CREATE_RELATIONSHIP', sourceId: feature, targetId: target, edgeType: 'DOCUMENTED_BY' });
     }
   }
   return { operations: ops, problems };

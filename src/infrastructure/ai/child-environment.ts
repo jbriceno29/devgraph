@@ -7,18 +7,54 @@
  * redirect authentication or switch the CLI into a nested mode.
  */
 const ALLOWED = [
-  'HOME', 'PATH', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE', 'TZ',
-  'TMPDIR', 'TEMP', 'TMP', 'TERM',
-  'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR',
-  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
-  'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+  'HOME',
+  'PATH',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'LANG',
+  'LANGUAGE',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'TERM',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_STATE_HOME',
+  'XDG_RUNTIME_DIR',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+  'NODE_EXTRA_CA_CERTS',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
   // Windows
-  'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'HOMEDRIVE', 'HOMEPATH',
+  'SYSTEMROOT',
+  'SystemRoot',
+  'WINDIR',
+  'COMSPEC',
+  'PATHEXT',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'PROGRAMDATA',
+  'HOMEDRIVE',
+  'HOMEPATH',
 ] as const;
 
 export type AgentAuthMode = 'subscription' | 'api_key';
 
-export function buildChildEnvironment(source: NodeJS.ProcessEnv, options: { authMode: AgentAuthMode }): NodeJS.ProcessEnv {
+export function buildChildEnvironment(
+  source: NodeJS.ProcessEnv,
+  options: { authMode: AgentAuthMode },
+): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const name of ALLOWED) {
     const value = source[name];

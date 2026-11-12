@@ -1,10 +1,68 @@
 {
-  "feature": { "key": "FEAT-101", "title": "Gestión avanzada de tareas", "summary": "Operaciones adicionales sobre la lista de tareas de src/tasks.js." },
+  "feature": {
+    "key": "FEAT-101",
+    "title": "Gestión avanzada de tareas",
+    "summary": "Operaciones adicionales sobre la lista de tareas de src/tasks.js."
+  },
   "tasks": [
-    { "id": "B1", "key": "TASK-101", "title": "Eliminar tareas", "summary": "Añade a la lista que devuelve createTaskList() (src/tasks.js) un método remove(id) que elimina la tarea con ese id y devuelve una copia de la tarea eliminada. Lanza TypeError si id no es un número y Error si no existe ninguna tarea con ese id.", "criteria": ["remove(id) elimina la tarea y devuelve una copia de ella", "list() deja de incluir la tarea eliminada", "remove con un id inexistente lanza un error sin modificar la lista"], "dependsOn": [] },
-    { "id": "B2", "key": "TASK-102", "title": "Renombrar tareas", "summary": "Añade a la lista de createTaskList() un método rename(id, title) que cambia el título de una tarea existente, aplicando la misma validación y normalización de título que add (recorta espacios, rechaza títulos vacíos o que no sean texto). Devuelve una copia actualizada. Lanza TypeError si id no es número y Error si no existe.", "criteria": ["rename recorta espacios del nuevo título", "rename rechaza títulos vacíos sin modificar la tarea", "rename con un id inexistente lanza un error"], "dependsOn": [] },
-    { "id": "B3", "key": "TASK-103", "title": "Filtrar por estado", "summary": "Permite que list() de createTaskList() reciba un filtro opcional { completed: boolean }. Sin argumento devuelve todas las tareas; con { completed: true } solo las completadas; con { completed: false } solo las pendientes. Siempre devuelve copias.", "criteria": ["list() sin argumentos devuelve todas las tareas", "list({ completed: true }) devuelve solo las completadas", "list({ completed: false }) devuelve solo las pendientes"], "dependsOn": [] },
-    { "id": "B4", "key": "TASK-104", "title": "Estadísticas de tareas", "summary": "Crea src/stats.js con una función exportada summarize(taskList) que recibe una lista creada con createTaskList() y devuelve { total, completed, pending } con el número de tareas totales, completadas y pendientes. Reutiliza el filtro por estado de list().", "criteria": ["summarize devuelve total, completed y pending", "una lista vacía da { total: 0, completed: 0, pending: 0 }"], "dependsOn": ["B3"] },
-    { "id": "B5", "key": "TASK-105", "title": "Guardar y cargar en JSON", "summary": "Crea src/storage.js con dos funciones exportadas: saveTasks(taskList, filePath), que escribe en filePath un JSON con el arreglo de tareas (id, title, completed), y loadTasks(filePath), que lee ese archivo y devuelve una lista nueva (con la misma interfaz que createTaskList(): add, complete, remove, rename, list) con las mismas tareas; el siguiente id asignado por add debe ser mayor que el mayor id cargado.", "criteria": ["saveTasks y loadTasks conservan ids, títulos y estado", "la lista cargada admite add, complete, remove, rename y list", "tras cargar, add asigna un id mayor que cualquier id existente"], "dependsOn": ["B1", "B2"] }
+    {
+      "id": "B1",
+      "key": "TASK-101",
+      "title": "Eliminar tareas",
+      "summary": "Añade a la lista que devuelve createTaskList() (src/tasks.js) un método remove(id) que elimina la tarea con ese id y devuelve una copia de la tarea eliminada. Lanza TypeError si id no es un número y Error si no existe ninguna tarea con ese id.",
+      "criteria": [
+        "remove(id) elimina la tarea y devuelve una copia de ella",
+        "list() deja de incluir la tarea eliminada",
+        "remove con un id inexistente lanza un error sin modificar la lista"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "B2",
+      "key": "TASK-102",
+      "title": "Renombrar tareas",
+      "summary": "Añade a la lista de createTaskList() un método rename(id, title) que cambia el título de una tarea existente, aplicando la misma validación y normalización de título que add (recorta espacios, rechaza títulos vacíos o que no sean texto). Devuelve una copia actualizada. Lanza TypeError si id no es número y Error si no existe.",
+      "criteria": [
+        "rename recorta espacios del nuevo título",
+        "rename rechaza títulos vacíos sin modificar la tarea",
+        "rename con un id inexistente lanza un error"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "B3",
+      "key": "TASK-103",
+      "title": "Filtrar por estado",
+      "summary": "Permite que list() de createTaskList() reciba un filtro opcional { completed: boolean }. Sin argumento devuelve todas las tareas; con { completed: true } solo las completadas; con { completed: false } solo las pendientes. Siempre devuelve copias.",
+      "criteria": [
+        "list() sin argumentos devuelve todas las tareas",
+        "list({ completed: true }) devuelve solo las completadas",
+        "list({ completed: false }) devuelve solo las pendientes"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "B4",
+      "key": "TASK-104",
+      "title": "Estadísticas de tareas",
+      "summary": "Crea src/stats.js con una función exportada summarize(taskList) que recibe una lista creada con createTaskList() y devuelve { total, completed, pending } con el número de tareas totales, completadas y pendientes. Reutiliza el filtro por estado de list().",
+      "criteria": [
+        "summarize devuelve total, completed y pending",
+        "una lista vacía da { total: 0, completed: 0, pending: 0 }"
+      ],
+      "dependsOn": ["B3"]
+    },
+    {
+      "id": "B5",
+      "key": "TASK-105",
+      "title": "Guardar y cargar en JSON",
+      "summary": "Crea src/storage.js con dos funciones exportadas: saveTasks(taskList, filePath), que escribe en filePath un JSON con el arreglo de tareas (id, title, completed), y loadTasks(filePath), que lee ese archivo y devuelve una lista nueva (con la misma interfaz que createTaskList(): add, complete, remove, rename, list) con las mismas tareas; el siguiente id asignado por add debe ser mayor que el mayor id cargado.",
+      "criteria": [
+        "saveTasks y loadTasks conservan ids, títulos y estado",
+        "la lista cargada admite add, complete, remove, rename y list",
+        "tras cargar, add asigna un id mayor que cualquier id existente"
+      ],
+      "dependsOn": ["B1", "B2"]
+    }
   ]
 }

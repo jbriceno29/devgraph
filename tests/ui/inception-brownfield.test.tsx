@@ -7,17 +7,50 @@ import type { InceptionRepositoryDto, RepositoryScanSummaryDto } from '../../src
 import { installShellIpc } from './shell-ipc.js';
 import { fakeInception, proposal, questions } from './inception-fake.js';
 
-const root: GraphNodeView = { id: 'root', key: 'PROJ-01', type: 'PROJECT_ROOT', label: 'Example Workspace', status: 'ACTIVE' };
-const scan: RepositoryScanSummaryDto = {
-  repositoryName: 'tienda', totalFiles: 42, truncated: false, hasCode: true, languages: [{ language: 'TypeScript', files: 30 }, { language: 'CSS', files: 4 }], topLevel: ['package.json', 'src/'],
-  directories: [{ path: 'src', files: 40 }], excluded: { ignored: 3, generated: 0, symlinks: 1, secrets: 2 }, warnings: [], scannedAt: 'now', bytes: 9000,
-  files: [{ path: 'package.json', kind: 'MANIFEST', bytes: 900, truncated: false }, { path: 'src/styles/tokens.css', kind: 'STYLE', bytes: 300, truncated: false }],
+const root: GraphNodeView = {
+  id: 'root',
+  key: 'PROJ-01',
+  type: 'PROJECT_ROOT',
+  label: 'Example Workspace',
+  status: 'ACTIVE',
 };
-const repository: InceptionRepositoryDto = { scan, corrections: [], inferences: [
-  { id: 'inf-1', area: 'STACK', statement: 'React 18 con Vite.', evidence: ['package.json'] },
-  { id: 'inf-2', area: 'DESIGN_SYSTEM', statement: 'Tokens propios con verde #0f766e.', evidence: ['src/styles/tokens.css'] },
-] };
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+const scan: RepositoryScanSummaryDto = {
+  repositoryName: 'tienda',
+  totalFiles: 42,
+  truncated: false,
+  hasCode: true,
+  languages: [
+    { language: 'TypeScript', files: 30 },
+    { language: 'CSS', files: 4 },
+  ],
+  topLevel: ['package.json', 'src/'],
+  directories: [{ path: 'src', files: 40 }],
+  excluded: { ignored: 3, generated: 0, symlinks: 1, secrets: 2 },
+  warnings: [],
+  scannedAt: 'now',
+  bytes: 9000,
+  files: [
+    { path: 'package.json', kind: 'MANIFEST', bytes: 900, truncated: false },
+    { path: 'src/styles/tokens.css', kind: 'STYLE', bytes: 300, truncated: false },
+  ],
+};
+const repository: InceptionRepositoryDto = {
+  scan,
+  corrections: [],
+  inferences: [
+    { id: 'inf-1', area: 'STACK', statement: 'React 18 con Vite.', evidence: ['package.json'] },
+    {
+      id: 'inf-2',
+      area: 'DESIGN_SYSTEM',
+      statement: 'Tokens propios con verde #0f766e.',
+      evidence: ['src/styles/tokens.css'],
+    },
+  ],
+};
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function setup(initial: Parameters<typeof fakeInception>[0]) {
   const ipc = installShellIpc([root]);
@@ -41,7 +74,15 @@ describe('Asistente de inicio en un repositorio con código (V4)', () => {
   });
 
   it('shows each inference with its evidence and sends the corrections with the answers', async () => {
-    const { client } = setup({ stage: 'ASK_GOALS', status: 'WAITING_USER', nextAction: 'ANSWER', brief: 'Un carrito', questions, repositoryPath: '/home/ana/tienda', repository });
+    const { client } = setup({
+      stage: 'ASK_GOALS',
+      status: 'WAITING_USER',
+      nextAction: 'ANSWER',
+      brief: 'Un carrito',
+      questions,
+      repositoryPath: '/home/ana/tienda',
+      repository,
+    });
     const findings = await screen.findByText('Lo que se detectó en tu repositorio (2)');
     const panel = findings.closest('details')!;
     expect(panel.open).toBe(true);
@@ -52,11 +93,31 @@ describe('Asistente de inicio en un repositorio con código (V4)', () => {
     const [first] = within(list).getAllByLabelText('¿No es así? Corrígelo (opcional)');
     fireEvent.change(first!, { target: { value: 'Es Vue 3, no React' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enviar respuestas' }));
-    await waitFor(() => expect(client.answer).toHaveBeenCalledWith('p', [{ questionId: 'q1', answer: '' }, { questionId: 'q2', answer: '' }, { questionId: 'q3', answer: '' }], undefined, { corrections: [{ inferenceId: 'inf-1', correction: 'Es Vue 3, no React' }] }));
+    await waitFor(() =>
+      expect(client.answer).toHaveBeenCalledWith(
+        'p',
+        [
+          { questionId: 'q1', answer: '' },
+          { questionId: 'q2', answer: '' },
+          { questionId: 'q3', answer: '' },
+        ],
+        undefined,
+        { corrections: [{ inferenceId: 'inf-1', correction: 'Es Vue 3, no React' }] },
+      ),
+    );
   });
 
   it('the proposal shows what was detected and the user corrected, without fields', async () => {
-    setup({ stage: 'PROPOSAL', status: 'WAITING_USER', nextAction: 'APPROVE', brief: 'Un carrito', questions, proposal, repositoryPath: '/home/ana/tienda', repository: { ...repository, corrections: [{ inferenceId: 'inf-1', correction: 'Es Vue 3' }] } });
+    setup({
+      stage: 'PROPOSAL',
+      status: 'WAITING_USER',
+      nextAction: 'APPROVE',
+      brief: 'Un carrito',
+      questions,
+      proposal,
+      repositoryPath: '/home/ana/tienda',
+      repository: { ...repository, corrections: [{ inferenceId: 'inf-1', correction: 'Es Vue 3' }] },
+    });
     const findings = await screen.findByText('Lo que se detectó en tu repositorio (2)');
     const panel = findings.closest('details')!;
     expect(within(panel).getByText('Tu corrección: Es Vue 3')).toBeTruthy();

@@ -7,63 +7,132 @@
   "verify": ["node_modules/.bin/tsc --noEmit", "node_modules/.bin/vitest run"],
   "judge": "vitest",
   "promptNote": "Trabaja en este repositorio (React + Vite + TypeScript; las dependencias ya están instaladas en node_modules y no puedes instalar otras). Añade pruebas con Vitest y verifica con node_modules/.bin/tsc --noEmit y node_modules/.bin/vitest run.",
-  "policy": { "writablePaths": ["src/**", "README.md"], "readonlyPaths": [], "deniedPaths": [".env*"], "allowedCommands": ["node_modules/.bin/tsc --noEmit", "node_modules/.bin/vitest run"] },
+  "policy": {
+    "writablePaths": ["src/**", "README.md"],
+    "readonlyPaths": [],
+    "deniedPaths": [".env*"],
+    "allowedCommands": ["node_modules/.bin/tsc --noEmit", "node_modules/.bin/vitest run"]
+  },
   "features": [
-    { "key": "FEAT-301", "title": "Modelo de notas", "summary": "Crear, editar y etiquetar notas en src/lib/notes.ts." },
-    { "key": "FEAT-302", "title": "Consultas sobre notas", "summary": "Buscar, ordenar y filtrar en src/lib/queries.ts." },
-    { "key": "FEAT-303", "title": "Intercambio e interfaz", "summary": "JSON de notas y componentes de la lista y la búsqueda." }
+    {
+      "key": "FEAT-301",
+      "title": "Modelo de notas",
+      "summary": "Crear, editar y etiquetar notas en src/lib/notes.ts."
+    },
+    {
+      "key": "FEAT-302",
+      "title": "Consultas sobre notas",
+      "summary": "Buscar, ordenar y filtrar en src/lib/queries.ts."
+    },
+    {
+      "key": "FEAT-303",
+      "title": "Intercambio e interfaz",
+      "summary": "JSON de notas y componentes de la lista y la búsqueda."
+    }
   ],
   "tasks": [
     {
-      "id": "A1", "feature": "FEAT-301", "key": "TASK-301", "title": "Crear notas",
+      "id": "A1",
+      "feature": "FEAT-301",
+      "key": "TASK-301",
+      "title": "Crear notas",
       "summary": "En src/lib/notes.ts exporta el tipo Note { id: string; title: string; body: string; tags: string[]; pinned: boolean; createdAt: string } y la función createNote(input: { title: string; body?: string }). El título se guarda sin espacios en los extremos; body es '' si falta; tags [] y pinned false; id único (crypto.randomUUID); createdAt en ISO 8601. Un título vacío (o solo espacios) es inválido. Convención del proyecto a partir de esta tarea: toda función exportada de src/lib devuelve un resultado de tipo Result<T> = { ok: true; value: T } | { ok: false; error: string } (error con un mensaje en español) y nunca lanza por una entrada inválida; exporta Result desde src/lib/result.ts.",
-      "criteria": ["createNote({ title: ' Hola ' }) devuelve ok con title 'Hola', body '', tags [] y pinned false", "Cada nota tiene id distinto y createdAt ISO", "Un título vacío devuelve ok false con un mensaje"],
+      "criteria": [
+        "createNote({ title: ' Hola ' }) devuelve ok con title 'Hola', body '', tags [] y pinned false",
+        "Cada nota tiene id distinto y createdAt ISO",
+        "Un título vacío devuelve ok false con un mensaje"
+      ],
       "dependsOn": []
     },
     {
-      "id": "A2", "feature": "FEAT-301", "key": "TASK-302", "title": "Editar notas",
+      "id": "A2",
+      "feature": "FEAT-301",
+      "key": "TASK-302",
+      "title": "Editar notas",
       "summary": "Exporta en src/lib/notes.ts updateNote(note: Note, changes: { title?: string; body?: string; pinned?: boolean }). Devuelve una nota nueva con los cambios aplicados (la original no cambia); conserva id y createdAt. Un título nuevo vacío es inválido.",
       "criteria": ["Aplica title, body y pinned", "No modifica la nota original", "Un título vacío se rechaza"],
       "dependsOn": ["A1"]
     },
     {
-      "id": "A3", "feature": "FEAT-301", "key": "TASK-303", "title": "Etiquetas",
+      "id": "A3",
+      "feature": "FEAT-301",
+      "key": "TASK-303",
+      "title": "Etiquetas",
       "summary": "Exporta en src/lib/notes.ts addTag(note: Note, tag: string) y removeTag(note: Note, tag: string). Las etiquetas se guardan en minúsculas y sin espacios en los extremos, sin duplicados; ambas devuelven una nota nueva. Una etiqueta vacía es inválida; quitar una etiqueta que no existe devuelve la nota sin cambios.",
-      "criteria": ["addTag normaliza y no duplica", "removeTag quita la etiqueta normalizada", "Una etiqueta vacía se rechaza"],
+      "criteria": [
+        "addTag normaliza y no duplica",
+        "removeTag quita la etiqueta normalizada",
+        "Una etiqueta vacía se rechaza"
+      ],
       "dependsOn": ["A2"]
     },
     {
-      "id": "B1", "feature": "FEAT-302", "key": "TASK-304", "title": "Buscar notas",
+      "id": "B1",
+      "feature": "FEAT-302",
+      "key": "TASK-304",
+      "title": "Buscar notas",
       "summary": "Crea src/lib/queries.ts con searchNotes(notes: Note[], text: string): devuelve las notas cuyo título o cuerpo contienen el texto, sin distinguir mayúsculas ni acentos ('cafe' encuentra 'Café'). Un texto vacío o de solo espacios devuelve todas las notas.",
       "criteria": ["Busca en título y cuerpo", "Ignora mayúsculas y acentos", "Texto vacío devuelve todas"],
       "dependsOn": ["A3"]
     },
     {
-      "id": "B2", "feature": "FEAT-302", "key": "TASK-305", "title": "Ordenar notas",
+      "id": "B2",
+      "feature": "FEAT-302",
+      "key": "TASK-305",
+      "title": "Ordenar notas",
       "summary": "Exporta en src/lib/queries.ts sortNotes(notes: Note[], by: 'recent' | 'title'). Las fijadas (pinned) van siempre primero; dentro de cada grupo, 'recent' ordena por createdAt de la más nueva a la más antigua y 'title' alfabéticamente según las reglas del español (localeCompare 'es'). No modifica el arreglo recibido. Un criterio distinto de esos dos es inválido.",
-      "criteria": ["Fijadas primero", "recent y title ordenan bien", "No muta la entrada", "Un criterio desconocido se rechaza"],
+      "criteria": [
+        "Fijadas primero",
+        "recent y title ordenan bien",
+        "No muta la entrada",
+        "Un criterio desconocido se rechaza"
+      ],
       "dependsOn": ["B1"]
     },
     {
-      "id": "B3", "feature": "FEAT-302", "key": "TASK-306", "title": "Filtrar por etiqueta",
+      "id": "B3",
+      "feature": "FEAT-302",
+      "key": "TASK-306",
+      "title": "Filtrar por etiqueta",
       "summary": "Exporta en src/lib/queries.ts filterByTag(notes: Note[], tag: string): las notas que tienen esa etiqueta (normalizada como en addTag). Una etiqueta vacía es inválida.",
-      "criteria": ["Filtra por etiqueta normalizada", "Sin coincidencias devuelve lista vacía", "Una etiqueta vacía se rechaza"],
+      "criteria": [
+        "Filtra por etiqueta normalizada",
+        "Sin coincidencias devuelve lista vacía",
+        "Una etiqueta vacía se rechaza"
+      ],
       "dependsOn": ["B2"]
     },
     {
-      "id": "C1", "feature": "FEAT-303", "key": "TASK-307", "title": "Exportar e importar JSON",
+      "id": "C1",
+      "feature": "FEAT-303",
+      "key": "TASK-307",
+      "title": "Exportar e importar JSON",
       "summary": "Crea src/lib/exchange.ts con serializeNotes(notes: Note[]) (texto JSON de un objeto { version: 1, notes }) y parseNotes(text: string), que reconstruye las notas de ese texto. parseNotes rechaza el JSON mal formado, una versión distinta de 1 y cualquier nota a la que le falte un campo de Note o lo tenga con otro tipo.",
-      "criteria": ["serializeNotes y parseNotes son inversos", "JSON mal formado se rechaza", "Versión o nota inválida se rechaza"],
+      "criteria": [
+        "serializeNotes y parseNotes son inversos",
+        "JSON mal formado se rechaza",
+        "Versión o nota inválida se rechaza"
+      ],
       "dependsOn": ["B3"]
     },
     {
-      "id": "C2", "feature": "FEAT-303", "key": "TASK-308", "title": "Lista de notas",
+      "id": "C2",
+      "feature": "FEAT-303",
+      "key": "TASK-308",
+      "title": "Lista de notas",
       "summary": "Crea el componente NoteList en src/components/NoteList.tsx (export function NoteList({ notes, onSelect }: { notes: Note[]; onSelect: (id: string) => void })). Muestra una lista (role list) con un elemento por nota; cada elemento tiene un botón con el título de la nota que llama a onSelect con su id. Sin notas, en lugar de la lista muestra el texto «No hay notas».",
-      "criteria": ["Un botón por nota con su título", "Pulsar el botón llama a onSelect con el id", "Lista vacía muestra «No hay notas»"],
+      "criteria": [
+        "Un botón por nota con su título",
+        "Pulsar el botón llama a onSelect con el id",
+        "Lista vacía muestra «No hay notas»"
+      ],
       "dependsOn": ["C1"]
     },
     {
-      "id": "C3", "feature": "FEAT-303", "key": "TASK-309", "title": "Campo de búsqueda",
+      "id": "C3",
+      "feature": "FEAT-303",
+      "key": "TASK-309",
+      "title": "Campo de búsqueda",
       "summary": "Crea el componente SearchBox en src/components/SearchBox.tsx (export function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void })): un campo de texto de tipo search con la etiqueta visible «Buscar notas» que muestra value y llama a onChange con el texto nuevo en cada cambio.",
       "criteria": ["Campo con etiqueta «Buscar notas»", "Muestra value", "Llama a onChange al escribir"],
       "dependsOn": ["C2"]

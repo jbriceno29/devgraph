@@ -9,5 +9,10 @@ export interface ChangeReviewVerdict {
   usage?: unknown;
 }
 export interface ChangeReviewPort {
-  review(input: { projectId: string; executionId: string; model: string; signal?: AbortSignal }): Promise<ChangeReviewVerdict>;
+  review(input: {
+    projectId: string;
+    executionId: string;
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<ChangeReviewVerdict>;
 }

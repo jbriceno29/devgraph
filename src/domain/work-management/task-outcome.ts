@@ -5,7 +5,7 @@ export interface TaskOutcome {
   executionId: string;
   /** The agent's final message: what it did, decisions taken and what is left pending. */
   summary: string;
-  files: Array<{ path: string; status: 'ADDED'|'MODIFIED'|'DELETED'|'RENAMED' }>;
+  files: Array<{ path: string; status: 'ADDED' | 'MODIFIED' | 'DELETED' | 'RENAMED' }>;
   checks: Array<{ command: string; passed: boolean }>;
   mergedCommit: string | null;
   integrationBranch: string | null;
@@ -45,14 +45,22 @@ export function extractConventions(summary: string): string[] {
 export function condenseOutcomeSummary(summary: string, onlyDone: boolean): string {
   const lines = summary.split(/\r?\n/);
   const kept: string[] = [];
-  let section: string | null = null, recognized = false;
+  let section: string | null = null,
+    recognized = false;
   for (const line of lines) {
     const heading = SECTION.exec(line);
-    if (heading) { section = heading[1]!.toLowerCase(); recognized = true; }
-    if (section === null || section === 'hecho' || (!onlyDone && (section === 'decisiones' || section === 'pendiente'))) kept.push(line);
+    if (heading) {
+      section = heading[1]!.toLowerCase();
+      recognized = true;
+    }
+    if (section === null || section === 'hecho' || (!onlyDone && (section === 'decisiones' || section === 'pendiente')))
+      kept.push(line);
   }
   if (!recognized) return summary;
-  const text = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const text = kept
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   return text || summary;
 }
 
@@ -69,8 +77,15 @@ export function splitSummaryByTask(summary: string, keys: readonly string[]): Ma
   for (const [index, line] of lines.entries()) {
     for (const key of keys) {
       if (seen.has(key)) continue;
-      const pattern = new RegExp(`^\\s*(?:#{1,6}\\s*|\\*\\*\\s*|[-*]\\s+)?(?:parte\\s+\\d+(?:\\s+de\\s+\\d+)?\\s*[:.\\-–]?\\s*)?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'i');
-      if (pattern.test(line)) { headings.push({ key, line: index }); seen.add(key); break; }
+      const pattern = new RegExp(
+        `^\\s*(?:#{1,6}\\s*|\\*\\*\\s*|[-*]\\s+)?(?:parte\\s+\\d+(?:\\s+de\\s+\\d+)?\\s*[:.\\-–]?\\s*)?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`,
+        'i',
+      );
+      if (pattern.test(line)) {
+        headings.push({ key, line: index });
+        seen.add(key);
+        break;
+      }
     }
   }
   if (headings.length !== keys.length) return null;

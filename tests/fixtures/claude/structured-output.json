@@ -1,121 +1,121 @@
 {
- "duration_api_ms": 2072,
- "stop_reason": "tool_use",
- "session_id": "94c9252c-e1c0-483c-a724-3aa29e765026",
- "total_cost_usd": 0.0011008,
- "usage": {
-  "input_tokens": 2,
-  "cache_creation_input_tokens": 4518,
-  "cache_read_input_tokens": 0,
-  "output_tokens": 394,
-  "output_tokens_details": {
-   "thinking_tokens": 107
-  },
-  "server_tool_use": {
-   "web_search_requests": 0,
-   "web_fetch_requests": 0
-  },
-  "service_tier": "standard",
-  "cache_creation": {
-   "ephemeral_1h_input_tokens": 4518,
-   "ephemeral_5m_input_tokens": 0
-  },
-  "inference_geo": "global",
-  "iterations": [
-   {
+  "duration_api_ms": 2072,
+  "stop_reason": "tool_use",
+  "session_id": "94c9252c-e1c0-483c-a724-3aa29e765026",
+  "total_cost_usd": 0.0011008,
+  "usage": {
     "input_tokens": 2,
-    "output_tokens": 394,
-    "cache_read_input_tokens": 0,
     "cache_creation_input_tokens": 4518,
-    "cache_creation": {
-     "ephemeral_5m_input_tokens": 0,
-     "ephemeral_1h_input_tokens": 4518
+    "cache_read_input_tokens": 0,
+    "output_tokens": 394,
+    "output_tokens_details": {
+      "thinking_tokens": 107
     },
-    "type": "message"
-   }
-  ],
-  "speed": "standard",
-  "fallback_credit": null
- },
- "modelUsage": {
-  "claude-haiku-5-5": {
-   "inputTokens": 2,
-   "outputTokens": 394,
-   "cacheReadInputTokens": 0,
-   "cacheCreationInputTokens": 4518,
-   "webSearchRequests": 0,
-   "costUSD": 0.0011008,
-   "contextWindow": 1000000,
-   "maxOutputTokens": 128000,
-   "thinkingTokens": 107,
-   "cacheCreationEphemeral5mInputTokens": 0,
-   "cacheCreationEphemeral1hInputTokens": 4518,
-   "canonicalModel": "claude-haiku-5-5",
-   "provider": "firstParty",
-   "costBasis": "list"
-  }
- },
- "permission_denials": [],
- "terminal_reason": "completed",
- "fast_mode_state": "off",
- "fast_mode_disabled_reason": "sdk_opt_in_required",
- "subagent_stats": {
-  "spawned": 0,
-  "requested": {
-   "background": 0,
-   "foreground": 0,
-   "unset": 0
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4518,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 394,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 4518,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4518
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
   },
-  "started_in_background": 0,
-  "max_depth": 0,
-  "spawned_by_subagents": 0,
-  "completed": 0,
-  "failed": 0,
-  "killed": {
-   "parent": 0,
-   "user": 0,
-   "system": 0
+  "modelUsage": {
+    "claude-haiku-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 394,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 4518,
+      "webSearchRequests": 0,
+      "costUSD": 0.0011008,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 107,
+      "cacheCreationEphemeral5mInputTokens": 0,
+      "cacheCreationEphemeral1hInputTokens": 4518,
+      "canonicalModel": "claude-haiku-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
   },
-  "refused": {
-   "depth_limit": 0,
-   "concurrency_limit": 0,
-   "budget": 0
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "subagent_stats": {
+    "spawned": 0,
+    "requested": {
+      "background": 0,
+      "foreground": 0,
+      "unset": 0
+    },
+    "started_in_background": 0,
+    "max_depth": 0,
+    "spawned_by_subagents": 0,
+    "completed": 0,
+    "failed": 0,
+    "killed": {
+      "parent": 0,
+      "user": 0,
+      "system": 0
+    },
+    "refused": {
+      "depth_limit": 0,
+      "concurrency_limit": 0,
+      "budget": 0
+    },
+    "by_type": {}
   },
-  "by_type": {}
- },
- "safety_stops": 0,
- "is_error": false,
- "num_turns": 2,
- "subtype": "success",
- "api_error_status": null,
- "result": "{\"title\":\"Add Auth module with Login feature\",\"rationale\":\"The smallest useful structure is one module that groups the authentication work, with one feature for the login flow inside it. The Login feature is a child of Auth, so it references the module by its tempId. No tools were used to produce this plan.\",\"operations\":[{\"type\":\"CREATE_MODULE\",\"title\":\"Auth\",\"tempId\":\"$auth\",\"summary\":\"Module that groups authentication functionality.\"},{\"type\":\"CREATE_FEATURE\",\"title\":\"Login\",\"tempId\":\"$login\",\"parentId\":\"$auth\",\"summary\":\"Login feature within the Auth module.\"}]}",
- "structured_output": {
-  "title": "Add Auth module with Login feature",
-  "rationale": "The smallest useful structure is one module that groups the authentication work, with one feature for the login flow inside it. The Login feature is a child of Auth, so it references the module by its tempId. No tools were used to produce this plan.",
-  "operations": [
-   {
-    "type": "CREATE_MODULE",
-    "title": "Auth",
-    "tempId": "$auth",
-    "summary": "Module that groups authentication functionality."
-   },
-   {
-    "type": "CREATE_FEATURE",
-    "title": "Login",
-    "tempId": "$login",
-    "parentId": "$auth",
-    "summary": "Login feature within the Auth module."
-   }
-  ]
- },
- "ttft_ms": 1085,
- "type": "result",
- "duration_ms": 2174,
- "uuid": "10ecd7b2-fd91-4be7-8076-7acb57ca26e0",
- "ttft_stream_ms": 603,
- "time_to_request_ms": 98,
- "first_content_frame_ms": 603,
- "queued_turn_count": 0,
- "result_index": 0,
- "credential_expires_at": null
+  "safety_stops": 0,
+  "is_error": false,
+  "num_turns": 2,
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"title\":\"Add Auth module with Login feature\",\"rationale\":\"The smallest useful structure is one module that groups the authentication work, with one feature for the login flow inside it. The Login feature is a child of Auth, so it references the module by its tempId. No tools were used to produce this plan.\",\"operations\":[{\"type\":\"CREATE_MODULE\",\"title\":\"Auth\",\"tempId\":\"$auth\",\"summary\":\"Module that groups authentication functionality.\"},{\"type\":\"CREATE_FEATURE\",\"title\":\"Login\",\"tempId\":\"$login\",\"parentId\":\"$auth\",\"summary\":\"Login feature within the Auth module.\"}]}",
+  "structured_output": {
+    "title": "Add Auth module with Login feature",
+    "rationale": "The smallest useful structure is one module that groups the authentication work, with one feature for the login flow inside it. The Login feature is a child of Auth, so it references the module by its tempId. No tools were used to produce this plan.",
+    "operations": [
+      {
+        "type": "CREATE_MODULE",
+        "title": "Auth",
+        "tempId": "$auth",
+        "summary": "Module that groups authentication functionality."
+      },
+      {
+        "type": "CREATE_FEATURE",
+        "title": "Login",
+        "tempId": "$login",
+        "parentId": "$auth",
+        "summary": "Login feature within the Auth module."
+      }
+    ]
+  },
+  "ttft_ms": 1085,
+  "type": "result",
+  "duration_ms": 2174,
+  "uuid": "10ecd7b2-fd91-4be7-8076-7acb57ca26e0",
+  "ttft_stream_ms": 603,
+  "time_to_request_ms": 98,
+  "first_content_frame_ms": 603,
+  "queued_turn_count": 0,
+  "result_index": 0,
+  "credential_expires_at": null
 }

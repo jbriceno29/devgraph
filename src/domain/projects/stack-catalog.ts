@@ -41,7 +41,8 @@ export const APP_RULES: readonly string[] = [
 ];
 
 const REVIEWED = '2026-11-11';
-const NPM_SCAFFOLD = 'La app crea package.json con las dependencias del perfil y las instala antes de que empieces: no edites "dependencies" ni "devDependencies" ni instales nada. Crea la configuración (tsconfig.json con "strict": true y la del framework de pruebas), la estructura de carpetas del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con los comandos de verificación.';
+const NPM_SCAFFOLD =
+  'La app crea package.json con las dependencias del perfil y las instala antes de que empieces: no edites "dependencies" ni "devDependencies" ni instales nada. Crea la configuración (tsconfig.json con "strict": true y la del framework de pruebas), la estructura de carpetas del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con los comandos de verificación.';
 const TS_VERIFY = ['node_modules/.bin/tsc --noEmit', 'node_modules/.bin/vitest run'] as const;
 /** Root files every npm profile writes; package.json stays guarded by the environment check (plan S2). */
 const NPM_ROOT_FILES = ['package.json', 'tsconfig.json', 'tsconfig.*.json', 'README.md', '.gitignore'] as const;
@@ -50,9 +51,17 @@ export const STACK_PROFILES: readonly StackProfile[] = [
   {
     id: 'minimo-node',
     title: 'Node mínimo, sin dependencias',
-    whenToUse: 'Scripts, utilidades y prototipos pequeños sin interfaz web que se resuelven con la biblioteca estándar de Node.',
-    techStack: { lenguaje: 'JavaScript (módulos ES)', runtime: 'Node.js', pruebas: 'node:test', dependencias: 'ninguna' },
-    packageManager: null, dependencies: [], devDependencies: [],
+    whenToUse:
+      'Scripts, utilidades y prototipos pequeños sin interfaz web que se resuelven con la biblioteca estándar de Node.',
+    techStack: {
+      lenguaje: 'JavaScript (módulos ES)',
+      runtime: 'Node.js',
+      pruebas: 'node:test',
+      dependencias: 'ninguna',
+    },
+    packageManager: null,
+    dependencies: [],
+    devDependencies: [],
     structure: 'src/ con el código, test/ con las pruebas (*.test.js), README.md en la raíz.',
     rules: [
       'Solo biblioteca estándar de Node: no se añaden paquetes externos.',
@@ -61,18 +70,36 @@ export const STACK_PROFILES: readonly StackProfile[] = [
     ],
     verificationCommands: ['node --test'],
     writablePaths: ['package.json', 'README.md', '.gitignore', 'test/**'],
-    scaffold: 'Crea package.json sin dependencias ("type": "module"), la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "node --test".',
+    scaffold:
+      'Crea package.json sin dependencias ("type": "module"), la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "node --test".',
     reviewedAt: REVIEWED,
   },
   {
     id: 'web-spa-react',
     title: 'Aplicación web (SPA) con React',
     whenToUse: 'Aplicaciones web con interfaz que corren en el navegador, sin servidor propio o con una API externa.',
-    techStack: { lenguaje: 'TypeScript', interfaz: 'React', build: 'Vite', pruebas: 'Vitest + Testing Library (jsdom)', estilos: 'CSS con variables (tokens de diseño)' },
+    techStack: {
+      lenguaje: 'TypeScript',
+      interfaz: 'React',
+      build: 'Vite',
+      pruebas: 'Vitest + Testing Library (jsdom)',
+      estilos: 'CSS con variables (tokens de diseño)',
+    },
     packageManager: 'npm',
     dependencies: ['react', 'react-dom'],
-    devDependencies: ['typescript', 'vite', '@vitejs/plugin-react', 'vitest', 'jsdom', '@testing-library/react', '@testing-library/user-event', '@types/react', '@types/react-dom'],
-    structure: 'index.html y vite.config.ts en la raíz; src/main.tsx, src/App.tsx, src/components/ (un componente por archivo), src/lib/ (lógica sin interfaz), src/styles/tokens.css; pruebas junto al código (*.test.tsx).',
+    devDependencies: [
+      'typescript',
+      'vite',
+      '@vitejs/plugin-react',
+      'vitest',
+      'jsdom',
+      '@testing-library/react',
+      '@testing-library/user-event',
+      '@types/react',
+      '@types/react-dom',
+    ],
+    structure:
+      'index.html y vite.config.ts en la raíz; src/main.tsx, src/App.tsx, src/components/ (un componente por archivo), src/lib/ (lógica sin interfaz), src/styles/tokens.css; pruebas junto al código (*.test.tsx).',
     rules: [
       'TypeScript estricto ("strict": true), sin any; tipos de props explícitos.',
       'Componentes de función en PascalCase, uno por archivo en src/components; la lógica sin interfaz vive en src/lib y se prueba sin renderizar.',
@@ -93,7 +120,8 @@ export const STACK_PROFILES: readonly StackProfile[] = [
     packageManager: 'npm',
     dependencies: ['fastify', 'zod'],
     devDependencies: ['typescript', 'vitest', '@types/node'],
-    structure: 'src/server.ts (arranque), src/app.ts (construye la instancia sin escuchar), src/routes/ (un archivo por recurso), src/domain/ (reglas sin Fastify); pruebas en test/ (*.test.ts).',
+    structure:
+      'src/server.ts (arranque), src/app.ts (construye la instancia sin escuchar), src/routes/ (un archivo por recurso), src/domain/ (reglas sin Fastify); pruebas en test/ (*.test.ts).',
     rules: [
       'TypeScript estricto ("strict": true), sin any.',
       'Una ruta por recurso en src/routes; el dominio en src/domain no importa Fastify.',
@@ -113,7 +141,8 @@ export const STACK_PROFILES: readonly StackProfile[] = [
     packageManager: 'npm',
     dependencies: [],
     devDependencies: ['typescript', 'vitest', '@types/node'],
-    structure: 'src/cli.ts (lee argumentos y llama al núcleo), src/core/ (lógica pura que recibe datos y devuelve resultados); pruebas en test/ (*.test.ts).',
+    structure:
+      'src/cli.ts (lee argumentos y llama al núcleo), src/core/ (lógica pura que recibe datos y devuelve resultados); pruebas en test/ (*.test.ts).',
     rules: [
       'TypeScript estricto ("strict": true), sin any.',
       'src/cli.ts solo traduce argumentos y salida; la lógica vive en src/core y no lee process.argv ni escribe en consola.',
@@ -129,7 +158,9 @@ export const STACK_PROFILES: readonly StackProfile[] = [
     title: 'Python mínimo, sin dependencias',
     whenToUse: 'Scripts y utilidades en Python que se resuelven con la biblioteca estándar.',
     techStack: { lenguaje: 'Python 3', pruebas: 'unittest', dependencias: 'ninguna' },
-    packageManager: null, dependencies: [], devDependencies: [],
+    packageManager: null,
+    dependencies: [],
+    devDependencies: [],
     structure: 'src/<paquete>/ con el código, tests/ con las pruebas (test_*.py), README.md en la raíz.',
     rules: [
       'Solo biblioteca estándar de Python: no se añaden paquetes externos.',
@@ -138,7 +169,8 @@ export const STACK_PROFILES: readonly StackProfile[] = [
     ],
     verificationCommands: ['python3 -m unittest discover -s tests'],
     writablePaths: ['README.md', '.gitignore', 'pyproject.toml'],
-    scaffold: 'Crea la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "python3 -m unittest discover -s tests".',
+    scaffold:
+      'Crea la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "python3 -m unittest discover -s tests".',
     reviewedAt: REVIEWED,
   },
 ];
@@ -157,7 +189,8 @@ export function catalogForPrompt(): Array<Pick<StackProfile, 'id' | 'title' | 'w
   return STACK_PROFILES.map(({ id, title, whenToUse, techStack }) => ({ id, title, whenToUse, techStack }));
 }
 
-const MAX_RULES = 20, MAX_STACK_KEYS = 12;
+const MAX_RULES = 20,
+  MAX_STACK_KEYS = 12;
 const same = (left: string, right: string) => left.trim().toLowerCase() === right.trim().toLowerCase();
 
 /**
@@ -167,10 +200,20 @@ const same = (left: string, right: string) => left.trim().toLowerCase() === righ
  */
 export function applyStackProfile(proposed: ProjectProfile, profile: StackProfile): ProjectProfile {
   const techStack: Record<string, string> = { ...profile.techStack };
-  for (const [key, value] of Object.entries(proposed.techStack)) if (Object.keys(techStack).length < MAX_STACK_KEYS && !Object.keys(techStack).some(existing => same(existing, key))) techStack[key] = value;
+  for (const [key, value] of Object.entries(proposed.techStack))
+    if (Object.keys(techStack).length < MAX_STACK_KEYS && !Object.keys(techStack).some(existing => same(existing, key)))
+      techStack[key] = value;
   const rules: string[] = [];
-  for (const rule of [...APP_RULES, ...profile.rules, ...proposed.rules]) if (rule.trim() && rules.length < MAX_RULES && !rules.some(existing => same(existing, rule))) rules.push(rule.trim());
-  return { ...proposed, stackProfileId: profile.id, techStack, rules, verificationCommands: [...profile.verificationCommands] };
+  for (const rule of [...APP_RULES, ...profile.rules, ...proposed.rules])
+    if (rule.trim() && rules.length < MAX_RULES && !rules.some(existing => same(existing, rule)))
+      rules.push(rule.trim());
+  return {
+    ...proposed,
+    stackProfileId: profile.id,
+    techStack,
+    rules,
+    verificationCommands: [...profile.verificationCommands],
+  };
 }
 
 /** Plan S2: what the app installs in a run's worktree and what the agent may add without asking. */
@@ -189,8 +232,18 @@ export interface ProjectEnvironment {
 export const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 
 /** The environment of a project, or null when its profile installs nothing (or it follows no profile). */
-export function environmentFor(stackProfileId: string | null | undefined, approved: readonly string[] = []): ProjectEnvironment | null {
+export function environmentFor(
+  stackProfileId: string | null | undefined,
+  approved: readonly string[] = [],
+): ProjectEnvironment | null {
   const profile = findStackProfile(stackProfileId);
   if (!profile || profile.packageManager !== 'npm') return null;
-  return { stackProfileId: profile.id, packageManager: 'npm', dependencies: [...profile.dependencies], devDependencies: [...profile.devDependencies], allowedPackages: [...new Set([...profilePackages(profile), ...approved.filter(name => PACKAGE_NAME.test(name))])], paths: ['node_modules'] };
+  return {
+    stackProfileId: profile.id,
+    packageManager: 'npm',
+    dependencies: [...profile.dependencies],
+    devDependencies: [...profile.devDependencies],
+    allowedPackages: [...new Set([...profilePackages(profile), ...approved.filter(name => PACKAGE_NAME.test(name))])],
+    paths: ['node_modules'],
+  };
 }

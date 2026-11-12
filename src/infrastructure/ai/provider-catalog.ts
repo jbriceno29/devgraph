@@ -26,13 +26,23 @@ export const PROVIDER_DEFAULTS: Record<'codex' | 'claude-code', ProviderDefaults
     executableEnv: 'GRAPHDEV_CLAUDE_PATH',
     developerProfileName: 'Desarrollador Claude Code',
     // Aliases always point at the latest model of each tier, so they survive model releases.
-    connectionConfig: { authMode: 'subscription', models: { planning: 'opus', execution: 'sonnet', available: ['haiku', 'sonnet', 'opus'] } },
+    connectionConfig: {
+      authMode: 'subscription',
+      models: { planning: 'opus', execution: 'sonnet', available: ['haiku', 'sonnet', 'opus'] },
+    },
   },
   codex: {
     providerKey: 'codex',
     displayName: 'Codex CLI',
     adapterVersion: '1.0.0',
-    capabilities: { supportsResume: false, supportsStreaming: true, supportsApprovals: false, supportsCancellation: true, supportsStructuredOutput: true, supportsWorktrees: true },
+    capabilities: {
+      supportsResume: false,
+      supportsStreaming: true,
+      supportsApprovals: false,
+      supportsCancellation: true,
+      supportsStructuredOutput: true,
+      supportsWorktrees: true,
+    },
     executableEnv: 'GRAPHDEV_CODEX_PATH',
     developerProfileName: 'Desarrollador Codex',
     connectionConfig: { models: { planning: null, execution: null, available: [] } },
@@ -46,5 +56,10 @@ export function providerDefaults(providerKey: AgentProviderId): ProviderDefaults
 
 export function parseConnectionConfig(json: string | null): ProviderConnectionConfig {
   if (!json) return {};
-  try { const value = JSON.parse(json) as unknown; return value && typeof value === 'object' ? value as ProviderConnectionConfig : {}; } catch { return {}; }
+  try {
+    const value = JSON.parse(json) as unknown;
+    return value && typeof value === 'object' ? (value as ProviderConnectionConfig) : {};
+  } catch {
+    return {};
+  }
 }

@@ -5,4 +5,6 @@ import type { RepositoryScanDto } from '../../shared/contracts/repository-scan.j
  * respect `.gitignore`, never follow symbolic links, never open credential-like files, never leave the repository and keep the whole
  * result (serialized) within MAX_SCAN_BYTES.
  */
-export interface RepositoryScannerPort { scan(repositoryPath: string): Promise<RepositoryScanDto> }
+export interface RepositoryScannerPort {
+  scan(repositoryPath: string): Promise<RepositoryScanDto>;
+}

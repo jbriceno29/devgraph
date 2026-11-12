@@ -3,7 +3,8 @@ import { splitSummaryByTask } from '../../src/domain/work-management/task-outcom
 
 describe('splitSummaryByTask', () => {
   it('splits by markdown headings, bold keys or «Parte n de m» lines, keeping the preamble with the first section', () => {
-    const summary = 'Resumen general.\n\n## TASK-001 Crear\n**Hecho** a\n\n**TASK-002**\n**Hecho** b\n\nParte 3 de 3: TASK-003\n**Hecho** c';
+    const summary =
+      'Resumen general.\n\n## TASK-001 Crear\n**Hecho** a\n\n**TASK-002**\n**Hecho** b\n\nParte 3 de 3: TASK-003\n**Hecho** c';
     const sections = splitSummaryByTask(summary, ['TASK-001', 'TASK-002', 'TASK-003'])!;
     expect(sections.get('TASK-001')).toBe('Resumen general.\n\n## TASK-001 Crear\n**Hecho** a');
     expect(sections.get('TASK-002')).toBe('**TASK-002**\n**Hecho** b');

@@ -9,7 +9,9 @@ import { WorkspaceShell } from '../../src/desktop/state/WorkspaceShell.js';
  * commit que llegó por una promesa y los `requestAnimationFrame` de foco. Úsalo tras una acción asíncrona antes de leer con `getBy*`.
  */
 export async function settle(): Promise<void> {
-  await act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 0)); });
+  await act(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
 }
 
 /**

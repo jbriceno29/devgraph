@@ -1,1 +1,3 @@
-export interface UnitOfWorkPort { execute<T>(work: () => T): T }
+export interface UnitOfWorkPort {
+  execute<T>(work: () => T): T;
+}

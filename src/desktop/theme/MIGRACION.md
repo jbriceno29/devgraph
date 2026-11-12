@@ -4,26 +4,26 @@ Los tokens viven en `tokens.css` (claro en `:root`, oscuro en `[data-theme=dark]
 
 ## Reemplazos (apariciones en `src/desktop/**/*.tsx`, medidas con grep el 2026-11-11, sin contar ThemeToggle)
 
-| Patrón hardcodeado | Clase semántica | Apariciones |
-|---|---|---|
-| `bg-[#090d18]` | `bg-surface` | 2 |
-| `bg-slate-950`, `bg-slate-950/xx` | `bg-surface` (fondos de página) o `bg-surface-sunken` (pozos, inputs) | 40 |
-| `bg-slate-900`, `bg-slate-900/xx` | `bg-surface-raised` (tarjetas, paneles) / `bg-surface-sunken` | 18 |
-| `bg-slate-800` (hover/seleccionado) | `bg-border` o `bg-surface-sunken` | 9 |
-| `border-slate-800` | `border-border` | 56 |
-| `border-slate-700` | `border-border-strong` | 31 |
-| `border-slate-600/500` | `border-border-strong` (o `border-fg-subtle` si es control) | 7 |
-| `text-slate-50/100/200`, `text-white` | `text-fg` | 70 |
-| `text-slate-300/400` | `text-fg-muted` | 71 |
-| `text-slate-500/600` | `text-fg-subtle` | 84 |
-| `bg-cyan-400/500` + `text-slate-950` | `bg-accent text-accent-fg` | 10 (bg) / 11 (text-slate-950) |
-| otros `text/border/bg/ring-cyan-*` | `text-accent`, `border-accent`, `bg-accent/10`, `bg-accent-soft` | 44 (incluye los 10 anteriores) |
-| `focus*:…-cyan-*` | `focus-visible:outline-accent` / `ring-accent` | 29 |
-| `…-rose-*` | `text-danger`, `border-danger/40`, `bg-danger/10` o `bg-danger-soft` | 32 |
-| `…-emerald-*` | `success` con los mismos modificadores | 23 |
-| `…-amber-*` | `warning` con los mismos modificadores | 11 |
-| `hover:…-slate-*` | `hover:bg-surface-sunken`, `hover:text-fg`, `hover:border-border-strong` | 13 |
-| `placeholder:text-slate-*` | `placeholder:text-fg-subtle` | 2 |
+| Patrón hardcodeado                    | Clase semántica                                                          | Apariciones                    |
+| ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| `bg-[#090d18]`                        | `bg-surface`                                                             | 2                              |
+| `bg-slate-950`, `bg-slate-950/xx`     | `bg-surface` (fondos de página) o `bg-surface-sunken` (pozos, inputs)    | 40                             |
+| `bg-slate-900`, `bg-slate-900/xx`     | `bg-surface-raised` (tarjetas, paneles) / `bg-surface-sunken`            | 18                             |
+| `bg-slate-800` (hover/seleccionado)   | `bg-border` o `bg-surface-sunken`                                        | 9                              |
+| `border-slate-800`                    | `border-border`                                                          | 56                             |
+| `border-slate-700`                    | `border-border-strong`                                                   | 31                             |
+| `border-slate-600/500`                | `border-border-strong` (o `border-fg-subtle` si es control)              | 7                              |
+| `text-slate-50/100/200`, `text-white` | `text-fg`                                                                | 70                             |
+| `text-slate-300/400`                  | `text-fg-muted`                                                          | 71                             |
+| `text-slate-500/600`                  | `text-fg-subtle`                                                         | 84                             |
+| `bg-cyan-400/500` + `text-slate-950`  | `bg-accent text-accent-fg`                                               | 10 (bg) / 11 (text-slate-950)  |
+| otros `text/border/bg/ring-cyan-*`    | `text-accent`, `border-accent`, `bg-accent/10`, `bg-accent-soft`         | 44 (incluye los 10 anteriores) |
+| `focus*:…-cyan-*`                     | `focus-visible:outline-accent` / `ring-accent`                           | 29                             |
+| `…-rose-*`                            | `text-danger`, `border-danger/40`, `bg-danger/10` o `bg-danger-soft`     | 32                             |
+| `…-emerald-*`                         | `success` con los mismos modificadores                                   | 23                             |
+| `…-amber-*`                           | `warning` con los mismos modificadores                                   | 11                             |
+| `hover:…-slate-*`                     | `hover:bg-surface-sunken`, `hover:text-fg`, `hover:border-border-strong` | 13                             |
+| `placeholder:text-slate-*`            | `placeholder:text-fg-subtle`                                             | 2                              |
 
 Notas: los recuentos de texto incluyen variantes con prefijo (`hover:text-slate-100` cuenta en `text-slate-100`). Mantener los modificadores de opacidad (`/10`, `/40`…): funcionan con los tokens. En claro, `bg-x/10` sobre blanco es muy tenue; para avisos usar `bg-*-soft`.
 

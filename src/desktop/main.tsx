@@ -4,5 +4,11 @@ import { WorkspaceNavigationProvider } from './state/workspace-navigation-contex
 import { workspaceIpc } from './platform/tauri-ipc-client.js';
 import { WorkspaceShell } from './state/WorkspaceShell.js';
 import './styles.css';
-window.workspaceIpc=workspaceIpc;
-createRoot(document.getElementById('root')!).render(<StrictMode><WorkspaceNavigationProvider><WorkspaceShell/></WorkspaceNavigationProvider></StrictMode>);
+window.workspaceIpc = workspaceIpc;
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <WorkspaceNavigationProvider>
+      <WorkspaceShell />
+    </WorkspaceNavigationProvider>
+  </StrictMode>,
+);

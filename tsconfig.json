@@ -13,34 +13,14 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@shared/*": [
-        "src/shared/*"
-      ],
-      "@domain/*": [
-        "src/domain/*"
-      ],
-      "@application/*": [
-        "src/application/*"
-      ],
-      "@infrastructure/*": [
-        "src/infrastructure/*"
-      ],
-      "@desktop/*": [
-        "src/desktop/*"
-      ]
+      "@shared/*": ["src/shared/*"],
+      "@domain/*": ["src/domain/*"],
+      "@application/*": ["src/application/*"],
+      "@infrastructure/*": ["src/infrastructure/*"],
+      "@desktop/*": ["src/desktop/*"]
     },
-    "types": [
-      "node",
-      "vitest/globals"
-    ],
+    "types": ["node", "vitest/globals"],
     "jsx": "react-jsx"
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "tests/**/*.ts",
-    "vitest.config.ts",
-    "vite.config.ts",
-    "tests/**/*.tsx"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "vitest.config.ts", "vite.config.ts", "tests/**/*.tsx"]
 }

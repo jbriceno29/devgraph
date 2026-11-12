@@ -30,5 +30,5 @@ export interface AgentAdapterPort {
   getCapabilities(): AgentCapabilities;
   run(input: AgentRunInput): AsyncIterable<AgentEvent>;
   cancel(executionId: string): Promise<void>;
-  respondToApproval(executionId:string,requestId:string,decision:ApprovalDecision):Promise<void>;
+  respondToApproval(executionId: string, requestId: string, decision: ApprovalDecision): Promise<void>;
 }

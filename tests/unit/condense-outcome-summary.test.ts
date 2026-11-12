@@ -39,7 +39,10 @@ describe('condenseOutcomeSummary', () => {
   });
 
   it('understands markdown headings and inline section text', () => {
-    const text = condenseOutcomeSummary('## Hecho\nCambié x.\n## Decisiones: usé y\n## Convenciones: regla z\n## Pendiente\nnada', true);
+    const text = condenseOutcomeSummary(
+      '## Hecho\nCambié x.\n## Decisiones: usé y\n## Convenciones: regla z\n## Pendiente\nnada',
+      true,
+    );
     expect(text).toBe('## Hecho\nCambié x.');
   });
 });

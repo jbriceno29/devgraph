@@ -34,10 +34,14 @@ export interface TaskGroupingOptions {
   /** Tasks that must run on their own (for example, a failed task that retries with its error as context). */
   runAlone?: readonly string[];
 }
-export interface TaskGroup { leader: GroupableTask; tasks: GroupableTask[] }
+export interface TaskGroup {
+  leader: GroupableTask;
+  tasks: GroupableTask[];
+}
 
 export const DEFAULT_GROUPING = { maxGroupSize: 3, criteriaPerTask: 2 } as const;
-const CONVENTION_PATTERN = /a partir de esta tarea|convenci[oó]n(?:es)? del proyecto|\b(?:fija|fijar|fijan|establece|establecer|define|definir|introduce|nueva|nuevas)\s+(?:la |una |las |esta |estas )?convenci/i;
+const CONVENTION_PATTERN =
+  /a partir de esta tarea|convenci[oó]n(?:es)? del proyecto|\b(?:fija|fijar|fijan|establece|establecer|define|definir|introduce|nueva|nuevas)\s+(?:la |una |las |esta |estas )?convenci/i;
 
 /** True when the task declares or fixes a project-wide convention and should run alone (not when it only follows one). */
 export function fixesConvention(task: Pick<GroupableTask, 'title' | 'summary'>): boolean {
@@ -49,13 +53,15 @@ const byKey = (a: GroupableTask, b: GroupableTask) => a.displayKey.localeCompare
 /** Tasks in dependency order (a task after everything it depends on inside the list), ties by display key. */
 export function orderTasks<T extends GroupableTask>(tasks: readonly T[]): T[] {
   const byId = new Map(tasks.map(task => [task.id, task]));
-  const ordered: T[] = []; const placed = new Set<string>();
+  const ordered: T[] = [];
+  const placed = new Set<string>();
   let pending = [...tasks].sort(byKey);
   while (pending.length) {
     // One task at a time: the first by key whose dependencies are placed, so TASK-002 (after TASK-001) still comes
     // before TASK-003. A dependency cycle inside the list falls back to the first pending task so the loop ends.
     const next = pending.find(task => task.dependsOn.every(id => !byId.has(id) || placed.has(id))) ?? pending[0]!;
-    ordered.push(next); placed.add(next.id);
+    ordered.push(next);
+    placed.add(next.id);
     pending = pending.filter(task => task.id !== next.id);
   }
   return ordered;
@@ -73,7 +79,8 @@ export function nextTaskGroup(tasks: readonly GroupableTask[], options: TaskGrou
   const leader = ordered.find(task => task.status === 'READY');
   if (!leader) return null;
   const single = { leader, tasks: [leader] };
-  if (maxGroupSize === 1 || options.projectHasDoneTasks === false || fixesConvention(leader) || alone.has(leader.id)) return single;
+  if (maxGroupSize === 1 || options.projectHasDoneTasks === false || fixesConvention(leader) || alone.has(leader.id))
+    return single;
 
   const done = new Set(tasks.filter(task => task.status === 'DONE').map(task => task.id));
   const inGroup = new Set([leader.id]);
@@ -84,10 +91,17 @@ export function nextTaskGroup(tasks: readonly GroupableTask[], options: TaskGrou
     if (inGroup.has(task.id) || alone.has(task.id) || fixesConvention(task)) continue;
     if (task.status !== 'READY' && task.status !== 'BLOCKED') continue;
     // Every dependency must be DONE already or inside this group (outside the feature counts as satisfied only if DONE).
-    if (!task.dependsOn.every(id => done.has(id) || inGroup.has(id) || (task.status === 'READY' && !tasks.some(item => item.id === id)))) continue;
+    if (
+      !task.dependsOn.every(
+        id => done.has(id) || inGroup.has(id) || (task.status === 'READY' && !tasks.some(item => item.id === id)),
+      )
+    )
+      continue;
     const count = task.criteriaCount ?? 0;
     if (criteria + count > maxCriteria) continue;
-    group.push(task); inGroup.add(task.id); criteria += count;
+    group.push(task);
+    inGroup.add(task.id);
+    criteria += count;
   }
   return { leader, tasks: group };
 }
@@ -105,10 +119,12 @@ export function planTaskGroups(tasks: readonly GroupableTask[], options: TaskGro
     if (!group) break;
     groups.push(group);
     const closed = new Set(group.tasks.map(task => task.id));
-    remaining = remaining.map(task => closed.has(task.id) ? { ...task, status: 'DONE' } : task);
+    remaining = remaining.map(task => (closed.has(task.id) ? { ...task, status: 'DONE' } : task));
     // Closing a group unblocks the tasks that only waited for it, as the orchestrator does.
     const doneIds = new Set(remaining.filter(task => task.status === 'DONE').map(task => task.id));
-    remaining = remaining.map(task => task.status === 'BLOCKED' && task.dependsOn.every(id => doneIds.has(id)) ? { ...task, status: 'READY' } : task);
+    remaining = remaining.map(task =>
+      task.status === 'BLOCKED' && task.dependsOn.every(id => doneIds.has(id)) ? { ...task, status: 'READY' } : task,
+    );
     projectHasDoneTasks = true;
   }
   return groups;

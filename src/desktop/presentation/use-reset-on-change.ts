@@ -8,5 +8,8 @@ import { useState } from 'react';
  */
 export function useResetOnChange(key: unknown, reset: () => void): void {
   const [seen, setSeen] = useState(key);
-  if (!Object.is(seen, key)) { setSeen(key); reset(); }
+  if (!Object.is(seen, key)) {
+    setSeen(key);
+    reset();
+  }
 }

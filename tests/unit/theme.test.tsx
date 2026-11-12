@@ -1,23 +1,125 @@
 // @vitest-environment jsdom
-import { act,cleanup,fireEvent,render,renderHook,screen } from '@testing-library/react';
-import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeToggle } from '../../src/desktop/presentation/shell/ThemeToggle.js';
-import { resetThemeStateForTests,THEME_STORAGE_KEY,useTheme } from '../../src/desktop/state/theme.js';
+import { resetThemeStateForTests, THEME_STORAGE_KEY, useTheme } from '../../src/desktop/state/theme.js';
 
 // matchMedia controlable: jsdom no lo trae.
-function mockSystem(dark:boolean){const listeners=new Set<()=>void>();const query={get matches(){return dark;},addEventListener:(_:string,fn:()=>void)=>listeners.add(fn),removeEventListener:(_:string,fn:()=>void)=>listeners.delete(fn)};vi.stubGlobal('matchMedia',vi.fn(()=>query));return {listeners,set(next:boolean){dark=next;listeners.forEach(fn=>fn());}};}
-beforeEach(()=>{localStorage.clear();document.documentElement.removeAttribute('data-theme');resetThemeStateForTests();});
-afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks();});
-
-describe('useTheme',()=>{
- it('por defecto sigue al sistema sin fijar data-theme',()=>{mockSystem(true);const {result}=renderHook(()=>useTheme());expect(result.current.preference).toBe('system');expect(result.current.resolved).toBe('dark');expect(document.documentElement.hasAttribute('data-theme')).toBe(false);});
- it('persiste la preferencia y la aplica en <html>',()=>{mockSystem(false);const {result}=renderHook(()=>useTheme());act(()=>result.current.setPreference('dark'));expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');expect(document.documentElement.dataset.theme).toBe('dark');expect(result.current.resolved).toBe('dark');act(()=>result.current.setPreference('system'));expect(document.documentElement.hasAttribute('data-theme')).toBe(false);expect(result.current.resolved).toBe('light');});
- it('lee la preferencia guardada al arrancar e ignora valores no válidos',()=>{localStorage.setItem(THEME_STORAGE_KEY,'light');expect(renderHook(()=>useTheme()).result.current.preference).toBe('light');expect(document.documentElement.dataset.theme).toBe('light');resetThemeStateForTests();localStorage.setItem(THEME_STORAGE_KEY,'morado');expect(renderHook(()=>useTheme()).result.current.preference).toBe('system');});
- it('funciona aunque localStorage falle y sin matchMedia',()=>{vi.spyOn(Storage.prototype,'getItem').mockImplementation(()=>{throw new Error('bloqueado');});vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('lleno');});const {result}=renderHook(()=>useTheme());expect(result.current.preference).toBe('system');expect(result.current.resolved).toBe('light');act(()=>result.current.setPreference('dark'));expect(result.current.preference).toBe('dark');expect(document.documentElement.dataset.theme).toBe('dark');});
- it('reacciona al cambio del sistema solo en modo system y limpia el listener',()=>{const system=mockSystem(false);const {result,unmount}=renderHook(()=>useTheme());expect(result.current.resolved).toBe('light');act(()=>system.set(true));expect(result.current.resolved).toBe('dark');act(()=>result.current.setPreference('light'));expect(system.listeners.size).toBe(0);act(()=>system.set(false));expect(result.current.resolved).toBe('light');act(()=>result.current.setPreference('system'));expect(system.listeners.size).toBe(1);unmount();expect(system.listeners.size).toBe(0);});
+function mockSystem(dark: boolean) {
+  const listeners = new Set<() => void>();
+  const query = {
+    get matches() {
+      return dark;
+    },
+    addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+  };
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => query),
+  );
+  return {
+    listeners,
+    set(next: boolean) {
+      dark = next;
+      listeners.forEach(fn => fn());
+    },
+  };
+}
+beforeEach(() => {
+  localStorage.clear();
+  document.documentElement.removeAttribute('data-theme');
+  resetThemeStateForTests();
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
-describe('ThemeToggle',()=>{
- it('muestra tres opciones accesibles y cambia la preferencia',()=>{mockSystem(false);render(<ThemeToggle/>);expect(screen.getByRole('radiogroup',{name:'Tema de la interfaz'})).toBeTruthy();const radios=screen.getAllByRole('radio');expect(radios.map(radio=>radio.textContent)).toEqual(['Sistema','Claro','Oscuro']);expect(screen.getByRole('radio',{name:'Sistema'}).getAttribute('aria-checked')).toBe('true');fireEvent.click(screen.getByRole('radio',{name:'Oscuro'}));expect(screen.getByRole('radio',{name:'Oscuro'}).getAttribute('aria-checked')).toBe('true');expect(document.documentElement.dataset.theme).toBe('dark');expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');});
- it('se maneja con flechas y solo la opción activa es tabulable',()=>{mockSystem(false);render(<ThemeToggle compact/>);const system=screen.getByRole('radio',{name:'Sistema'});expect(system.tabIndex).toBe(0);expect(screen.getByRole('radio',{name:'Claro'}).tabIndex).toBe(-1);fireEvent.keyDown(system,{key:'ArrowRight'});const light=screen.getByRole('radio',{name:'Claro'});expect(light.getAttribute('aria-checked')).toBe('true');expect(document.activeElement).toBe(light);fireEvent.keyDown(light,{key:'ArrowLeft'});fireEvent.keyDown(screen.getByRole('radio',{name:'Sistema'}),{key:'ArrowLeft'});expect(screen.getByRole('radio',{name:'Oscuro'}).getAttribute('aria-checked')).toBe('true');});
+describe('useTheme', () => {
+  it('por defecto sigue al sistema sin fijar data-theme', () => {
+    mockSystem(true);
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.preference).toBe('system');
+    expect(result.current.resolved).toBe('dark');
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+  it('persiste la preferencia y la aplica en <html>', () => {
+    mockSystem(false);
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setPreference('dark'));
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(result.current.resolved).toBe('dark');
+    act(() => result.current.setPreference('system'));
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    expect(result.current.resolved).toBe('light');
+  });
+  it('lee la preferencia guardada al arrancar e ignora valores no válidos', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    expect(renderHook(() => useTheme()).result.current.preference).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    resetThemeStateForTests();
+    localStorage.setItem(THEME_STORAGE_KEY, 'morado');
+    expect(renderHook(() => useTheme()).result.current.preference).toBe('system');
+  });
+  it('funciona aunque localStorage falle y sin matchMedia', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('bloqueado');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('lleno');
+    });
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.preference).toBe('system');
+    expect(result.current.resolved).toBe('light');
+    act(() => result.current.setPreference('dark'));
+    expect(result.current.preference).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+  it('reacciona al cambio del sistema solo en modo system y limpia el listener', () => {
+    const system = mockSystem(false);
+    const { result, unmount } = renderHook(() => useTheme());
+    expect(result.current.resolved).toBe('light');
+    act(() => system.set(true));
+    expect(result.current.resolved).toBe('dark');
+    act(() => result.current.setPreference('light'));
+    expect(system.listeners.size).toBe(0);
+    act(() => system.set(false));
+    expect(result.current.resolved).toBe('light');
+    act(() => result.current.setPreference('system'));
+    expect(system.listeners.size).toBe(1);
+    unmount();
+    expect(system.listeners.size).toBe(0);
+  });
+});
+
+describe('ThemeToggle', () => {
+  it('muestra tres opciones accesibles y cambia la preferencia', () => {
+    mockSystem(false);
+    render(<ThemeToggle />);
+    expect(screen.getByRole('radiogroup', { name: 'Tema de la interfaz' })).toBeTruthy();
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map(radio => radio.textContent)).toEqual(['Sistema', 'Claro', 'Oscuro']);
+    expect(screen.getByRole('radio', { name: 'Sistema' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Oscuro' }));
+    expect(screen.getByRole('radio', { name: 'Oscuro' }).getAttribute('aria-checked')).toBe('true');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+  });
+  it('se maneja con flechas y solo la opción activa es tabulable', () => {
+    mockSystem(false);
+    render(<ThemeToggle compact />);
+    const system = screen.getByRole('radio', { name: 'Sistema' });
+    expect(system.tabIndex).toBe(0);
+    expect(screen.getByRole('radio', { name: 'Claro' }).tabIndex).toBe(-1);
+    fireEvent.keyDown(system, { key: 'ArrowRight' });
+    const light = screen.getByRole('radio', { name: 'Claro' });
+    expect(light.getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(light);
+    fireEvent.keyDown(light, { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Sistema' }), { key: 'ArrowLeft' });
+    expect(screen.getByRole('radio', { name: 'Oscuro' }).getAttribute('aria-checked')).toBe('true');
+  });
 });

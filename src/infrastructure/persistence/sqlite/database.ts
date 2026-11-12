@@ -23,7 +23,11 @@ export const MIGRATIONS: ReadonlyArray<{ version: number; file: string }> = [
   { version: 16, file: '016_project_skills.sql' },
 ];
 const migrationPath = (file: string) => fileURLToPath(new URL(`./migrations/${file}`, import.meta.url));
-export interface OpenDatabaseOptions { filename: string; readonly?: boolean; initialize?: boolean }
+export interface OpenDatabaseOptions {
+  filename: string;
+  readonly?: boolean;
+  initialize?: boolean;
+}
 export function openDatabase(options: OpenDatabaseOptions): SqliteDatabase {
   const db = new Database(options.filename, { readonly: options.readonly ?? false });
   db.pragma('foreign_keys = ON');
@@ -36,7 +40,9 @@ export function openDatabase(options: OpenDatabaseOptions): SqliteDatabase {
   }
   return db;
 }
-export function closeDatabase(db: SqliteDatabase): void { db.close(); }
+export function closeDatabase(db: SqliteDatabase): void {
+  db.close();
+}
 
 /**
  * Applies pending migrations in order, each exactly once and in its own transaction.

@@ -4,20 +4,28 @@
  * its own: it still completes (nothing is lost), but a person looks at it first. Flags, not failures, so legitimate
  * changes are never blocked.
  */
-export interface QualityFlagInput { filePath: string; changeType: 'ADDED' | 'MODIFIED' | 'DELETED' | 'RENAMED'; diffPatch: string | null }
+export interface QualityFlagInput {
+  filePath: string;
+  changeType: 'ADDED' | 'MODIFIED' | 'DELETED' | 'RENAMED';
+  diffPatch: string | null;
+}
 
 const TEST_FILE = /(?:^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]*\.py$|_test\.py$/i;
-const SKIP = /\b(?:it|test|describe|suite)\.(?:skip|only|todo)\s*\(|\bx(?:it|describe|test)\s*\(|@(?:unittest\.)?skip(?:If|Unless)?\b|\bpytest\.mark\.skip/;
+const SKIP =
+  /\b(?:it|test|describe|suite)\.(?:skip|only|todo)\s*\(|\bx(?:it|describe|test)\s*\(|@(?:unittest\.)?skip(?:If|Unless)?\b|\bpytest\.mark\.skip/;
 /** Files that decide which checks run and how strictly (at the root or in any folder). */
-const VERIFICATION_CONFIG = /(?:^|\/)(?:tsconfig(?:\.[\w-]+)?\.json|(?:vite|vitest|jest|playwright)\.config\.[cm]?[jt]s|vitest\.workspace\.[cm]?[jt]s|pytest\.ini|conftest\.py|setup\.cfg|tox\.ini|\.eslintrc(?:\.\w+)?|eslint\.config\.[cm]?js)$/i;
+const VERIFICATION_CONFIG =
+  /(?:^|\/)(?:tsconfig(?:\.[\w-]+)?\.json|(?:vite|vitest|jest|playwright)\.config\.[cm]?[jt]s|vitest\.workspace\.[cm]?[jt]s|pytest\.ini|conftest\.py|setup\.cfg|tox\.ini|\.eslintrc(?:\.\w+)?|eslint\.config\.[cm]?js)$/i;
 
 export function qualityFlags(files: readonly QualityFlagInput[]): string[] {
   const flags: string[] = [];
   for (const file of files) {
     if (TEST_FILE.test(file.filePath) && file.changeType === 'DELETED') flags.push(`Borra pruebas: ${file.filePath}`);
-    else if (TEST_FILE.test(file.filePath) && addedLines(file.diffPatch).some(line => SKIP.test(line))) flags.push(`Salta o aísla pruebas (skip/only): ${file.filePath}`);
+    else if (TEST_FILE.test(file.filePath) && addedLines(file.diffPatch).some(line => SKIP.test(line)))
+      flags.push(`Salta o aísla pruebas (skip/only): ${file.filePath}`);
     // Creating the configuration is the scaffold's job; changing or deleting one that existed needs a look.
-    if (VERIFICATION_CONFIG.test(file.filePath) && file.changeType !== 'ADDED') flags.push(`Cambia la configuración de verificación: ${file.filePath}`);
+    if (VERIFICATION_CONFIG.test(file.filePath) && file.changeType !== 'ADDED')
+      flags.push(`Cambia la configuración de verificación: ${file.filePath}`);
   }
   return flags;
 }

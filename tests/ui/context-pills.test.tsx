@@ -1,22 +1,180 @@
 // @vitest-environment jsdom
-import { cleanup,fireEvent,screen,waitFor } from '@testing-library/react';
-import { afterEach,expect,it,vi } from 'vitest';
-import { openShell,selectView } from './helpers.js';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { openShell, selectView } from './helpers.js';
 import type { ContextPackageDto } from '../../src/shared/contracts/context-view.js';
-import type { EntityInspectorDto,WorkspaceIpcClient,WorkspaceLoadedStateDto } from '../../src/shared/contracts/ipc-contracts.js';
+import type {
+  EntityInspectorDto,
+  WorkspaceIpcClient,
+  WorkspaceLoadedStateDto,
+} from '../../src/shared/contracts/ipc-contracts.js';
 
-const project={id:'p',name:'Context Project',slug:'context-project',description:null,currentRevision:1,createdAt:'now',updatedAt:'now'};
-const graph={projectId:'p',revision:1,nodes:[{id:'root',key:'PROJ-01',type:'PROJECT_ROOT' as const,label:'Context Project',status:'ACTIVE'},{id:'feature',key:'FEAT-01',type:'FEATURE' as const,label:'Account recovery',status:'DRAFT',parentId:'root'}],edges:[]};
-const loaded:WorkspaceLoadedStateDto={project,graph,selectedEntityId:'feature'};
-const packageDto:ContextPackageDto={snapshot:{id:'snapshot-1',projectId:'p',executionId:null,focusEntityId:'feature',repositoryCommit:'abc123',graphRevision:1,createdAt:'now',tokenUsage:{maxAllowedTokens:32000,totalUsedTokens:800},constraints:['Do not expose credentials.'],includedSources:[{sourceId:'policy:p:0',entityKey:'POLICY-1',sourceType:'POLICY',titleOrPath:'Project policy',authorityTier:1,retrievalOrigin:'FOCUS_NODE',graphDistance:0,contentHash:'hash-policy',extractedContent:'Do not expose credentials.',tokenCount:8},{sourceId:'spec',entityKey:'DOC-001',sourceType:'SPECIFICATION',titleOrPath:'docs/recovery-spec.md',authorityTier:3,retrievalOrigin:'GRAPH_EDGE',viaEdgeType:'DOCUMENTED_BY',graphDistance:1,contentHash:'hash-spec',extractedContent:'Recovery requirements.',tokenCount:5}],excludedSources:[{sourceId:'prd',titleOrPath:'docs/PRD.md',authorityTier:5,exclusionReason:'TOKEN_BUDGET_EXCEEDED'}]},packageText:'<ContextSnapshot>sealed context</ContextSnapshot>'};
+const project = {
+  id: 'p',
+  name: 'Context Project',
+  slug: 'context-project',
+  description: null,
+  currentRevision: 1,
+  createdAt: 'now',
+  updatedAt: 'now',
+};
+const graph = {
+  projectId: 'p',
+  revision: 1,
+  nodes: [
+    { id: 'root', key: 'PROJ-01', type: 'PROJECT_ROOT' as const, label: 'Context Project', status: 'ACTIVE' },
+    {
+      id: 'feature',
+      key: 'FEAT-01',
+      type: 'FEATURE' as const,
+      label: 'Account recovery',
+      status: 'DRAFT',
+      parentId: 'root',
+    },
+  ],
+  edges: [],
+};
+const loaded: WorkspaceLoadedStateDto = { project, graph, selectedEntityId: 'feature' };
+const packageDto: ContextPackageDto = {
+  snapshot: {
+    id: 'snapshot-1',
+    projectId: 'p',
+    executionId: null,
+    focusEntityId: 'feature',
+    repositoryCommit: 'abc123',
+    graphRevision: 1,
+    createdAt: 'now',
+    tokenUsage: { maxAllowedTokens: 32000, totalUsedTokens: 800 },
+    constraints: ['Do not expose credentials.'],
+    includedSources: [
+      {
+        sourceId: 'policy:p:0',
+        entityKey: 'POLICY-1',
+        sourceType: 'POLICY',
+        titleOrPath: 'Project policy',
+        authorityTier: 1,
+        retrievalOrigin: 'FOCUS_NODE',
+        graphDistance: 0,
+        contentHash: 'hash-policy',
+        extractedContent: 'Do not expose credentials.',
+        tokenCount: 8,
+      },
+      {
+        sourceId: 'spec',
+        entityKey: 'DOC-001',
+        sourceType: 'SPECIFICATION',
+        titleOrPath: 'docs/recovery-spec.md',
+        authorityTier: 3,
+        retrievalOrigin: 'GRAPH_EDGE',
+        viaEdgeType: 'DOCUMENTED_BY',
+        graphDistance: 1,
+        contentHash: 'hash-spec',
+        extractedContent: 'Recovery requirements.',
+        tokenCount: 5,
+      },
+    ],
+    excludedSources: [
+      { sourceId: 'prd', titleOrPath: 'docs/PRD.md', authorityTier: 5, exclusionReason: 'TOKEN_BUDGET_EXCEEDED' },
+    ],
+  },
+  packageText: '<ContextSnapshot>sealed context</ContextSnapshot>',
+};
 afterEach(cleanup);
-it('prepares and displays the selected feature ContextSnapshot and recalculates its token budget',async()=>{
- const details:EntityInspectorDto={entity:{id:'feature',key:'FEAT-01',type:'FEATURE',label:'Account recovery',status:'DRAFT',summary:'Recover access.',parentId:'root'},attributes:{scope:'Account recovery'},relationships:[],executionHistory:[]};
- const preview=vi.fn(async(input:{projectId:string;focusEntityId:string;maxAllowedTokens?:number})=>({...packageDto,snapshot:{...packageDto.snapshot,tokenUsage:{...packageDto.snapshot.tokenUsage,maxAllowedTokens:input.maxAllowedTokens??32000}}}));
- const client:WorkspaceIpcClient={commands:{createProject:vi.fn(async()=>project),openProject:vi.fn(async()=>loaded),configureRepository:vi.fn(),createArtifact:vi.fn(),saveArtifact:vi.fn(),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn(),startExecution:vi.fn(),cancelExecution:vi.fn(),acceptExecution:vi.fn(),setWorkItemStatus:vi.fn(),setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),exportFeatureReport:vi.fn(),updateExecutionPolicy:vi.fn(),requestExecutionChanges:vi.fn(),resolveExecutionApproval:vi.fn()},queries:{listProjects:vi.fn(async()=>[project]),getGraphView:vi.fn(async()=>graph),getEntityInspectorDetails:vi.fn(async()=>details),getRepositoryPath:vi.fn(async()=>null),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn(),listChangeSets:vi.fn(async()=>[]),previewContext:preview,getContextSnapshot:vi.fn(),listAgentProfiles:vi.fn(async()=>[]),listExecutions:vi.fn(async()=>[]),getExecutionDetail:vi.fn(),getFeaturePilot:vi.fn(),getContextFlow:vi.fn(async()=>({executionId:null,snapshotId:null,sources:[],conventions:[]})),getFeatureReport:vi.fn(),getActivity:vi.fn(),getExecutionPolicy:vi.fn(),listExecutionEvents:vi.fn(async()=>[])},events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(()=>()=>{}),onExecutionStatusChanged:vi.fn(()=>()=>{}),onPilotUpdated:vi.fn(()=>()=>{}),onExecutionEventReceived:vi.fn(()=>()=>{})}};
- Object.defineProperty(window,'workspaceIpc',{configurable:true,value:client});await openShell('Context Project');await selectView(/Grafo/);
- await waitFor(()=>expect(preview).toHaveBeenCalledWith({projectId:'p',focusEntityId:'feature',maxAllowedTokens:32000}));expect(await screen.findByText('2 incluidas · 1 excluidas')).toBeTruthy();
- fireEvent.click(screen.getByText('Ver fuentes incluidas (2)'));expect(await screen.findByText('docs/recovery-spec.md')).toBeTruthy();fireEvent.click(screen.getByText('Fuentes excluidas (1)'));expect(await screen.findByText(/docs\/PRD.md · nivel 5 · no cabe en el presupuesto/)).toBeTruthy();expect(screen.getByTitle('Nivel de autoridad 1 · reglas y convenciones')).toBeTruthy();expect(screen.queryByText(/^N1$/)).toBeNull();
- fireEvent.click(screen.getByText('Presupuesto y texto del contexto'));const budget=await screen.findByLabelText('Presupuesto máximo de tokens') as HTMLInputElement;await waitFor(()=>expect(budget.value).toBe('32000'));fireEvent.change(budget,{target:{value:'100'}});expect(budget.value).toBe('100');fireEvent.click(screen.getByRole('button',{name:'Recalcular'}));
- await waitFor(()=>expect(preview).toHaveBeenLastCalledWith({projectId:'p',focusEntityId:'feature',maxAllowedTokens:100}));
+it('prepares and displays the selected feature ContextSnapshot and recalculates its token budget', async () => {
+  const details: EntityInspectorDto = {
+    entity: {
+      id: 'feature',
+      key: 'FEAT-01',
+      type: 'FEATURE',
+      label: 'Account recovery',
+      status: 'DRAFT',
+      summary: 'Recover access.',
+      parentId: 'root',
+    },
+    attributes: { scope: 'Account recovery' },
+    relationships: [],
+    executionHistory: [],
+  };
+  const preview = vi.fn(async (input: { projectId: string; focusEntityId: string; maxAllowedTokens?: number }) => ({
+    ...packageDto,
+    snapshot: {
+      ...packageDto.snapshot,
+      tokenUsage: { ...packageDto.snapshot.tokenUsage, maxAllowedTokens: input.maxAllowedTokens ?? 32000 },
+    },
+  }));
+  const client: WorkspaceIpcClient = {
+    commands: {
+      createProject: vi.fn(async () => project),
+      openProject: vi.fn(async () => loaded),
+      configureRepository: vi.fn(),
+      createArtifact: vi.fn(),
+      saveArtifact: vi.fn(),
+      proposeChanges: vi.fn(),
+      editChangeSet: vi.fn(),
+      applyChangeSet: vi.fn(),
+      rejectChangeSet: vi.fn(),
+      startExecution: vi.fn(),
+      cancelExecution: vi.fn(),
+      acceptExecution: vi.fn(),
+      setWorkItemStatus: vi.fn(),
+      setFeatureAutonomy: vi.fn(),
+      startPilot: vi.fn(),
+      stopPilot: vi.fn(),
+      resumePilot: vi.fn(),
+      setAuthMode: vi.fn(),
+      exportFeatureReport: vi.fn(),
+      updateExecutionPolicy: vi.fn(),
+      requestExecutionChanges: vi.fn(),
+      resolveExecutionApproval: vi.fn(),
+    },
+    queries: {
+      listProjects: vi.fn(async () => [project]),
+      getGraphView: vi.fn(async () => graph),
+      getEntityInspectorDetails: vi.fn(async () => details),
+      getRepositoryPath: vi.fn(async () => null),
+      listArtifacts: vi.fn(async () => []),
+      getArtifact: vi.fn(),
+      listChangeSets: vi.fn(async () => []),
+      previewContext: preview,
+      getContextSnapshot: vi.fn(),
+      listAgentProfiles: vi.fn(async () => []),
+      listExecutions: vi.fn(async () => []),
+      getExecutionDetail: vi.fn(),
+      getFeaturePilot: vi.fn(),
+      getContextFlow: vi.fn(async () => ({ executionId: null, snapshotId: null, sources: [], conventions: [] })),
+      getFeatureReport: vi.fn(),
+      getActivity: vi.fn(),
+      getExecutionPolicy: vi.fn(),
+      listExecutionEvents: vi.fn(async () => []),
+    },
+    events: {
+      onGraphRevisionUpdated: vi.fn(() => () => {}),
+      onArtifactSyncStatusChanged: vi.fn(() => () => {}),
+      onExecutionStatusChanged: vi.fn(() => () => {}),
+      onPilotUpdated: vi.fn(() => () => {}),
+      onExecutionEventReceived: vi.fn(() => () => {}),
+    },
+  };
+  Object.defineProperty(window, 'workspaceIpc', { configurable: true, value: client });
+  await openShell('Context Project');
+  await selectView(/Grafo/);
+  await waitFor(() =>
+    expect(preview).toHaveBeenCalledWith({ projectId: 'p', focusEntityId: 'feature', maxAllowedTokens: 32000 }),
+  );
+  expect(await screen.findByText('2 incluidas · 1 excluidas')).toBeTruthy();
+  fireEvent.click(screen.getByText('Ver fuentes incluidas (2)'));
+  expect(await screen.findByText('docs/recovery-spec.md')).toBeTruthy();
+  fireEvent.click(screen.getByText('Fuentes excluidas (1)'));
+  expect(await screen.findByText(/docs\/PRD.md · nivel 5 · no cabe en el presupuesto/)).toBeTruthy();
+  expect(screen.getByTitle('Nivel de autoridad 1 · reglas y convenciones')).toBeTruthy();
+  expect(screen.queryByText(/^N1$/)).toBeNull();
+  fireEvent.click(screen.getByText('Presupuesto y texto del contexto'));
+  const budget = (await screen.findByLabelText('Presupuesto máximo de tokens')) as HTMLInputElement;
+  await waitFor(() => expect(budget.value).toBe('32000'));
+  fireEvent.change(budget, { target: { value: '100' } });
+  expect(budget.value).toBe('100');
+  fireEvent.click(screen.getByRole('button', { name: 'Recalcular' }));
+  await waitFor(() =>
+    expect(preview).toHaveBeenLastCalledWith({ projectId: 'p', focusEntityId: 'feature', maxAllowedTokens: 100 }),
+  );
 });

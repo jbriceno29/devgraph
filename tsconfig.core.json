@@ -1,6 +1,18 @@
 {
-  "extends":"./tsconfig.json",
-  "compilerOptions":{"rootDir":"./src","outDir":"./dist/main","jsx":"react-jsx","noEmit":false,"declaration":false},
-  "include":["src/application/**/*.ts","src/domain/**/*.ts","src/infrastructure/persistence/**/*.ts","src/infrastructure/ipc/sidecar/**/*.ts","src/shared/**/*.ts"],
-  "exclude":["tests","node_modules","dist"]
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist/main",
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "declaration": false
+  },
+  "include": [
+    "src/application/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/infrastructure/persistence/**/*.ts",
+    "src/infrastructure/ipc/sidecar/**/*.ts",
+    "src/shared/**/*.ts"
+  ],
+  "exclude": ["tests", "node_modules", "dist"]
 }

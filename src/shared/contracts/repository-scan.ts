@@ -9,7 +9,8 @@ export const MAX_SCAN_BYTES = 48 * 1024;
 export type RepositoryScanFileKind = 'MANIFEST' | 'STYLE' | 'README' | 'CI';
 export interface RepositoryScanFileDto {
   /** Relative to the repository root, with `/`. */
-  path: string; kind: RepositoryScanFileKind;
+  path: string;
+  kind: RepositoryScanFileKind;
   /** Size on disk. */
   bytes: number;
   /** The content was cut to fit the limits (for a large style file only its token lines are kept). */
@@ -39,19 +40,43 @@ export interface RepositoryScanDto {
   scannedAt: string;
 }
 /** The view of a scan: the same without file contents (the inception view is polled every few seconds). */
-export type RepositoryScanSummaryDto = Omit<RepositoryScanDto, 'files'> & { files: Array<Omit<RepositoryScanFileDto, 'content'>>; bytes: number };
+export type RepositoryScanSummaryDto = Omit<RepositoryScanDto, 'files'> & {
+  files: Array<Omit<RepositoryScanFileDto, 'content'>>;
+  bytes: number;
+};
 
 /** What the assistant inferred from the scan. Every inference names its evidence: paths that exist in the scan (others are dropped in code). */
 export type RepositoryInferenceArea = 'STACK' | 'DESIGN_SYSTEM' | 'STRUCTURE' | 'TESTING';
-export const REPOSITORY_INFERENCE_AREAS: readonly RepositoryInferenceArea[] = ['STACK', 'DESIGN_SYSTEM', 'STRUCTURE', 'TESTING'];
-export interface RepositoryInferenceDto { id: string; area: RepositoryInferenceArea; statement: string; evidence: string[] }
+export const REPOSITORY_INFERENCE_AREAS: readonly RepositoryInferenceArea[] = [
+  'STACK',
+  'DESIGN_SYSTEM',
+  'STRUCTURE',
+  'TESTING',
+];
+export interface RepositoryInferenceDto {
+  id: string;
+  area: RepositoryInferenceArea;
+  statement: string;
+  evidence: string[];
+}
 /** The user's correction of one inference (it takes precedence over the inference in every later prompt). */
-export interface RepositoryCorrectionDto { inferenceId: string; correction: string }
+export interface RepositoryCorrectionDto {
+  inferenceId: string;
+  correction: string;
+}
 export const MAX_REPOSITORY_CORRECTION = 500;
 /** The repository part of the inception view: what was read, what the assistant inferred and what the user corrected. */
-export interface InceptionRepositoryDto { scan: RepositoryScanSummaryDto; inferences: RepositoryInferenceDto[]; corrections: RepositoryCorrectionDto[] }
+export interface InceptionRepositoryDto {
+  scan: RepositoryScanSummaryDto;
+  inferences: RepositoryInferenceDto[];
+  corrections: RepositoryCorrectionDto[];
+}
 
 /** The view of a scan, without contents, with the serialized size of the full scan. */
 export function summarizeScan(scan: RepositoryScanDto): RepositoryScanSummaryDto {
-  return { ...scan, files: scan.files.map(({ content: _content, ...rest }) => rest), bytes: new TextEncoder().encode(JSON.stringify(scan)).length };
+  return {
+    ...scan,
+    files: scan.files.map(({ content: _content, ...rest }) => rest),
+    bytes: new TextEncoder().encode(JSON.stringify(scan)).length,
+  };
 }

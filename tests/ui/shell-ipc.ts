@@ -1,16 +1,117 @@
 import { vi } from 'vitest';
 import type { ActivityItemDto, ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import type { GraphNodeView } from '../../src/shared/contracts/graph-view.js';
-import type { EntityInspectorDto, WorkspaceIpcClient, WorkspaceLoadedStateDto } from '../../src/shared/contracts/ipc-contracts.js';
+import type {
+  EntityInspectorDto,
+  WorkspaceIpcClient,
+  WorkspaceLoadedStateDto,
+} from '../../src/shared/contracts/ipc-contracts.js';
 
 /** Doble de window.workspaceIpc para probar el shell completo (incluye getActivity). */
-export const shellProject={id:'p',name:'Example Workspace',slug:'example-workspace',description:null,currentRevision:1,createdAt:'now',updatedAt:'now'};
-export const activityItem=(over:Partial<ActivityItemDto>&Pick<ActivityItemDto,'id'|'kind'|'title'>):ActivityItemDto=>({at:new Date().toISOString(),detail:null,needsAttention:false,workItemId:null,executionId:null,featureId:null,changeSetId:null,target:'agents',...over});
-export function installShellIpc(nodes:GraphNodeView[],activity:ActivitySummaryDto={items:[],running:[],attentionCount:0}){
- const graph={projectId:'p',revision:1,nodes,edges:[]};
- const loaded:WorkspaceLoadedStateDto={project:shellProject,graph,selectedEntityId:'root'};
- const details=(id:string):EntityInspectorDto=>{const node=nodes.find(item=>item.id===id)??nodes[0]!;return {entity:{id:node.id,key:node.key,type:node.type,label:node.label,status:node.status,summary:`Summary for ${id}`,...(node.parentId?{parentId:node.parentId}:{})},attributes:{},relationships:[],executionHistory:[]};};
- const client:WorkspaceIpcClient={commands:{createProject:vi.fn(async()=>shellProject),openProject:vi.fn(async()=>loaded),configureRepository:vi.fn(async(projectId:string,localPath:string)=>({projectId,localPath})),createArtifact:vi.fn(),saveArtifact:vi.fn(),proposeChanges:vi.fn(),editChangeSet:vi.fn(),applyChangeSet:vi.fn(),rejectChangeSet:vi.fn(),startExecution:vi.fn(),cancelExecution:vi.fn(),acceptExecution:vi.fn(),setWorkItemStatus:vi.fn(),setFeatureAutonomy:vi.fn(),startPilot:vi.fn(),stopPilot:vi.fn(),resumePilot:vi.fn(),setAuthMode:vi.fn(),exportFeatureReport:vi.fn(),updateExecutionPolicy:vi.fn(),requestExecutionChanges:vi.fn(),resolveExecutionApproval:vi.fn()},queries:{listProjects:vi.fn(async()=>[shellProject]),getGraphView:vi.fn(async()=>graph),getEntityInspectorDetails:vi.fn(async(id:string)=>details(id)),getRepositoryPath:vi.fn(async()=>null),listArtifacts:vi.fn(async()=>[]),getArtifact:vi.fn(),listChangeSets:vi.fn(async()=>[]),previewContext:vi.fn(async()=>{throw new Error('sin contexto');}),getContextSnapshot:vi.fn(),listAgentProfiles:vi.fn(async()=>[]),listExecutions:vi.fn(async()=>[]),getExecutionDetail:vi.fn(),getFeaturePilot:vi.fn(async()=>{throw new Error('sin piloto');}),getContextFlow:vi.fn(async()=>({executionId:null,snapshotId:null,sources:[],conventions:[]})),getFeatureReport:vi.fn(),getActivity:vi.fn(async()=>activity),getExecutionPolicy:vi.fn(async()=>{throw new Error('sin política');}),listExecutionEvents:vi.fn(async()=>[])},events:{onGraphRevisionUpdated:vi.fn(()=>()=>{}),onArtifactSyncStatusChanged:vi.fn(()=>()=>{}),onExecutionStatusChanged:vi.fn(()=>()=>{}),onPilotUpdated:vi.fn(()=>()=>{}),onExecutionEventReceived:vi.fn(()=>()=>{})}};
- Object.defineProperty(window,'workspaceIpc',{configurable:true,value:client});
- return client;
+export const shellProject = {
+  id: 'p',
+  name: 'Example Workspace',
+  slug: 'example-workspace',
+  description: null,
+  currentRevision: 1,
+  createdAt: 'now',
+  updatedAt: 'now',
+};
+export const activityItem = (
+  over: Partial<ActivityItemDto> & Pick<ActivityItemDto, 'id' | 'kind' | 'title'>,
+): ActivityItemDto => ({
+  at: new Date().toISOString(),
+  detail: null,
+  needsAttention: false,
+  workItemId: null,
+  executionId: null,
+  featureId: null,
+  changeSetId: null,
+  target: 'agents',
+  ...over,
+});
+export function installShellIpc(
+  nodes: GraphNodeView[],
+  activity: ActivitySummaryDto = { items: [], running: [], attentionCount: 0 },
+) {
+  const graph = { projectId: 'p', revision: 1, nodes, edges: [] };
+  const loaded: WorkspaceLoadedStateDto = { project: shellProject, graph, selectedEntityId: 'root' };
+  const details = (id: string): EntityInspectorDto => {
+    const node = nodes.find(item => item.id === id) ?? nodes[0]!;
+    return {
+      entity: {
+        id: node.id,
+        key: node.key,
+        type: node.type,
+        label: node.label,
+        status: node.status,
+        summary: `Summary for ${id}`,
+        ...(node.parentId ? { parentId: node.parentId } : {}),
+      },
+      attributes: {},
+      relationships: [],
+      executionHistory: [],
+    };
+  };
+  const client: WorkspaceIpcClient = {
+    commands: {
+      createProject: vi.fn(async () => shellProject),
+      openProject: vi.fn(async () => loaded),
+      configureRepository: vi.fn(async (projectId: string, localPath: string) => ({ projectId, localPath })),
+      createArtifact: vi.fn(),
+      saveArtifact: vi.fn(),
+      proposeChanges: vi.fn(),
+      editChangeSet: vi.fn(),
+      applyChangeSet: vi.fn(),
+      rejectChangeSet: vi.fn(),
+      startExecution: vi.fn(),
+      cancelExecution: vi.fn(),
+      acceptExecution: vi.fn(),
+      setWorkItemStatus: vi.fn(),
+      setFeatureAutonomy: vi.fn(),
+      startPilot: vi.fn(),
+      stopPilot: vi.fn(),
+      resumePilot: vi.fn(),
+      setAuthMode: vi.fn(),
+      exportFeatureReport: vi.fn(),
+      updateExecutionPolicy: vi.fn(),
+      requestExecutionChanges: vi.fn(),
+      resolveExecutionApproval: vi.fn(),
+    },
+    queries: {
+      listProjects: vi.fn(async () => [shellProject]),
+      getGraphView: vi.fn(async () => graph),
+      getEntityInspectorDetails: vi.fn(async (id: string) => details(id)),
+      getRepositoryPath: vi.fn(async () => null),
+      listArtifacts: vi.fn(async () => []),
+      getArtifact: vi.fn(),
+      listChangeSets: vi.fn(async () => []),
+      previewContext: vi.fn(async () => {
+        throw new Error('sin contexto');
+      }),
+      getContextSnapshot: vi.fn(),
+      listAgentProfiles: vi.fn(async () => []),
+      listExecutions: vi.fn(async () => []),
+      getExecutionDetail: vi.fn(),
+      getFeaturePilot: vi.fn(async () => {
+        throw new Error('sin piloto');
+      }),
+      getContextFlow: vi.fn(async () => ({ executionId: null, snapshotId: null, sources: [], conventions: [] })),
+      getFeatureReport: vi.fn(),
+      getActivity: vi.fn(async () => activity),
+      getExecutionPolicy: vi.fn(async () => {
+        throw new Error('sin política');
+      }),
+      listExecutionEvents: vi.fn(async () => []),
+    },
+    events: {
+      onGraphRevisionUpdated: vi.fn(() => () => {}),
+      onArtifactSyncStatusChanged: vi.fn(() => () => {}),
+      onExecutionStatusChanged: vi.fn(() => () => {}),
+      onPilotUpdated: vi.fn(() => () => {}),
+      onExecutionEventReceived: vi.fn(() => () => {}),
+    },
+  };
+  Object.defineProperty(window, 'workspaceIpc', { configurable: true, value: client });
+  return client;
 }

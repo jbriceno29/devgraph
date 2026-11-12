@@ -1,6 +1,6 @@
 # Graph Workspace
 
-Aplicación de escritorio *local-first* para llevar un proyecto de software de la idea al código con agentes de IA, sin que el usuario tenga que hacer de orquestador. Shell Tauri 2 (Rust), interfaz React/Tailwind y un núcleo Node/TypeScript con SQLite y Markdown versionado en Git.
+Aplicación de escritorio _local-first_ para llevar un proyecto de software de la idea al código con agentes de IA, sin que el usuario tenga que hacer de orquestador. Shell Tauri 2 (Rust), interfaz React/Tailwind y un núcleo Node/TypeScript con SQLite y Markdown versionado en Git.
 
 ## Qué es
 
@@ -30,11 +30,11 @@ npm run desktop
 
 Otros scripts (`package.json`):
 
-| Script | Qué hace |
-| :--- | :--- |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Pruebas con Vitest (unitarias, integración y UI) |
-| `npm run build` | Compila núcleo y renderer y prepara los recursos de Tauri |
+| Script                  | Qué hace                                                                                                        |
+| :---------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`     | `tsc --noEmit`                                                                                                  |
+| `npm test`              | Pruebas con Vitest (unitarias, integración y UI)                                                                |
+| `npm run build`         | Compila núcleo y renderer y prepara los recursos de Tauri                                                       |
 | `npm run desktop:build` | Empaqueta la aplicación con `tauri build` (runtime Node, núcleo y `better-sqlite3` para la plataforma de build) |
 
 ## Recorrido de uso
@@ -52,18 +52,18 @@ Guía detallada, con lenguaje llano, en [docs/GUIA_DE_USO.md](docs/GUIA_DE_USO.m
 
 ## Mapa de la documentación
 
-| Documento | Para qué |
-| :--- | :--- |
-| [docs/GUIA_DE_USO.md](docs/GUIA_DE_USO.md) | Guía de usuario: conceptos, recorrido, dónde queda el código, costos, problemas comunes |
-| [docs/PLAN_DE_TRABAJO.md](docs/PLAN_DE_TRABAJO.md) | Plan vigente: visión, hipótesis, etapas con su estado, decisiones |
-| [docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md](docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md) | Asistente de inicio de proyecto: diseño original y estado implementado |
-| [docs/ARQUITECTURA_ACTUAL.md](docs/ARQUITECTURA_ACTUAL.md) | Capas, flujo de una ejecución, sidecar y host Rust (estado real) |
-| [docs/REFERENCIA_IPC.md](docs/REFERENCIA_IPC.md) | Canales IPC: comandos, consultas y eventos |
-| [docs/BASE_DE_DATOS.md](docs/BASE_DE_DATOS.md) | Migraciones 001–009 y tablas principales |
-| [docs/benchmarks/](docs/benchmarks/) | Informes de las mediciones 1–6 |
+| Documento                                                                                                                                                                        | Para qué                                                                                                                           |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/GUIA_DE_USO.md](docs/GUIA_DE_USO.md)                                                                                                                                       | Guía de usuario: conceptos, recorrido, dónde queda el código, costos, problemas comunes                                            |
+| [docs/PLAN_DE_TRABAJO.md](docs/PLAN_DE_TRABAJO.md)                                                                                                                               | Plan vigente: visión, hipótesis, etapas con su estado, decisiones                                                                  |
+| [docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md](docs/PROPUESTA_ORQUESTADOR_DE_INICIO.md)                                                                                               | Asistente de inicio de proyecto: diseño original y estado implementado                                                             |
+| [docs/ARQUITECTURA_ACTUAL.md](docs/ARQUITECTURA_ACTUAL.md)                                                                                                                       | Capas, flujo de una ejecución, sidecar y host Rust (estado real)                                                                   |
+| [docs/REFERENCIA_IPC.md](docs/REFERENCIA_IPC.md)                                                                                                                                 | Canales IPC: comandos, consultas y eventos                                                                                         |
+| [docs/BASE_DE_DATOS.md](docs/BASE_DE_DATOS.md)                                                                                                                                   | Migraciones 001–009 y tablas principales                                                                                           |
+| [docs/benchmarks/](docs/benchmarks/)                                                                                                                                             | Informes de las mediciones 1–6                                                                                                     |
 | [docs/DOMAIN.md](docs/DOMAIN.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md), [docs/PROGRESS.md](docs/PROGRESS.md) | Especificaciones originales (en inglés, anteriores a la migración a Claude Code; úsalos como referencia de diseño, no como estado) |
-| [docs/ANALISIS_PROYECTO.md](docs/ANALISIS_PROYECTO.md), [docs/PLAN_MIGRACION_CLAUDE.md](docs/PLAN_MIGRACION_CLAUDE.md) | Históricos |
-| [src/desktop/theme/MIGRACION.md](src/desktop/theme/MIGRACION.md) | Tokens del tema claro/oscuro y su migración |
+| [docs/ANALISIS_PROYECTO.md](docs/ANALISIS_PROYECTO.md), [docs/PLAN_MIGRACION_CLAUDE.md](docs/PLAN_MIGRACION_CLAUDE.md)                                                           | Históricos                                                                                                                         |
+| [src/desktop/theme/MIGRACION.md](src/desktop/theme/MIGRACION.md)                                                                                                                 | Tokens del tema claro/oscuro y su migración                                                                                        |
 
 ## Estado actual
 

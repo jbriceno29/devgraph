@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { ClaudeReferenceTranslator } from '../../src/infrastructure/ai/claude-reference-translator.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 /** Fake `claude`: logs argv, cwd, the files in its cwd and stdin; answers for every `ref-<n>` id found in the prompt. */
 const FAKE_CLAUDE = `#!/usr/bin/env node
@@ -23,26 +25,61 @@ let stdin='';process.stdin.on('data',c=>stdin+=c);process.stdin.on('end',()=>{
 });
 `;
 function fakeClaude(mode: string) {
-  const root = mkdtempSync(join(tmpdir(), 'graphdev2-translator-')); roots.push(root);
-  const bin = join(root, 'bin'); mkdirSync(bin); const executable = join(bin, 'claude');
-  writeFileSync(executable, FAKE_CLAUDE); chmodSync(executable, 0o755); writeFileSync(join(bin, 'mode'), mode);
-  const stored = join(root, 'stored'); mkdirSync(stored);
-  const store = (name: string, content: string) => { const path = join(stored, name); writeFileSync(path, content); return path; };
-  const runs = () => (existsSync(join(bin, 'invocations.jsonl')) ? readFileSync(join(bin, 'invocations.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line) as { args: string[]; cwd: string; files: string[]; stdin: string }) : []).filter(run => run.args[0] === '-p');
+  const root = mkdtempSync(join(tmpdir(), 'graphdev2-translator-'));
+  roots.push(root);
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  const executable = join(bin, 'claude');
+  writeFileSync(executable, FAKE_CLAUDE);
+  chmodSync(executable, 0o755);
+  writeFileSync(join(bin, 'mode'), mode);
+  const stored = join(root, 'stored');
+  mkdirSync(stored);
+  const store = (name: string, content: string) => {
+    const path = join(stored, name);
+    writeFileSync(path, content);
+    return path;
+  };
+  const runs = () =>
+    (existsSync(join(bin, 'invocations.jsonl'))
+      ? readFileSync(join(bin, 'invocations.jsonl'), 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map(line => JSON.parse(line) as { args: string[]; cwd: string; files: string[]; stdin: string })
+      : []
+    ).filter(run => run.args[0] === '-p');
   return { root, executable, store, runs, tempRoot: join(root, 'tmp') };
 }
 
 describe('ClaudeReferenceTranslator', () => {
   it('runs the CLI with Read only, inside a throwaway folder that holds renamed copies, and deletes it afterwards', async () => {
-    const fake = fakeClaude('ok'); mkdirSync(fake.tempRoot);
+    const fake = fakeClaude('ok');
+    mkdirSync(fake.tempRoot);
     const translator = new ClaudeReferenceTranslator(fake.root, { executable: fake.executable }, fake.tempRoot);
-    const { results, usage } = await translator.translate({ model: 'haiku', files: [
-      { id: 'ref-1', kind: 'VISUAL', note: 'sin sombras', mimeType: 'image/png', path: fake.store('ref-1.png', 'png') },
-      { id: 'ref-2', kind: 'FUNCTIONAL', note: '', mimeType: 'text/html', path: fake.store('ref-2.HTML', '<html>') },
-    ] });
+    const { results, usage } = await translator.translate({
+      model: 'haiku',
+      files: [
+        {
+          id: 'ref-1',
+          kind: 'VISUAL',
+          note: 'sin sombras',
+          mimeType: 'image/png',
+          path: fake.store('ref-1.png', 'png'),
+        },
+        { id: 'ref-2', kind: 'FUNCTIONAL', note: '', mimeType: 'text/html', path: fake.store('ref-2.HTML', '<html>') },
+      ],
+    });
     expect(results).toEqual([
-      { id: 'ref-1', error: null, translation: expect.objectContaining({ summary: 'Descripción de ref-1', palette: ['azul'], screens: [] }) },
-      { id: 'ref-2', error: null, translation: expect.objectContaining({ summary: 'Descripción de ref-2', screens: ['Inicio'], palette: [] }) },
+      {
+        id: 'ref-1',
+        error: null,
+        translation: expect.objectContaining({ summary: 'Descripción de ref-1', palette: ['azul'], screens: [] }),
+      },
+      {
+        id: 'ref-2',
+        error: null,
+        translation: expect.objectContaining({ summary: 'Descripción de ref-2', screens: ['Inicio'], palette: [] }),
+      },
     ]);
     expect(usage).toMatchObject({ inputTokens: 10, outputTokens: 5 });
     const run = fake.runs()[0]!;
@@ -62,15 +99,25 @@ describe('ClaudeReferenceTranslator', () => {
   });
 
   it('a CLI error rejects with a message that says what the call was doing, and still deletes the folder', async () => {
-    const fake = fakeClaude('api-error'); mkdirSync(fake.tempRoot);
+    const fake = fakeClaude('api-error');
+    mkdirSync(fake.tempRoot);
     const translator = new ClaudeReferenceTranslator(fake.root, { executable: fake.executable }, fake.tempRoot);
-    await expect(translator.translate({ files: [{ id: 'ref-1', kind: 'VISUAL', note: '', mimeType: 'image/png', path: fake.store('ref-1.png', 'png') }] })).rejects.toThrow('Claude Code no pudo analizar las referencias: Overloaded');
+    await expect(
+      translator.translate({
+        files: [{ id: 'ref-1', kind: 'VISUAL', note: '', mimeType: 'image/png', path: fake.store('ref-1.png', 'png') }],
+      }),
+    ).rejects.toThrow('Claude Code no pudo analizar las referencias: Overloaded');
     expect(existsSync(fake.runs()[0]!.cwd)).toBe(false);
   });
 
   it('an answer without a structured result is reported as such', async () => {
-    const fake = fakeClaude('no-output'); mkdirSync(fake.tempRoot);
+    const fake = fakeClaude('no-output');
+    mkdirSync(fake.tempRoot);
     const translator = new ClaudeReferenceTranslator(fake.root, { executable: fake.executable }, fake.tempRoot);
-    await expect(translator.translate({ files: [{ id: 'ref-1', kind: 'VISUAL', note: '', mimeType: 'image/png', path: fake.store('ref-1.png', 'png') }] })).rejects.toThrow('sin un resultado estructurado al analizar las referencias');
+    await expect(
+      translator.translate({
+        files: [{ id: 'ref-1', kind: 'VISUAL', note: '', mimeType: 'image/png', path: fake.store('ref-1.png', 'png') }],
+      }),
+    ).rejects.toThrow('sin un resultado estructurado al analizar las referencias');
   });
 });

@@ -13,7 +13,11 @@ describe('skills that ship with the app (plan S4)', () => {
     const skills = await loadBundledSkills(SKILLS);
     expect(skills.map(skill => skill.manifest.id)).toEqual(['impeccable']);
     const impeccable = skills[0]!;
-    expect(impeccable.manifest).toMatchObject({ license: 'Apache-2.0', appliesTo: 'INTERFACE', source: { commit: expect.stringMatching(/^[0-9a-f]{40}$/) } });
+    expect(impeccable.manifest).toMatchObject({
+      license: 'Apache-2.0',
+      appliesTo: 'INTERFACE',
+      source: { commit: expect.stringMatching(/^[0-9a-f]{40}$/) },
+    });
     expect(existsSync(join(SKILLS, 'impeccable', 'LICENSE'))).toBe(true);
     expect(existsSync(join(impeccable.contentDirectory, 'SKILL.md'))).toBe(true);
     // Nothing executable ships: the agent could not run it, and the launcher would download a binary.
@@ -35,7 +39,8 @@ describe('skills that ship with the app (plan S4)', () => {
   });
 
   it('only interface work of a project with an interface gets an interface skill', () => {
-    const ui = [{ title: 'Pantalla de lista de notas', summary: '' }], logic = [{ title: 'Guardar notas en localStorage', summary: 'Módulo en src/lib.' }];
+    const ui = [{ title: 'Pantalla de lista de notas', summary: '' }],
+      logic = [{ title: 'Guardar notas en localStorage', summary: 'Módulo en src/lib.' }];
     expect(stackHasInterface({ interfaz: 'React' })).toBe(true);
     expect(stackHasInterface({ interfaz: 'ninguna' })).toBe(false);
     expect(stackHasInterface({ lenguaje: 'Python 3' })).toBe(false);
@@ -52,7 +57,9 @@ describe('skills that ship with the app (plan S4)', () => {
     expect(plain[plain.indexOf('--tools') + 1]).not.toContain('Skill');
     const withSkills = buildClaudeArgs({ policy, skills: ['impeccable', '../evil'] });
     expect(withSkills).not.toContain('--disable-slash-commands');
-    expect(withSkills.slice(withSkills.indexOf('--setting-sources'), withSkills.indexOf('--setting-sources') + 2)).toEqual(['--setting-sources', 'project,local']);
+    expect(
+      withSkills.slice(withSkills.indexOf('--setting-sources'), withSkills.indexOf('--setting-sources') + 2),
+    ).toEqual(['--setting-sources', 'project,local']);
     expect(withSkills[withSkills.indexOf('--tools') + 1]).toBe('Read,Write,Edit,Glob,Grep,Skill');
     expect(buildClaudeArgs({ policy, skills: ['../evil'] })).toContain('--disable-slash-commands');
   });

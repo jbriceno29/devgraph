@@ -41,6 +41,8 @@ export function createWorkspaceCore(
   ]);
   return {
     handle: ({ channel, args }: WorkspaceRequest): Promise<unknown> => router.handle(channel, args),
+    isSerialized: (channel: string) => router.isSerialized(channel),
+    channels: () => router.channels(),
     /** Resolves when the project's background inception call (if any) has finished (tests and shutdown). */
     async inceptionSettled(projectId: string): Promise<void> {
       await c.inceptionIfStarted(projectId)?.settled(projectId);

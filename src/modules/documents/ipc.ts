@@ -3,7 +3,7 @@ import type {
   ArtifactDocumentViewDto,
   CreateArtifactDocumentInput,
 } from '../../shared/contracts/artifact-view.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { ArtifactManagementService, DocumentView } from './application/artifact-management-service.js';
 import type { ArtifactDocumentRecord } from './application/ports/artifact-management-port.js';
 
@@ -20,14 +20,15 @@ export function documentsHandlers(d: DocumentsIpcDeps): IpcHandlers {
     'repository:get_path': ([id]) => d.management(text(id)).repositoryPath(text(id)),
     'artifact:list': ([id]) => d.management(text(id)).list(text(id)).map(toDocumentDto),
     'artifact:read': async ([id]) => toDocumentViewDto(await d.managementForDocument(text(id)).read(text(id))),
-    'artifact:create': async ([raw]) => {
+    'artifact:create': serial(async ([raw]) => {
       const input = raw as CreateArtifactDocumentInput;
       const result = await d.management(input.projectId).create(input);
       d.emit('graph:revision_updated', { projectId: input.projectId, revision: d.currentRevision(input.projectId) });
       return toDocumentViewDto(result);
-    },
-    'artifact:save': async ([id, hash, content]) =>
+    }),
+    'artifact:save': serial(async ([id, hash, content]) =>
       toDocumentViewDto(await d.managementForDocument(text(id)).save(text(id), text(hash), text(content))),
+    ),
   };
 }
 

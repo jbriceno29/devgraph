@@ -10,6 +10,8 @@ export function createIpcRouter(groups: IpcHandlers[]) {
     }
   return {
     channels: () => [...handlers.keys()],
+    /** The channel mutates shared state and must run one at a time (declared with `serial` by its module). */
+    isSerialized: (channel: string) => handlers.get(channel)?.serialized === true,
     handle: async (channel: string, args: unknown[]): Promise<unknown> => {
       const handler = handlers.get(channel);
       if (!handler) throw new Error(`Unsupported workspace IPC channel: ${channel}`);

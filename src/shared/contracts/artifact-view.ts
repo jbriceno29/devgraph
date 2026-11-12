@@ -1,5 +1,6 @@
-export type ArtifactType = 'PRD' | 'ARCHITECTURE' | 'SPEC' | 'IMPLEMENTATION_PLAN' | 'DOMAIN_DOC' | 'OTHER';
-export type ArtifactSyncStatus = 'SYNCED' | 'DRIFTED' | 'MISSING' | 'UNTRACKED';
+import type { ArtifactSyncStatus, ArtifactType } from '../kernel/artifacts.js';
+
+export type { ArtifactSyncStatus, ArtifactType } from '../kernel/artifacts.js';
 export interface ArtifactDocumentDto {
   id: string;
   projectId: string;

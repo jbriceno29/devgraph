@@ -1,4 +1,4 @@
-import type { GraphEdgeType } from '../../../shared/contracts/graph-view.js';
+import type { GraphEdgeType } from '../../../shared/kernel/graph.js';
 import type { AgentProfileRole } from '../../execution/index.js';
 export type ChangeSetStatus = 'PENDING_APPROVAL' | 'VALIDATED' | 'CONFLICTED' | 'APPLIED' | 'REJECTED';
 export type ChangeSetOriginType = 'AI_CHAT' | 'AGENT_EXECUTION' | 'USER_BULK_ACTION';

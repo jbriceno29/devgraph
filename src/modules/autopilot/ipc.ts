@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SetFeatureAutonomyInput } from '../../shared/contracts/agent-view.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { FeaturePilot } from './application/feature-pilot.js';
 
 export interface AutopilotIpcDeps {
@@ -14,14 +14,16 @@ export interface AutopilotIpcDeps {
 export function autopilotHandlers(d: AutopilotIpcDeps): IpcHandlers {
   const of = (projectId: unknown) => d.pilot(text(projectId));
   return {
-    'pilot:set_autonomy': ([id, featureId, input]) =>
+    'pilot:set_autonomy': serial(([id, featureId, input]) =>
       of(id).setAutonomy(text(id), text(featureId), input as SetFeatureAutonomyInput),
-    'pilot:start': ([id, featureId, input]) =>
+    ),
+    'pilot:start': serial(([id, featureId, input]) =>
       of(id).start(text(id), text(featureId), {
         acknowledgeCost: Boolean((input as { acknowledgeCost?: boolean } | undefined)?.acknowledgeCost),
       }),
-    'pilot:stop': ([id, featureId]) => of(id).stop(text(id), text(featureId)),
-    'pilot:resume': ([id, featureId]) => of(id).resume(text(id), text(featureId)),
+    ),
+    'pilot:stop': serial(([id, featureId]) => of(id).stop(text(id), text(featureId))),
+    'pilot:resume': serial(([id, featureId]) => of(id).resume(text(id), text(featureId))),
     'metrics:feature_report': ([id, featureId]) => d.featureReport(text(id), text(featureId)),
     'metrics:export_report': ([id, featureId]) => {
       const projectId = text(id);

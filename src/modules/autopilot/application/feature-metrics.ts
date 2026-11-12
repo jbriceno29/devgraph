@@ -1,57 +1,10 @@
 import type { AgentExecution } from '../../execution/index.js';
 import { coveredWorkItems } from '../../execution/index.js';
 import type { PilotRepositoryPort } from './ports/pilot-port.js';
-import type { AgentOrchestrator } from '../../execution/index.js';
+import type { ExecutionMetrics, FeatureReport, TaskMetrics } from '../../../shared/contracts/metrics-view.js';
 
-export interface ExecutionMetrics {
-  executionId: string;
-  status: string;
-  reviewStatus: string | null;
-  model: string | null;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  uncachedInputTokens: number;
-  durationMs: number | null;
-  filesChanged: number;
-  additions: number;
-  deletions: number;
-  deniedActions: number;
-  policyViolations: number;
-  checksRun: number;
-  checksPassed: boolean | null;
-  revisionOf: string | null;
-  autoAccepted: boolean;
-}
-export interface TaskMetrics {
-  workItemId: string;
-  displayKey: string;
-  title: string;
-  status: string;
-  executions: ExecutionMetrics[];
-  attempts: number;
-  acceptedOnFirstAttempt: boolean;
-  interventions: number;
-}
-export interface FeatureReport {
-  featureId: string;
-  generatedAt: string;
-  tasks: TaskMetrics[];
-  totals: {
-    tasks: number;
-    done: number;
-    executions: number;
-    inputTokens: number;
-    outputTokens: number;
-    durationMs: number;
-    deniedActions: number;
-    policyViolations: number;
-    acceptedOnFirstAttempt: number;
-    acceptedWithoutHuman: number;
-    interventions: number;
-    pilotWaits: number;
-  };
-}
+export type { ExecutionMetrics, FeatureReport, TaskMetrics } from '../../../shared/contracts/metrics-view.js';
+import type { AgentOrchestrator } from '../../execution/index.js';
 
 /**
  * Stage 5: measures what the workspace costs and saves, from data already recorded — engine usage, timings, diffs,

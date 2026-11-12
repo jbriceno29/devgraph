@@ -93,7 +93,8 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
 - En Ajustes › Política, «Proponer rutas desde el repositorio» (`policy:propose_from_repository`) rellena el formulario sin guardar.
 - Pruebas: `tests/unit/agent-access.test.ts`, `tests/integration/agent-access.test.ts` (repositorio Next; una ejecución que escribe en `app/` pasa con las rutas derivadas y se revierte con las de siempre) y `tests/ui/agent-access.test.tsx`.
 - Corrida real con `haiku` sobre una copia de `salestify-web` (`app/`, `core/`, `modules/`, sin `src/`): la tarea escribió `core/format-price.js` y se completó sin reversión.
-- No se probó con modelo real el paso del inicio (usa `opus`); su cableado está cubierto con un motor falso.
+- Inicio real con `sonnet` (elegible en el selector del asistente o con `model` en `inception:start`) sobre una copia de `salestify-web`: inferencias con evidencia, «Qué podrá tocar el agente» con las rutas del repositorio, la edición (quitar `e2e/**`, añadir `server/**`, solo `npm test`) se guardó tal cual en la política al aprobar; 0,31 USD. La primera tarea de «Fundación» con `haiku` se completó sin reversión.
+- Corrección tras esa corrida: `docs/**` entra siempre en las rutas propuestas (motivo «documentación»; los ADR siguen de solo lectura), porque la «Fundación» de un repositorio existente documenta la base.
 
 ### R2. Línea base de verificación (M, 1 día)
 

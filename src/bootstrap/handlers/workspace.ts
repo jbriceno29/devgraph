@@ -6,7 +6,7 @@ import { GitRepositoryInitializer } from '../../modules/projects/infrastructure/
 import { checkProjectLocation } from '../../modules/projects/infrastructure/project-location.js';
 import { toProjectSummary } from '../../modules/projects/ipc.js';
 import type { CreateProjectInput, WorkspaceLoadedStateDto } from '../../shared/contracts/ipc-contracts.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { Container } from '../container.js';
 import { proposeFromChat } from './propose-from-chat.js';
 
@@ -23,8 +23,8 @@ export function workspaceHandlers(c: Container): IpcHandlers {
   };
   return {
     'project:list': () => c.store.listProjects(),
-    'project:create': ([raw]) => createProject(c, (raw ?? {}) as CreateProjectInput),
-    'project:open': async ([raw]) => {
+    'project:create': serial(([raw]) => createProject(c, (raw ?? {}) as CreateProjectInput)),
+    'project:open': serial(async ([raw]) => {
       const id = text(raw);
       const workspace = c.store.openProject(id);
       const project = workspace.projects.findById(id)!;
@@ -36,9 +36,9 @@ export function workspaceHandlers(c: Container): IpcHandlers {
       const selectedEntityId = graph.nodes.find(node => node.type === 'PROJECT_ROOT')?.id ?? graph.nodes[0]?.id ?? '';
       const loaded: WorkspaceLoadedStateDto = { project: toProjectSummary(project), graph, selectedEntityId };
       return loaded;
-    },
-    'repository:configure': ([projectId, path]) => connectRepository(text(projectId), text(path)),
-    'repository:initialize': async ([raw, path]) => {
+    }),
+    'repository:configure': serial(([projectId, path]) => connectRepository(text(projectId), text(path))),
+    'repository:initialize': serial(async ([raw, path]) => {
       const projectId = text(raw);
       const project = c.store.openProject(projectId).projects.findById(projectId)!;
       const created = await new GitRepositoryInitializer().initialize({
@@ -50,7 +50,7 @@ export function workspaceHandlers(c: Container): IpcHandlers {
       const { stage, status } = c.inception(projectId).get(projectId);
       c.emit('inception:updated', { projectId, stage, status });
       return { projectId, localPath: configured.localPath, initialCommit: created.initialCommit, files: created.files };
-    },
+    }),
     'entity:get_inspector_details': ([raw]) => inspectorDetails(c, text(raw)),
     'graph:context_flow': ([projectId, workItemId]) => contextFlow(c, text(projectId), text(workItemId)),
     'pilot:get': ([raw, featureId]) => {

@@ -21,6 +21,7 @@ describe('sidecar request dispatcher (D1)', () => {
           if (request.channel === 'changeset:propose_from_chat') await slow.promise;
           return request.channel;
         },
+        isSerialized: () => false,
       },
       value => answered.push((value as { id: string }).id),
     );
@@ -49,6 +50,7 @@ describe('sidecar request dispatcher (D1)', () => {
           order.push(`end ${request.channel}`);
           return null;
         },
+        isSerialized: () => true,
       },
       () => undefined,
     );
@@ -70,6 +72,7 @@ describe('sidecar request dispatcher (D1)', () => {
           if (request.channel === 'changeset:apply') throw new Error('REVISION_CONFLICT');
           return 'ok';
         },
+        isSerialized: () => true,
       },
       value => outputs.push(value),
     );
@@ -84,5 +87,74 @@ describe('sidecar request dispatcher (D1)', () => {
         expect.objectContaining({ id: null, ok: false }),
       ]),
     );
+  });
+});
+
+describe('canales serializados declarados por cada módulo (A1b)', () => {
+  it('are exactly the mutating commands the dispatcher serialized before, and every channel has a handler', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { createWorkspaceCore } = await import('../../src/bootstrap/workspace-core.js');
+    const root = mkdtempSync(join(tmpdir(), 'graphdev2-channels-'));
+    const core = createWorkspaceCore(root);
+    try {
+      const serialized = core
+        .channels()
+        .filter(channel => core.isSerialized(channel))
+        .sort();
+      expect(serialized).toEqual(
+        [
+          'artifact:create',
+          'artifact:save',
+          'changeset:apply',
+          'changeset:edit',
+          'changeset:reject',
+          'commands:start',
+          'commands:stop',
+          'decision:set_status',
+          'environment:approve_dependencies',
+          'environment:set_skills',
+          'execution:accept',
+          'execution:cancel',
+          'execution:request_changes',
+          'execution:resolve_approval',
+          'execution:start',
+          'feature:integrate',
+          'inception:answer',
+          'inception:approve',
+          'inception:choose_ui',
+          'inception:import_design',
+          'inception:import_prototype',
+          'inception:reopen_design',
+          'inception:restart',
+          'inception:revise_ui',
+          'inception:start',
+          'pilot:resume',
+          'pilot:set_autonomy',
+          'pilot:start',
+          'pilot:stop',
+          'policy:update',
+          'project:create',
+          'project:open',
+          'provider:set_auth_mode',
+          'repository:configure',
+          'repository:initialize',
+          'settings:set_projects_folder',
+          'workitem:set_status',
+        ].sort(),
+      );
+      expect(core.isSerialized('changeset:propose_from_chat')).toBe(false);
+      expect(core.isSerialized('project:list')).toBe(false);
+      // Every channel the Tauri client calls has a handler in some module.
+      const { readFileSync } = await import('node:fs');
+      const client = readFileSync(new URL('../../src/desktop/platform/tauri-ipc-client.ts', import.meta.url), 'utf8');
+      const called = [...client.matchAll(/invokeCore(?:<[^>]*>)?\('([a-z_]+:[a-z_]+)'/g)].map(match => match[1]);
+      expect(called.length).toBeGreaterThan(50);
+      expect(called.filter(channel => !core.channels().includes(channel!))).toEqual([]);
+    } finally {
+      core.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

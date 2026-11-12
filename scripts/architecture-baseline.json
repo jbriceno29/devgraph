@@ -96,13 +96,7 @@
   "layers": {
     "src/modules/execution/application/agent-orchestrator.ts": 1,
     "src/modules/autopilot/application/feature-pilot.ts": 1,
-    "src/modules/inception/application/reference-files.ts": 1,
-    "src/modules/documents/domain/artifacts.ts": 2,
-    "src/modules/knowledge/domain/graph-topology-service.ts": 1,
-    "src/modules/knowledge/domain/knowledge-entity.ts": 1,
-    "src/modules/knowledge/domain/change-set.ts": 1,
-    "src/modules/context/domain/context-snapshot.ts": 1,
-    "src/shared/contracts/agent-view.ts": 1
+    "src/modules/inception/application/reference-files.ts": 1
   },
   "ipc-access": {
     "src/desktop/main.tsx": 1,

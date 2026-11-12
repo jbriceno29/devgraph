@@ -1,4 +1,4 @@
-import type { GraphEdgeType } from '../../../shared/contracts/graph-view.js';
+import type { GraphEdgeType } from '../../../shared/kernel/graph.js';
 export type ContextAuthorityTier = 1 | 2 | 3 | 4 | 5 | 6;
 export interface ContextSourceEntry {
   sourceId: string;

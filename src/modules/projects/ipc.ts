@@ -1,6 +1,6 @@
 import type { ProjectSummaryDto } from '../../shared/contracts/ipc-contracts.js';
 import { summarizeScan } from '../../shared/contracts/repository-scan.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { RepositoryScannerPort } from './application/ports/repository-scan-port.js';
 import { proposeAgentAccess } from './domain/agent-access.js';
 import type { Project } from './domain/project.js';
@@ -21,7 +21,7 @@ export function projectsHandlers(d: ProjectsIpcDeps): IpcHandlers {
   };
   return {
     'settings:get': () => d.settings.get(),
-    'settings:set_projects_folder': ([path]) => d.settings.setProjectsFolder(text(path)),
+    'settings:set_projects_folder': serial(([path]) => d.settings.setProjectsFolder(text(path))),
     'folder:inspect': ([path]) => inspectFolder(text(path)),
     // Brownfield preview: what the assistant would read from the project's repository (no contents in the answer).
     'repository:scan': async ([projectId]) => summarizeScan(await scanOf(text(projectId))),

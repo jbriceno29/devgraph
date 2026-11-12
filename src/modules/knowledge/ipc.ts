@@ -1,5 +1,5 @@
 import type { GraphFilterDto } from '../../shared/contracts/ipc-contracts.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { ProjectRepositoryPort } from '../projects/index.js';
 import { GetGraphViewUseCase } from './application/get-graph-view.js';
 import type {
@@ -28,7 +28,7 @@ export function knowledgeHandlers(d: KnowledgeIpcDeps): IpcHandlers {
         filter as GraphFilterDto | undefined,
       );
     },
-    'decision:set_status': ([projectId, decisionId, status]) => {
+    'decision:set_status': serial(([projectId, decisionId, status]) => {
       const id = text(projectId);
       const result = new SetDecisionStatusUseCase(d.store.openProject(id).graph).execute(
         id,
@@ -37,6 +37,6 @@ export function knowledgeHandlers(d: KnowledgeIpcDeps): IpcHandlers {
       );
       d.emit('graph:revision_updated', { projectId: id, revision: result.revision });
       return result;
-    },
+    }),
   };
 }

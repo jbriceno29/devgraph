@@ -4,7 +4,7 @@ import {
   REFERENCE_KINDS,
   type ReferenceKind,
 } from '../../shared/contracts/inception-view.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { ChangeOperation } from '../knowledge/index.js';
 import { normalizeTranslation } from '../inception/index.js';
 import type { ChangeSetPlanningService } from './application/change-set-planning-service.js';
@@ -23,14 +23,15 @@ export function planningHandlers(d: PlanningIpcDeps): IpcHandlers {
   return {
     'planning:translate_references': ([projectId, references]) =>
       d.planningReferences.translate(text(projectId), references),
-    'changeset:edit': ([id, operations]) =>
+    'changeset:edit': serial(([id, operations]) =>
       d.planningForChangeSet(text(id)).edit(text(id), operations as ChangeOperation[]),
-    'changeset:apply': async ([id]) => {
+    ),
+    'changeset:apply': serial(async ([id]) => {
       const result = await d.planningForChangeSet(text(id)).apply(text(id));
       d.emit('graph:revision_updated', { projectId: result.changeSet.projectId, revision: result.revision });
       return result;
-    },
-    'changeset:reject': ([id]) => d.planningForChangeSet(text(id)).reject(text(id)),
+    }),
+    'changeset:reject': serial(([id]) => d.planningForChangeSet(text(id)).reject(text(id))),
     'changeset:list': ([projectId]) => d.planning(text(projectId)).list(text(projectId)),
   };
 }

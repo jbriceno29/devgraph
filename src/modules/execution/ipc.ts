@@ -6,7 +6,7 @@ import type {
   RequestExecutionChangesInput,
   StartAgentExecutionInput,
 } from '../../shared/contracts/agent-view.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { WorkItemStatus } from '../knowledge/index.js';
 import type { AgentOrchestrator } from './application/agent-orchestrator.js';
 import { coveredWorkItems, type AgentExecution, type ApprovalDecision } from './domain/models.js';
@@ -28,19 +28,19 @@ export function executionHandlers(d: ExecutionIpcDeps): IpcHandlers {
     'agent:list_profiles': ([id]) => of(id).listProfiles(text(id)),
     'execution:list': ([id]) => of(id).listExecutions(text(id)).map(toAgentExecutionDto),
     'execution:list_events': ([id]) => run(id).listEvents(text(id)),
-    'execution:start': async ([raw]) => {
+    'execution:start': serial(async ([raw]) => {
       const input = raw as StartAgentExecutionInput;
       return toAgentExecutionDto(await d.execution(input.projectId).start(input));
-    },
-    'execution:cancel': async ([id]) => toAgentExecutionDto(await run(id).cancel(text(id))),
-    'execution:accept': async ([id]) => {
+    }),
+    'execution:cancel': serial(async ([id]) => toAgentExecutionDto(await run(id).cancel(text(id)))),
+    'execution:accept': serial(async ([id]) => {
       const result = await run(id).accept(text(id));
       return { ...result, execution: toAgentExecutionDto(result.execution) };
-    },
-    'execution:request_changes': async ([raw]) => {
+    }),
+    'execution:request_changes': serial(async ([raw]) => {
       const input = raw as RequestExecutionChangesInput;
       return toAgentExecutionDto(await run(input.executionId).requestChanges(input));
-    },
+    }),
     'execution:get_detail': ([id]) => {
       const detail = run(id).detail(text(id));
       const logPath = join(
@@ -54,11 +54,11 @@ export function executionHandlers(d: ExecutionIpcDeps): IpcHandlers {
       const testLog = existsSync(logPath) ? readFileSync(logPath, 'utf8').slice(-200_000) : null;
       return { ...detail, execution: toAgentExecutionDto(detail.execution), testLog };
     },
-    'execution:resolve_approval': async ([raw]) => {
+    'execution:resolve_approval': serial(async ([raw]) => {
       const input = raw as { executionId: string; requestId: string; decision: ApprovalDecision };
       await run(input.executionId).resolveApproval(input.executionId, input.requestId, input.decision);
       return { resolved: true };
-    },
+    }),
     ...projectHandlers(d),
   };
 }
@@ -67,10 +67,11 @@ export function executionHandlers(d: ExecutionIpcDeps): IpcHandlers {
 function projectHandlers(d: ExecutionIpcDeps): IpcHandlers {
   const of = (projectId: unknown) => d.execution(text(projectId));
   return {
-    'workitem:set_status': ([id, workItemId, status]) =>
+    'workitem:set_status': serial(([id, workItemId, status]) =>
       of(id).setWorkItemStatus(text(id), text(workItemId), text(status) as WorkItemStatus),
+    ),
     'policy:get': ([id]) => of(id).getPolicy(text(id)),
-    'policy:update': ([id, raw]) => {
+    'policy:update': serial(([id, raw]) => {
       const policy = raw as ExecutionPolicyDto;
       return of(id).updatePolicy(text(id), {
         writablePaths: policy?.writablePaths ?? [],
@@ -81,20 +82,20 @@ function projectHandlers(d: ExecutionIpcDeps): IpcHandlers {
         ...(typeof policy?.maxTurns === 'number' || policy?.maxTurns === null ? { maxTurns: policy.maxTurns } : {}),
         ...(policy?.decisionPolicy !== undefined ? { decisionPolicy: policy.decisionPolicy } : {}),
       });
-    },
+    }),
     'provider:get_auth': ([id]) => ({
       authMode: of(id).authMode(text(id)),
       apiKeyAvailable: Boolean(process.env.ANTHROPIC_API_KEY),
     }),
-    'provider:set_auth_mode': ([id, mode]) => ({
+    'provider:set_auth_mode': serial(([id, mode]) => ({
       authMode: of(id).setAuthMode(text(id), mode as 'subscription' | 'api_key'),
-    }),
+    })),
     // `pilot:updated` refreshes the feature panel and the activity (the shell's next step reads `integrations`).
-    'feature:integrate': async ([id, featureId]) => {
+    'feature:integrate': serial(async ([id, featureId]) => {
       const result = await of(id).integrateFeature(text(id), text(featureId));
       d.emit('pilot:updated', { projectId: text(id), featureId: text(featureId), status: null });
       return result;
-    },
+    }),
   };
 }
 

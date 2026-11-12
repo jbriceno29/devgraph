@@ -53,7 +53,8 @@ Tamaño y forma:
    `*Service`/`*Manager` que agrupen acciones.
 9. Constructor ≤ 6 dependencias; puerto ≤ 8 métodos.
 10. **[auto]** Prompts y textos de más de 400 caracteres en `prompts/*.md` (no en cadenas de código).
-11. Un handler IPC solo parsea argumentos, llama a un caso de uso y devuelve un DTO.
+11. Un handler IPC solo parsea argumentos, llama a un caso de uso y devuelve un DTO. Si muta estado compartido se
+    declara con `serial(...)` en el `ipc.ts` de su módulo (el sidecar lo ejecuta uno a uno, en orden).
 
 Interfaz (MVVM):
 

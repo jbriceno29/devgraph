@@ -1,4 +1,4 @@
-import type { KnowledgeEntityType, GraphEdgeType, EdgeProvenance } from '../../../shared/contracts/graph-view.js';
+import type { KnowledgeEntityType, GraphEdgeType, EdgeProvenance } from '../../../shared/kernel/graph.js';
 export interface KnowledgeEntity {
   id: string;
   projectId: string;

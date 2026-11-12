@@ -1,5 +1,5 @@
 import { DomainError } from '../../../shared/types/domain-error.js';
-import type { GraphEdgeType, KnowledgeEntityType } from '../../../shared/contracts/graph-view.js';
+import type { GraphEdgeType, KnowledgeEntityType } from '../../../shared/kernel/graph.js';
 import type { KnowledgeEntity, GraphRelationship } from './knowledge-entity.js';
 type Pair = readonly [KnowledgeEntityType, KnowledgeEntityType];
 /** Which entity types each edge may join (source → target). The planner prompt is built from this same table. */

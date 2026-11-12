@@ -1,5 +1,5 @@
 import type { ProjectEnvironmentDto } from '../../shared/contracts/agent-view.js';
-import { text, type IpcHandlers } from '../../shared/ipc-handlers.js';
+import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { WorkspaceEnvironmentPort } from '../execution/index.js';
 import type { ProjectCommands } from './infrastructure/project-commands.js';
 
@@ -16,12 +16,12 @@ export interface EnvironmentIpcDeps {
 export function environmentHandlers(d: EnvironmentIpcDeps): IpcHandlers {
   return {
     'environment:get': ([id]) => d.environmentView(text(id)),
-    'environment:approve_dependencies': ([id, packages]) => d.approveDependencies(text(id), packages),
-    'environment:set_skills': ([id, enabled]) => d.setSkills(text(id), enabled),
+    'environment:approve_dependencies': serial(([id, packages]) => d.approveDependencies(text(id), packages)),
+    'environment:set_skills': serial(([id, enabled]) => d.setSkills(text(id), enabled)),
     'commands:refs': ([id]) => d.commands.refs(d.repositoryOf(text(id))),
     'commands:scripts': ([id, ref]) => d.commands.scripts(d.repositoryOf(text(id)), text(ref)),
     'commands:list': ([id]) => d.commands.list(text(id)),
-    'commands:start': ([id, raw]) => {
+    'commands:start': serial(([id, raw]) => {
       const projectId = text(id),
         input = (raw ?? {}) as { ref?: unknown; script?: unknown };
       return d.commands.start({
@@ -31,7 +31,7 @@ export function environmentHandlers(d: EnvironmentIpcDeps): IpcHandlers {
         script: text(input.script),
         environment: d.environment(projectId).forProject(projectId),
       });
-    },
-    'commands:stop': ([, runId]) => d.commands.stop(text(runId)),
+    }),
+    'commands:stop': serial(([, runId]) => d.commands.stop(text(runId))),
   };
 }

@@ -26,6 +26,7 @@ Ya cerrados: [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) (S
 | 2 | **A0** · guardarraíles: `CLAUDE.md`, `check:arch` con línea base y entrada estable del sidecar | ARQ | ½ día | Hecho | Es barato y hace que todo lo nuevo nazca en su sitio. |
 | 2b | **R1** · rutas escribibles y comandos derivados del repositorio | REP | ½ día | Hecho | Hoy un proyecto con código fuera de `src/` ve revertido el trabajo del agente sin causa visible, y «Ya tengo el código» hace fácil llegar ahí. Es puro y pequeño: A2 lo mueve sin costo. |
 | 3 | **A1 + A2** · composición, IPC por módulo y traslado a `modules/` | ARQ | ~2 días | Hecho | Son pasos mecánicos. Así las capacidades se escriben ya en su módulo y no se mueven dos veces. |
+| 3b | **A1b** · `shared/kernel` y serialización declarada por canal | ARQ | ½ día | Hecho | Lo que A1 + A2 dejó pendiente; mecánico y antes de añadir capacidades. |
 | 4 | **C1 → C7a → C6** · documentación en línea, perfil Next.js con cambio de stack y verificación por stack | CAP | ~2–3 días | Pendiente | Desbloquean la migración del ecommerce a Next.js. |
 | 4b | **R2** · línea base de verificación | REP | ~1 día | Pendiente | Reutiliza la ejecución por comando de C6. Evita el piloto que nunca puede aceptar porque las pruebas ya fallaban. |
 | 5 | **A3** · partir los gigantes del núcleo (orquestador, repositorio de ejecuciones, piloto, inicio) | ARQ | 2–3 días | Pendiente | Va antes de C2 y C3, que añaden lógica a la ejecución. |

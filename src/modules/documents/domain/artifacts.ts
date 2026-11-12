@@ -1,6 +1,6 @@
 import type { KnowledgeEntity } from '../../knowledge/index.js';
-import type { ArtifactSyncStatus, ArtifactType } from '../../../shared/contracts/artifact-view.js';
-export type { ArtifactSyncStatus } from '../../../shared/contracts/artifact-view.js';
+import type { ArtifactSyncStatus, ArtifactType } from '../../../shared/kernel/artifacts.js';
+export type { ArtifactSyncStatus } from '../../../shared/kernel/artifacts.js';
 export interface ArtifactSyncState {
   contentHash: string;
   syncStatus: ArtifactSyncStatus;

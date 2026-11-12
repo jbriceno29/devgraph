@@ -120,11 +120,7 @@ export interface InceptionReferenceFilesPort {
  */
 export interface InceptionEnginePort {
   /** Up to 5 short questions about goal and scope, with suggested options. */
-  askGoals(input: {
-    project: InceptionProjectInput;
-    model?: string;
-    signal?: AbortSignal;
-  }): Promise<{
+  askGoals(input: { project: InceptionProjectInput; model?: string; signal?: AbortSignal }): Promise<{
     questions: InceptionQuestionDto[];
     assumptions: string[] /** Brownfield only: stack, design system, structure and testing inferred from the scan, each with evidence paths (the service keeps only evidence that exists). */;
     inferences?: unknown[];

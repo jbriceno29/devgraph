@@ -171,14 +171,12 @@ export class ProjectInceptionService {
           ...(model ? { model } : {}),
           signal,
         });
-        const questions = result.questions
-          .slice(0, MAX_QUESTIONS)
-          .map((question, index) => ({
-            ...question,
-            id: question.id?.trim() || `q${index + 1}`,
-            options: question.options.slice(0, 6),
-            default: question.default && question.options.includes(question.default) ? question.default : null,
-          }));
+        const questions = result.questions.slice(0, MAX_QUESTIONS).map((question, index) => ({
+          ...question,
+          id: question.id?.trim() || `q${index + 1}`,
+          options: question.options.slice(0, 6),
+          default: question.default && question.options.includes(question.default) ? question.default : null,
+        }));
         return {
           stage: 'ASK_GOALS',
           status: 'WAITING_USER',

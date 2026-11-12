@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 // Lee los tokens de cada tema y comprueba WCAG AA: 4,5:1 para texto, 3:1 para elementos gráficos.
 const css = readFileSync(new URL('../../src/desktop/theme/tokens.css', import.meta.url), 'utf8');
+/** The declarations of a rule, whatever the formatting: the CSS is normalized (no space before `{`, unquoted attribute values). */
+const normalized = css.replace(/\s*\{/g, '{').replace(/="([\w-]+)"/g, '=$1');
 const block = (selector: string) => {
-  const start = css.indexOf(`${selector}{`);
+  const start = normalized.indexOf(`${selector}{`);
   expect(start, selector).toBeGreaterThanOrEqual(0);
-  const body = css.slice(start + selector.length + 1, css.indexOf('}', start));
+  const body = normalized.slice(start + selector.length + 1, normalized.indexOf('}', start));
   return Object.fromEntries(
     [...body.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})/gi)].map(([, name, value]) => [name, value!.toLowerCase()]),
   );
@@ -77,7 +79,7 @@ const pairs: [string, string, number][] = [
 
 describe('tokens de tema', () => {
   it('los dos bloques oscuros (forzado y del sistema) son idénticos', () => {
-    const media = css.slice(css.indexOf('@media (prefers-color-scheme: dark){'));
+    const media = normalized.slice(normalized.indexOf('@media (prefers-color-scheme: dark){'));
     expect(block(':root:not([data-theme=light])')).toEqual(themes.dark);
     expect(media).toContain(':root:not([data-theme=light]){');
   });

@@ -56,21 +56,19 @@ export class AgentOrchestrator {
   }
 
   listProfiles(projectId: string) {
-    return this.repository
-      .listProfiles(projectId)
-      .map(profile => ({
-        id: profile.id,
-        projectId: profile.projectId,
-        roleKey: profile.roleKey,
-        name: profile.name,
-        defaultProviderId: profile.defaultProviderId,
-        providerId: profile.provider.id,
-        providerName: profile.provider.displayName,
-        capabilities: profile.provider.capabilities,
-        defaultModel: profile.models?.default ?? null,
-        planningModel: profile.models?.planning ?? null,
-        availableModels: profile.models?.available ?? [],
-      }));
+    return this.repository.listProfiles(projectId).map(profile => ({
+      id: profile.id,
+      projectId: profile.projectId,
+      roleKey: profile.roleKey,
+      name: profile.name,
+      defaultProviderId: profile.defaultProviderId,
+      providerId: profile.provider.id,
+      providerName: profile.provider.displayName,
+      capabilities: profile.provider.capabilities,
+      defaultModel: profile.models?.default ?? null,
+      planningModel: profile.models?.planning ?? null,
+      availableModels: profile.models?.available ?? [],
+    }));
   }
   listExecutions(projectId: string) {
     return this.repository.listExecutions(projectId);
@@ -506,15 +504,13 @@ export class AgentOrchestrator {
     return {
       execution,
       taskStatus: task?.status ?? null,
-      files: this.repository
-        .listFileDiffs(executionId)
-        .map(diff => ({
-          path: diff.filePath,
-          changeType: diff.changeType,
-          additions: diff.additions,
-          deletions: diff.deletions,
-          patch: diff.diffPatch,
-        })),
+      files: this.repository.listFileDiffs(executionId).map(diff => ({
+        path: diff.filePath,
+        changeType: diff.changeType,
+        additions: diff.additions,
+        deletions: diff.deletions,
+        patch: diff.diffPatch,
+      })),
       deniedActions,
       canAccept: reviewable,
       canRequestChanges: reviewable && !this.active.has(executionId),
@@ -1192,12 +1188,10 @@ export class AgentOrchestrator {
     try {
       const feature = this.repository.findFeatureFor(projectId, workItemIds[0]!);
       if (!feature) return undefined;
-      const tasks = this.repository
-        .listFeatureTasks(projectId, feature.id)
-        .map(task => ({
-          ...task,
-          dependsOn: this.repository.listDependencies(projectId, task.id).map(dependency => dependency.displayKey),
-        }));
+      const tasks = this.repository.listFeatureTasks(projectId, feature.id).map(task => ({
+        ...task,
+        dependsOn: this.repository.listDependencies(projectId, task.id).map(dependency => dependency.displayKey),
+      }));
       return { feature, tasks, currentIds: workItemIds };
     } catch {
       return undefined;

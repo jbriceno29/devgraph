@@ -342,9 +342,7 @@ export class SqliteChangeSetApplier implements ChangeSetApplyPort {
     return `${prefix}-${String(max + 1).padStart(3, '0')}`;
   }
 }
-function isCreate(
-  op: ChangeOperation,
-): op is Extract<
+function isCreate(op: ChangeOperation): op is Extract<
   ChangeOperation,
   {
     type:

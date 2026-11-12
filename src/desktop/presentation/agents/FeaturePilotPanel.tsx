@@ -20,7 +20,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
   const features = nodes.filter(node => node.type === 'FEATURE');
   const [featureId, setFeatureId] = useState(features[0]?.id ?? '');
   const [state, setState] = useState<FeaturePilotDto | null>(null);
-  const [draft, setDraft] = useState<{ level: AutonomyLevelDto; executionModel: string; escalationModel: string; maxAttempts: string; threshold: string; groupTasks: boolean; maxGroupSize: string } | null>(null);
+  const [draft, setDraft] = useState<{ level: AutonomyLevelDto; executionModel: string; escalationModel: string; maxAttempts: string; threshold: string; groupTasks: boolean; maxGroupSize: string; reviewModel: string } | null>(null);
   const [confirming, setConfirming] = useState(false), [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<FeatureReportDto['report'] | null>(null), [exported, setExported] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
     try {
       const next = await window.workspaceIpc.queries.getFeaturePilot(projectId, featureId);
       setState(next);
-      setDraft(current => current && current.level === next.autonomy.level ? current : { level: next.autonomy.level, executionModel: next.autonomy.executionModel ?? '', escalationModel: next.autonomy.escalationModel ?? '', maxAttempts: String(next.autonomy.maxAttempts), threshold: String(Math.round(next.autonomy.usagePauseThreshold * 100)), groupTasks: next.autonomy.groupTasks, maxGroupSize: String(next.autonomy.maxGroupSize) });
+      setDraft(current => current && current.level === next.autonomy.level ? current : { level: next.autonomy.level, executionModel: next.autonomy.executionModel ?? '', escalationModel: next.autonomy.escalationModel ?? '', maxAttempts: String(next.autonomy.maxAttempts), threshold: String(Math.round(next.autonomy.usagePauseThreshold * 100)), groupTasks: next.autonomy.groupTasks, maxGroupSize: String(next.autonomy.maxGroupSize), reviewModel: next.autonomy.reviewModel ?? '' });
     } catch (reason) { setError(text(reason)); }
   }, [projectId, featureId]);
   useEffect(() => { setDraft(null); setState(null); void load(); }, [load]);
@@ -40,8 +40,8 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
 
   const act = async (work: () => Promise<unknown>) => { setBusy(true); setError(null); try { await work(); await load(); } catch (reason) { setError(text(reason)); } finally { setBusy(false); } };
   const save = () => draft && act(async () => {
-    const saved = await window.workspaceIpc.commands.setFeatureAutonomy(projectId, featureId, { level: draft.level, executionModel: draft.executionModel || null, escalationModel: draft.escalationModel || null, maxAttempts: Number(draft.maxAttempts), usagePauseThreshold: Number(draft.threshold) / 100, groupTasks: draft.groupTasks, maxGroupSize: Number(draft.maxGroupSize) });
-    setDraft({ level: saved.level, executionModel: saved.executionModel ?? '', escalationModel: saved.escalationModel ?? '', maxAttempts: String(saved.maxAttempts), threshold: String(Math.round(saved.usagePauseThreshold * 100)), groupTasks: saved.groupTasks, maxGroupSize: String(saved.maxGroupSize) });
+    const saved = await window.workspaceIpc.commands.setFeatureAutonomy(projectId, featureId, { level: draft.level, executionModel: draft.executionModel || null, escalationModel: draft.escalationModel || null, maxAttempts: Number(draft.maxAttempts), usagePauseThreshold: Number(draft.threshold) / 100, groupTasks: draft.groupTasks, maxGroupSize: Number(draft.maxGroupSize), reviewModel: draft.reviewModel || null });
+    setDraft({ level: saved.level, executionModel: saved.executionModel ?? '', escalationModel: saved.escalationModel ?? '', maxAttempts: String(saved.maxAttempts), threshold: String(Math.round(saved.usagePauseThreshold * 100)), groupTasks: saved.groupTasks, maxGroupSize: String(saved.maxGroupSize), reviewModel: saved.reviewModel ?? '' });
   });
 
   const integrateFeature = window.workspaceIpc.commands.integrateFeature;
@@ -77,6 +77,9 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
           <input id="pilot-attempts" type="number" min={1} max={5} value={draft.maxAttempts} onChange={event => setDraft({ ...draft, maxAttempts: event.target.value })} className={control} /></div>
         <div><label htmlFor="pilot-threshold" className={small}>Pausar al llegar al (%)</label>
           <input id="pilot-threshold" type="number" min={50} max={99} value={draft.threshold} onChange={event => setDraft({ ...draft, threshold: event.target.value })} className={control} /></div>
+        {draft.level === 'PILOT' && <div className="col-span-2"><label htmlFor="pilot-review" className={small}>Revisión independiente antes de aceptar</label>
+          <select id="pilot-review" value={draft.reviewModel} onChange={event => setDraft({ ...draft, reviewModel: event.target.value })} className={control}><option value="">Sin revisión</option>{state.availableModels.map(model => <option key={model} value={model}>{model}</option>)}</select>
+          <p className="mt-1 text-[11px] text-fg-muted">Otro modelo lee el diff contra los criterios de cada tarea; si algo no se cumple, el piloto pide ajustes con sus hallazgos. Añade una llamada por ejecución.</p></div>}
       </div>}
       {draft.level === 'PILOT' && <div className="space-y-1.5 rounded-lg border border-border bg-surface-sunken p-2">
         <label className="flex min-h-9 items-start gap-2 text-xs text-fg"><input type="checkbox" checked={draft.groupTasks} onChange={event => setDraft({ ...draft, groupTasks: event.target.checked })} className="mt-0.5 accent-[var(--accent)]" /><span><span className="font-semibold">Agrupar tareas pequeñas</span> <span className="rounded bg-success-soft px-1 text-[10px] font-medium uppercase text-success">recomendado</span> · <span className="text-fg-muted">Junta 2 o 3 tareas listas de la feature en una sola ejecución. Medido con el piloto: ~19 % menos de costo con la misma calidad usando grupos de 3; con grupos de 4 se perdió la convención del proyecto, así que no subas de 3 sin medirlo. La tarea que fija una convención siempre va sola.</span></span></label>

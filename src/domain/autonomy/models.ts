@@ -16,13 +16,17 @@ export interface FeatureAutonomy {
   groupTasks: boolean;
   /** Most tasks one grouped execution may cover (1–5). */
   maxGroupSize: number;
+  /** Plan S5: model that reviews each completed run against its criteria before the autopilot accepts it; null = no review. */
+  reviewModel: string | null;
 }
-export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85, groupTasks: true, maxGroupSize: 3 };
+export const DEFAULT_AUTONOMY: Omit<FeatureAutonomy, 'featureId' | 'projectId'> = { level: 'MANUAL', executionModel: null, escalationModel: null, maxAttempts: 3, usagePauseThreshold: 0.85, groupTasks: true, maxGroupSize: 3, reviewModel: null };
 
 export type PilotStatus = 'RUNNING' | 'PAUSED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export const ACTIVE_PILOT_STATUSES: ReadonlySet<PilotStatus> = new Set(['RUNNING', 'PAUSED']);
 export interface PilotRun { id: string; projectId: string; featureId: string; status: PilotStatus; reason: string | null; startedAt: string; endedAt: string | null }
 export type PilotEventKind = 'STARTED' | 'TASK_STARTED' | 'GROUP_STARTED' | 'TASK_ACCEPTED' | 'AUTO_ACCEPTED' | 'RETRY' | 'ESCALATED' | 'PAUSED' | 'RESUMED' | 'WAITING_USER' | 'COMPLETED' | 'STOPPED' | 'FAILED'
   /** The agent's plan proposal was applied to the graph (PLAN_CHANGED) or awaits the user / was invalid (PLAN_PROPOSAL). */
-  | 'PLAN_CHANGED' | 'PLAN_PROPOSAL';
+  | 'PLAN_CHANGED' | 'PLAN_PROPOSAL'
+  /** Plan S5: the second model's verdict on a completed run. */
+  | 'REVIEW_APPROVED' | 'REVIEW_REJECTED';
 export interface PilotEvent { id: string; pilotRunId: string; sequenceNo: number; kind: PilotEventKind; message: string; workItemId: string | null; executionId: string | null; createdAt: string }

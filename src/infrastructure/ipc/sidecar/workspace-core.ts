@@ -38,13 +38,16 @@ import { GitIsolationService } from '../../git/git-isolation-service.js';
 import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
 import { NpmEnvironment } from '../../execution/npm-environment.js';
+import { ClaudeChangeReviewer } from '../../ai/claude-change-reviewer.js';
+import type { ReviewInput } from '../../ai/change-review-contract.js';
+import type { ChangeReviewPort } from '../../../application/ports/change-review-port.js';
 import type { SkillProvisionPort, WorkspaceEnvironmentPort } from '../../../application/ports/agent-execution-port.js';
 import { loadBundledSkills, materializeSkill, type BundledSkill } from '../../skills/skill-bundle.js';
 import { isInterfaceWork, stackHasInterface } from '../../../domain/projects/skill-selection.js';
 import { spawnSync } from 'node:child_process';
 import { PACKAGE_NAME, environmentFor, findStackProfile, profilePackages } from '../../../domain/projects/stack-catalog.js';
 import type { ProjectEnvironmentDto } from '../../../shared/contracts/agent-view.js';
-import { FeaturePilot, unapprovedPackages } from '../../../application/execution/feature-pilot.js';
+import { FeaturePilot, executionQualityFlags, unapprovedPackages } from '../../../application/execution/feature-pilot.js';
 import { FeatureMetrics, renderFeatureReport } from '../../../application/execution/feature-metrics.js';
 import { SqlitePilotRepository } from '../../persistence/repositories/sqlite-pilot-repository.js';
 import { SqliteActivityRepository } from '../../persistence/repositories/sqlite-activity-repository.js';
@@ -68,7 +71,7 @@ import { summarizeScan } from '../../../shared/contracts/repository-scan.js';
 import type { InceptionAnswerDto, StartInceptionInput } from '../../../shared/contracts/inception-view.js';
 export interface WorkspaceRequest { channel:IpcCommandChannel|IpcQueryChannel; args:unknown[] }
 export type WorkspaceEventEmitter=(channel:string,payload:unknown)=>void;
-export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort;repositoryScanner?:RepositoryScannerPort;/** Tests: the ChangeSet planner (otherwise the wired engine's). */changeSetPlanner?:ChangeSetPlannerPort;/** Tests: what installs the dependencies (otherwise npm). */environmentInstaller?:Omit<WorkspaceEnvironmentPort,'forProject'>;/** Tests: where the bundled skills are (otherwise next to the core). */skillsDirectory?:string}={}) {
+export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmitter=()=>undefined,dependencies:{agentAdapter?:AgentAdapterPort;inceptionEngine?:InceptionEnginePort;referenceTranslator?:ReferenceTranslatorPort;repositoryScanner?:RepositoryScannerPort;/** Tests: the ChangeSet planner (otherwise the wired engine's). */changeSetPlanner?:ChangeSetPlannerPort;/** Tests: what installs the dependencies (otherwise npm). */environmentInstaller?:Omit<WorkspaceEnvironmentPort,'forProject'>;/** Tests: where the bundled skills are (otherwise next to the core). */skillsDirectory?:string;/** Tests: the review engine (otherwise Claude), given the assembled evidence. */changeReviewer?:{review(input:ReviewInput,model:string):Promise<import('../../../application/ports/change-review-port.js').ChangeReviewVerdict>}}={}) {
  const store=new ProjectWorkspaceStore(workspaceRoot);
  const files=new AtomicMarkdownFileStore();
  const documentCommitter=new GitDocumentCommitter();
@@ -191,8 +194,23 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
   const known=new Map(management.list(projectId).map(document=>[document.relativePath,document.contentHash]));
   await new TransactionalMarkdownFileStore().recoverInterruptedWrites(root,known).catch(()=>undefined);
  };
+ // Plan S5: the review gathers its evidence here (tasks and criteria, project rules, diff, checks) and asks the review engine.
+ const reviewerFor=(projectId:string):ChangeReviewPort|null=>{
+  if(!dependencies.changeReviewer&&agentAdapter.providerId!=='claude-code')return null;
+  return {review:async input=>{
+   const service=getExecutionService(projectId),detail=service.detail(input.executionId),execution=detail.execution;
+   const db=store.openProject(projectId).database;
+   const tasks=coveredWorkItems(execution).flatMap(id=>{const row=db.prepare(`SELECT k.display_key,k.title,k.summary,w.acceptance_criteria_json FROM knowledge_entities k JOIN work_items w ON w.entity_id=k.id WHERE k.id=?`).get(id) as {display_key:string;title:string;summary:string|null;acceptance_criteria_json:string}|undefined;if(!row)return [];let criteria:string[]=[];try{criteria=(JSON.parse(row.acceptance_criteria_json) as Array<string|{description?:string}>).map(item=>typeof item==='string'?item:String(item.description??'')).filter(Boolean);}catch{/* none */}return [{key:row.display_key,title:row.title,summary:row.summary??'',criteria}];});
+   const rules=(()=>{try{return JSON.parse((db.prepare('SELECT rules_json FROM projects WHERE id=?').get(projectId) as {rules_json:string}).rules_json) as string[];}catch{return [];}})();
+   const logPath=join(workspaceRoot,'projects',projectId,'executions',execution.id,'test-output.log');
+   const evidence:ReviewInput={tasks,rules,files:detail.files.map(file=>({path:file.path,changeType:file.changeType,patch:file.patch})),checks:existsSync(logPath)?readFileSync(logPath,'utf8'):''};
+   if(dependencies.changeReviewer)return dependencies.changeReviewer.review(evidence,input.model);
+   const profile=providerConnection(projectId,db);
+   return new ClaudeChangeReviewer(workspaceRoot,{authMode:profile?.connectionConfig.authMode==='api_key'?'api_key':'subscription'}).review(evidence,input.model,input.signal);
+  }};
+ };
  // One autopilot service per project, sharing that project's orchestrator.
- const getPilot=(projectId:string)=>{const cached=pilots.get(projectId);if(cached)return cached;const pilot=new FeaturePilot(getExecutionService(projectId),new SqlitePilotRepository(store.openProject(projectId).database),(channel,payload)=>emit(channel,payload));pilots.set(projectId,pilot);return pilot;};
+ const getPilot=(projectId:string)=>{const cached=pilots.get(projectId);if(cached)return cached;const pilot=new FeaturePilot(getExecutionService(projectId),new SqlitePilotRepository(store.openProject(projectId).database),(channel,payload)=>emit(channel,payload),{},reviewerFor(projectId));pilots.set(projectId,pilot);return pilot;};
  const featureReport=(projectId:string,featureId:string)=>{
   const workspace=store.openProject(projectId);const feature=workspace.graph.findEntityById(featureId);if(!feature||feature.projectId!==projectId||feature.entityType!=='FEATURE')throw new Error('Feature no encontrada en este proyecto.');
   const report=new FeatureMetrics(getExecutionService(projectId),new SqlitePilotRepository(workspace.database)).report(projectId,featureId);
@@ -410,4 +428,4 @@ function planningReferenceInputs(value:unknown):PlanningReference[]{
 function summarize(project:Project):ProjectSummaryDto{return {id:project.props.id,name:project.props.name,slug:project.props.slug,description:project.props.description??null,currentRevision:project.currentRevision,createdAt:project.props.createdAt,updatedAt:project.props.updatedAt};}
 function toDocumentDto(document:import('../../../application/ports/artifact-management-port.js').ArtifactDocumentRecord):ArtifactDocumentDto {return {id:document.id,projectId:document.projectId,displayKey:document.displayKey,title:document.title,summary:document.summary,entityType:document.entityType,artifactType:document.artifactType,version:document.version,adrNumber:document.adrNumber,relativePath:document.relativePath,contentHash:document.contentHash,syncStatus:document.syncStatus};}
 function toDocumentViewDto(view:import('../../../application/artifacts/artifact-management-service.js').DocumentView):ArtifactDocumentViewDto{return {document:toDocumentDto(view.document),content:view.content};}
-function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt,coveredWorkItemIds:coveredWorkItems(execution),...(unapprovedPackages(execution)?{pendingPackages:unapprovedPackages(execution)!}:{})};}
+function toAgentExecutionDto(execution:AgentExecution):import('../../../shared/contracts/agent-view.js').AgentExecutionDto{return {id:execution.id,projectId:execution.projectId,workItemId:execution.workItemId,profileId:execution.profileId,providerId:execution.providerId,sessionId:execution.sessionId,contextSnapshotId:execution.contextSnapshotId,status:execution.status,modelUsed:execution.modelUsed,initialCommit:execution.initialCommit,finalCommit:execution.finalCommit,branchOrWorktree:execution.branchOrWorktree,baseBranch:execution.baseBranch,executionBranch:execution.executionBranch??null,revisionOf:execution.revisionOf??null,reviewStatus:execution.reviewStatus??null,reviewNote:execution.reviewNote??null,mergedCommit:execution.mergedCommit??null,reviewedAt:execution.reviewedAt??null,resultSummary:execution.resultSummary,startedAt:execution.startedAt,completedAt:execution.completedAt,coveredWorkItemIds:coveredWorkItems(execution),...(unapprovedPackages(execution)?{pendingPackages:unapprovedPackages(execution)!}:{}),...(executionQualityFlags(execution).length?{qualityFlags:executionQualityFlags(execution)}:{})};}

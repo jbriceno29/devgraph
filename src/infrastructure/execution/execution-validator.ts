@@ -6,6 +6,7 @@ import { git } from '../git/git-isolation-service.js';
 import type { AutonomyPolicy } from '../../domain/governance/models.js';
 import type { ExecutionValidatorPort, WorkspaceEnvironmentPort } from '../../application/ports/agent-execution-port.js';
 import type { ProjectEnvironment } from '../../domain/projects/stack-catalog.js';
+import { qualityFlags } from '../../domain/work-management/quality-flags.js';
 
 const execFileAsync=promisify(execFile);
 type GitRunner=(args:string[])=>Promise<string>;
@@ -71,7 +72,9 @@ export class ExecutionValidator implements ExecutionValidatorPort {
   // Accepted work is committed on the execution branch so it can be reviewed and merged as a unit.
   if(!failed&&input.commitMessage)await commitAll(run,input.commitMessage,environmentPaths);
   const finalCommit=(await run(['rev-parse','HEAD'])).trim();
-  return {passed:!failed,finalCommit,resultSummary:failed?`Verification command failed: ${failed.command}`:'Diff audit passed.'+(testReport.results.length?' Configured checks passed.':' No verification commands are allowlisted.'),testSummary:{passed:!failed,commands:testReport.results,skipped:testReport.results.length===0,patchPath:'changes.patch',testLogPath:'test-output.log'}};
+  // Plan S5: what may have weakened the verification goes with the result; the autopilot does not accept it on its own.
+  const flags=qualityFlags(diffRows);
+  return {passed:!failed,finalCommit,resultSummary:failed?`Verification command failed: ${failed.command}`:'Diff audit passed.'+(testReport.results.length?' Configured checks passed.':' No verification commands are allowlisted.'),testSummary:{passed:!failed,commands:testReport.results,skipped:testReport.results.length===0,patchPath:'changes.patch',testLogPath:'test-output.log',...(flags.length?{qualityFlags:flags}:{})}};
  }
 
  private async readDiffRows(run:GitRunner,cwd:string,base:string,paths:string[],untracked:string[]):Promise<ExecutionFileDiff[]> {

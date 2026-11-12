@@ -9,13 +9,13 @@ export class SqlitePilotRepository implements PilotRepositoryPort {
   getAutonomy(projectId: string, featureId: string): FeatureAutonomy {
     const row = this.db.prepare('SELECT * FROM feature_autonomy WHERE feature_id=?').get(featureId) as AutonomyRow | undefined;
     if (!row) return { featureId, projectId, ...DEFAULT_AUTONOMY };
-    return { featureId, projectId: row.project_id, level: row.level, executionModel: row.execution_model, escalationModel: row.escalation_model, maxAttempts: row.max_attempts, usagePauseThreshold: row.usage_pause_threshold, groupTasks: row.group_tasks === 1, maxGroupSize: row.max_group_size ?? DEFAULT_AUTONOMY.maxGroupSize };
+    return { featureId, projectId: row.project_id, level: row.level, executionModel: row.execution_model, escalationModel: row.escalation_model, maxAttempts: row.max_attempts, usagePauseThreshold: row.usage_pause_threshold, groupTasks: row.group_tasks === 1, maxGroupSize: row.max_group_size ?? DEFAULT_AUTONOMY.maxGroupSize, reviewModel: row.review_model ?? null };
   }
 
   saveAutonomy(autonomy: FeatureAutonomy): void {
-    this.db.prepare(`INSERT INTO feature_autonomy(feature_id,project_id,level,execution_model,escalation_model,max_attempts,usage_pause_threshold,group_tasks,max_group_size,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
-      ON CONFLICT(feature_id) DO UPDATE SET level=excluded.level,execution_model=excluded.execution_model,escalation_model=excluded.escalation_model,max_attempts=excluded.max_attempts,usage_pause_threshold=excluded.usage_pause_threshold,group_tasks=excluded.group_tasks,max_group_size=excluded.max_group_size,updated_at=excluded.updated_at`)
-      .run(autonomy.featureId, autonomy.projectId, autonomy.level, autonomy.executionModel, autonomy.escalationModel, autonomy.maxAttempts, autonomy.usagePauseThreshold, autonomy.groupTasks ? 1 : 0, autonomy.maxGroupSize, new Date().toISOString());
+    this.db.prepare(`INSERT INTO feature_autonomy(feature_id,project_id,level,execution_model,escalation_model,max_attempts,usage_pause_threshold,group_tasks,max_group_size,review_model,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(feature_id) DO UPDATE SET level=excluded.level,execution_model=excluded.execution_model,escalation_model=excluded.escalation_model,max_attempts=excluded.max_attempts,usage_pause_threshold=excluded.usage_pause_threshold,group_tasks=excluded.group_tasks,max_group_size=excluded.max_group_size,review_model=excluded.review_model,updated_at=excluded.updated_at`)
+      .run(autonomy.featureId, autonomy.projectId, autonomy.level, autonomy.executionModel, autonomy.escalationModel, autonomy.maxAttempts, autonomy.usagePauseThreshold, autonomy.groupTasks ? 1 : 0, autonomy.maxGroupSize, autonomy.reviewModel, new Date().toISOString());
   }
 
   featureOf(projectId: string, workItemId: string): string | null {
@@ -77,7 +77,7 @@ export class SqlitePilotRepository implements PilotRepositoryPort {
   }
 }
 
-interface AutonomyRow { project_id: string; level: FeatureAutonomy['level']; execution_model: string | null; escalation_model: string | null; max_attempts: number; usage_pause_threshold: number; group_tasks?: number; max_group_size?: number }
+interface AutonomyRow { project_id: string; level: FeatureAutonomy['level']; execution_model: string | null; escalation_model: string | null; max_attempts: number; usage_pause_threshold: number; group_tasks?: number; max_group_size?: number; review_model?: string | null }
 interface RunRow { id: string; project_id: string; feature_id: string; status: PilotStatus; reason: string | null; started_at: string; ended_at: string | null }
 interface EventRow { id: string; pilot_run_id: string; sequence_no: number; kind: PilotEventKind; message: string; work_item_id: string | null; execution_id: string | null; created_at: string }
 function mapRun(row: RunRow): PilotRun { return { id: row.id, projectId: row.project_id, featureId: row.feature_id, status: row.status, reason: row.reason, startedAt: row.started_at, endedAt: row.ended_at }; }

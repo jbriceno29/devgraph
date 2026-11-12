@@ -21,7 +21,7 @@ describe('FeaturePilotPanel',()=>{
   fireEvent.change(screen.getByLabelText('Modelo de ejecución'),{target:{value:'haiku'}});
   fireEvent.change(screen.getByLabelText('Intentos por tarea'),{target:{value:'2'}});
   fireEvent.click(screen.getByRole('button',{name:'Guardar autonomía'}));
-  await waitFor(()=>expect(client.commands.setFeatureAutonomy).toHaveBeenCalledWith('p','feat',{level:'AUTO_ACCEPT',executionModel:'haiku',escalationModel:'sonnet',maxAttempts:2,usagePauseThreshold:0.85,groupTasks:false,maxGroupSize:3}));
+  await waitFor(()=>expect(client.commands.setFeatureAutonomy).toHaveBeenCalledWith('p','feat',{level:'AUTO_ACCEPT',executionModel:'haiku',escalationModel:'sonnet',maxAttempts:2,usagePauseThreshold:0.85,groupTasks:false,maxGroupSize:3,reviewModel:null}));
  });
 
  it('offers task grouping only for the pilot level, saves the switch and the size, and previews «~M ejecuciones» in the cost warning',async()=>{

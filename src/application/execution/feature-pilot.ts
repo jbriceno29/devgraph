@@ -5,6 +5,7 @@ import type { FeatureTaskView, PilotRepositoryPort } from '../ports/pilot-port.j
 import { nextTaskGroup } from './task-grouping.js';
 import { coveredWorkItems } from '../../domain/agents/models.js';
 import type { AgentOrchestrator, PlanProposalOutcome } from './agent-orchestrator.js';
+import type { ChangeReviewPort } from '../ports/change-review-port.js';
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 type Usage = { utilization: number | null; window: string; resetsAt: string | null; status: string };
@@ -28,24 +29,26 @@ export class FeaturePilot {
     private readonly repository: PilotRepositoryPort,
     private readonly emit: (channel: 'pilot:updated', payload: { projectId: string; featureId: string; status: PilotStatus | null }) => void = () => undefined,
     private readonly options: { pollMs?: number } = {},
+    /** Plan S5: reviews runs of features with a review model before the pilot accepts them. */
+    private readonly reviewer: ChangeReviewPort | null = null,
   ) {
     orchestrator.onExecutionFinished(execution => { void this.autoAccept(execution); });
   }
 
   getAutonomy(projectId: string, featureId: string): FeatureAutonomy { return this.repository.getAutonomy(projectId, featureId); }
 
-  setAutonomy(projectId: string, featureId: string, input: { level: AutonomyLevel; executionModel?: string | null; escalationModel?: string | null; maxAttempts?: number; usagePauseThreshold?: number; groupTasks?: boolean; maxGroupSize?: number }): FeatureAutonomy {
+  setAutonomy(projectId: string, featureId: string, input: { level: AutonomyLevel; executionModel?: string | null; escalationModel?: string | null; maxAttempts?: number; usagePauseThreshold?: number; groupTasks?: boolean; maxGroupSize?: number; reviewModel?: string | null }): FeatureAutonomy {
     if (!['MANUAL', 'AUTO_ACCEPT', 'PILOT'].includes(input.level)) throw new Error(`Nivel de autonomía desconocido: ${input.level}`);
     const current = this.repository.getAutonomy(projectId, featureId);
     const available = this.orchestrator.listProfiles(projectId).find(profile => profile.roleKey === 'DEVELOPER')?.availableModels ?? [];
-    for (const model of [input.executionModel, input.escalationModel]) if (model && !available.includes(model)) throw new Error(`El modelo ${model} no está disponible.`);
+    for (const model of [input.executionModel, input.escalationModel, input.reviewModel]) if (model && !available.includes(model)) throw new Error(`El modelo ${model} no está disponible.`);
     const maxAttempts = input.maxAttempts ?? current.maxAttempts;
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) throw new Error('Los intentos por tarea deben estar entre 1 y 5.');
     const usagePauseThreshold = input.usagePauseThreshold ?? current.usagePauseThreshold;
     if (!(usagePauseThreshold >= 0.5 && usagePauseThreshold <= 0.99)) throw new Error('El umbral de pausa debe estar entre 50 % y 99 %.');
     const maxGroupSize = input.maxGroupSize ?? current.maxGroupSize;
     if (!Number.isInteger(maxGroupSize) || maxGroupSize < 1 || maxGroupSize > 5) throw new Error('El tamaño del grupo debe estar entre 1 y 5 tareas.');
-    const next: FeatureAutonomy = { featureId, projectId, level: input.level, executionModel: input.executionModel ?? null, escalationModel: input.escalationModel ?? null, maxAttempts, usagePauseThreshold, groupTasks: input.groupTasks ?? current.groupTasks, maxGroupSize };
+    const next: FeatureAutonomy = { featureId, projectId, level: input.level, executionModel: input.executionModel ?? null, escalationModel: input.escalationModel ?? null, maxAttempts, usagePauseThreshold, groupTasks: input.groupTasks ?? current.groupTasks, maxGroupSize, reviewModel: input.reviewModel === undefined ? current.reviewModel : input.reviewModel || null };
     this.repository.saveAutonomy(next);
     if (next.level !== 'PILOT') { const run = this.repository.latestRun(featureId); if (run && ACTIVE_PILOT_STATUSES.has(run.status)) void this.stop(projectId, featureId, 'El nivel de autonomía dejó de ser piloto.'); }
     this.notify(projectId, featureId);
@@ -176,7 +179,7 @@ export class FeaturePilot {
         state.currentExecution = null;
         if (state.stop) break;
         if (final.status === 'COMPLETED') {
-          if (!await this.acceptWithGates(run, final, label)) return;
+          if (!await this.acceptWithGates(run, final, label, autonomy, state)) return;
           attempts.delete(next.id); failures.delete(next.id); groups.delete(next.id);
           continue;
         }
@@ -200,9 +203,33 @@ export class FeaturePilot {
   }
 
   /** Accepts a completed run when the gates pass; otherwise hands it to the user. Returns whether the loop may go on. */
-  private async acceptWithGates(run: PilotRun, execution: AgentExecution, key: string): Promise<boolean> {
-    const gate = this.gate(execution);
-    if (!gate.ok) { this.waitUser(run, `${key} terminó pero no se acepta sola: ${gate.reason}`, execution.workItemId, execution.id); return false; }
+  private async acceptWithGates(run: PilotRun, completed: AgentExecution, key: string, autonomy?: FeatureAutonomy, state?: LoopState): Promise<boolean> {
+    let execution = completed;
+    // Plan S5: with a review model, a second model checks the run against its criteria; a rejection becomes a revision
+    // of the same run with the findings as feedback, up to the feature's attempts, and then the user decides.
+    for (let round = 1; ; round += 1) {
+      const gate = this.gate(execution);
+      if (!gate.ok) { this.waitUser(run, `${key} terminó pero no se acepta sola: ${gate.reason}`, execution.workItemId, execution.id); return false; }
+      if (!autonomy?.reviewModel || !this.reviewer) break;
+      let verdict;
+      try { verdict = await this.reviewer.review({ projectId: run.projectId, executionId: execution.id, model: autonomy.reviewModel }); }
+      catch (error) { this.waitUser(run, `No se pudo revisar ${key} con ${autonomy.reviewModel}: ${message(error)}. Revísala y acéptala a mano, o reanuda el piloto.`, execution.workItemId, execution.id); return false; }
+      if (state?.stop || state?.closed) return false;
+      if (verdict.approved) { this.log(run, 'REVIEW_APPROVED', `${key}: la revisión con ${autonomy.reviewModel} la aprueba.`, execution.workItemId, execution.id); break; }
+      const findings = verdict.findings.map(finding => `- ${finding}`).join('\n');
+      this.log(run, 'REVIEW_REJECTED', `${key}: la revisión con ${autonomy.reviewModel} la rechaza (${round} de ${autonomy.maxAttempts}).\n${findings}`, execution.workItemId, execution.id);
+      if (round >= autonomy.maxAttempts) { this.waitUser(run, `${key} no pasó la revisión tras ${round} ${round === 1 ? 'intento' : 'intentos'}. Hallazgos:\n${findings}`, execution.workItemId, execution.id); return false; }
+      let revision: AgentExecution;
+      try { revision = await this.orchestrator.requestChanges({ executionId: execution.id, feedback: `La revisión independiente encontró problemas; corrígelos sin romper lo demás:\n${findings}`, ...(autonomy.executionModel ? { model: autonomy.executionModel } : {}) }); }
+      catch (error) { this.waitUser(run, `No se pudieron pedir los ajustes de la revisión para ${key}: ${message(error)}`, execution.workItemId, execution.id); return false; }
+      if (!state) return false;
+      state.currentExecution = revision.id;
+      const final = await this.waitTerminal(revision.id, state);
+      state.currentExecution = null;
+      if (state.stop || state.closed) return false;
+      if (final.status !== 'COMPLETED') { this.waitUser(run, `El ajuste de ${key} pedido por la revisión no terminó bien: ${final.resultSummary ?? final.status}`, execution.workItemId, final.id); return false; }
+      execution = final;
+    }
     const result = await this.orchestrator.accept(execution.id, { note: 'Aceptada por el piloto automático: auditoría y comprobaciones en verde.' });
     if (!result.merged) { this.waitUser(run, `No se pudo integrar ${key}: ${result.conflict?.detail ?? 'conflicto'}${result.conflict?.files.length ? ` (${result.conflict.files.join(', ')})` : ''}`, execution.workItemId, execution.id); return false; }
     this.log(run, 'TASK_ACCEPTED', `${key} aceptada e integrada en ${execution.baseBranch} (${result.execution.mergedCommit?.slice(0, 8)}).`, execution.workItemId, execution.id);
@@ -243,6 +270,8 @@ export class FeaturePilot {
     const commands = (execution.testSummary as { commands?: Array<{ exitCode: number }> } | null)?.commands ?? [];
     if (!commands.length) return { ok: false, reason: 'no hay comandos de verificación configurados en la política. Revísala y acéptala a mano, o configura comandos.' };
     if (commands.some(command => command.exitCode !== 0)) return { ok: false, reason: 'alguna comprobación falló.' };
+    const flags = executionQualityFlags(execution);
+    if (flags.length) return { ok: false, reason: `puede haber debilitado su propia verificación, revísala y acéptala a mano (${flags.join('; ')}).` };
     return { ok: true };
   }
 
@@ -325,4 +354,10 @@ function message(error: unknown): string { return error instanceof Error ? error
 export function unapprovedPackages(execution: AgentExecution): string[] | null {
   const summary = execution.testSummary as { reason?: unknown; packages?: unknown } | null;
   return summary?.reason === 'DEPENDENCY_APPROVAL' && Array.isArray(summary.packages) ? summary.packages.map(String) : null;
+}
+
+/** Plan S5: what a completed run may have done to its own verification (deleted or skipped tests, verification config). */
+export function executionQualityFlags(execution: AgentExecution): string[] {
+  const flags = (execution.testSummary as { qualityFlags?: unknown } | null)?.qualityFlags;
+  return Array.isArray(flags) ? flags.map(String) : [];
 }

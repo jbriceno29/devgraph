@@ -15,6 +15,7 @@ con `haiku`, commit y push, y una nota en su plan.
 | **CAP** | [PLAN_CAPACIDADES_DEL_AGENTE.md](PLAN_CAPACIDADES_DEL_AGENTE.md): lo que el agente necesita para desarrollar apps reales. |
 | **REP** | [PLAN_REPOSITORIO_EXISTENTE.md](PLAN_REPOSITORIO_EXISTENTE.md): incorporar un repositorio con historia (rutas, línea base, mapa de lo existente y grafo al día). |
 | **GIT** | [AUDITORIA_GIT.md](AUDITORIA_GIT.md): qué hace la app con el repositorio del usuario, riesgos y propuesta. |
+| **DIS** | [PLAN_DISENO_VISUAL.md](PLAN_DISENO_VISUAL.md): direcciones visuales con concepto y criterio, y sitios web como referencia. |
 
 Ya cerrados: [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) (S1–S6) y
 [PLAN_EXPLORACION_VISUAL_Y_OBJETIVO.md](PLAN_EXPLORACION_VISUAL_Y_OBJETIVO.md) (V1–V4).
@@ -34,6 +35,7 @@ Ya cerrados: [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) (S
 | 4b | **R2** · línea base de verificación | REP | ~1 día | Hecho | Reutiliza la ejecución por comando de C6. Evita el piloto que nunca puede aceptar porque las pruebas ya fallaban. |
 | 5 | **A3** · partir los gigantes del núcleo (orquestador, repositorio de ejecuciones, piloto, inicio) | ARQ | 2–3 días | Hecho: el núcleo salió de la línea base de arquitectura | Va antes de C2 y C3, que añaden lógica a la ejecución. |
 | 5b | **R3 + R4** · mapa de lo existente en el grafo y preguntas del siguiente hito | REP | ~3 días | Hecho (el mapa reduce la exploración a casi la mitad) | Añaden lógica al inicio y al contexto: van con el núcleo ya partido. Pueden ir antes que el 6 si el proyecto real que se va a llevar es un repositorio existente. |
+| 5c | **D0 → D1 + D2 → D4 → D3 → D7** · medición base, concepto y criterio estético, una llamada por dirección, sitios web como referencia, crítica y salida a Claude Design (D5 y D6 esperan decisión) | DIS | ~4–5 días | En curso: D0 hecho (medición base); sigue D1 + D2 | Las direcciones visuales salen básicas y parecidas, y son lo primero que el usuario ve de su proyecto. D0 solo mide. D1 en adelante tocan el módulo `inception`, igual que R3 y R4, ya integrados. |
 | 6 | **C2 → C3** · secretos del proyecto y servicios Docker gestionados por la app | CAP | ~3 días | Pendiente | Dan Postgres real y preparan Supabase. |
 | 7 | **A4** · interfaz MVVM | ARQ | 2–3 días | Pendiente | Es requisito de la reorganización de pantallas. |
 | 8 | **F1 → F3** · reorganización: Proyecto, Plan, Ejecuciones, Configuración y acabado | UX | ~8–10 días | Pendiente | Con ViewModels, mover pantallas es mover Views. |

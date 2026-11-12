@@ -147,6 +147,7 @@ describe('opening an existing project', () => {
     legacy.exec('ALTER TABLE projects DROP COLUMN skills_enabled');
     legacy.exec('ALTER TABLE projects DROP COLUMN docs_enabled');
     legacy.exec('ALTER TABLE projects DROP COLUMN doc_domains_json');
+    legacy.exec('ALTER TABLE projects DROP COLUMN verification_baseline_json');
     legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_execution_minutes');
     legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN decision_policy_json');
     legacy.exec('ALTER TABLE autonomy_policies DROP COLUMN max_turns');

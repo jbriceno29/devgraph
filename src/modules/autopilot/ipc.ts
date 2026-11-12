@@ -8,6 +8,8 @@ export interface AutopilotIpcDeps {
   workspaceRoot: string;
   pilot(projectId: string): FeaturePilot;
   featureReport(projectId: string, featureId: string): { report: unknown; markdown: string };
+  /** Plan REP, R2: why the pilot cannot start (the base branch's verification fails); null when it can. */
+  baseline?: { pilotBlocker(projectId: string): string | null };
 }
 
 /** The autopilot of each feature and its metrics report. */
@@ -17,11 +19,13 @@ export function autopilotHandlers(d: AutopilotIpcDeps): IpcHandlers {
     'pilot:set_autonomy': serial(([id, featureId, input]) =>
       of(id).setAutonomy(text(id), text(featureId), input as SetFeatureAutonomyInput),
     ),
-    'pilot:start': serial(([id, featureId, input]) =>
-      of(id).start(text(id), text(featureId), {
+    'pilot:start': serial(([id, featureId, input]) => {
+      const blocked = d.baseline?.pilotBlocker(text(id));
+      if (blocked) throw new Error(blocked);
+      return of(id).start(text(id), text(featureId), {
         acknowledgeCost: Boolean((input as { acknowledgeCost?: boolean } | undefined)?.acknowledgeCost),
-      }),
-    ),
+      });
+    }),
     'pilot:stop': serial(([id, featureId]) => of(id).stop(text(id), text(featureId))),
     'pilot:resume': serial(([id, featureId]) => of(id).resume(text(id), text(featureId))),
     'metrics:feature_report': ([id, featureId]) => d.featureReport(text(id), text(featureId)),

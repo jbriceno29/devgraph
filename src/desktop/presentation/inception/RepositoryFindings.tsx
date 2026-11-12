@@ -93,6 +93,7 @@ export function RepositoryFindings({
   open = false,
   access,
   onAccessChange,
+  projectId,
 }: {
   repository: InceptionRepositoryDto;
   corrections?: Record<string, string>;
@@ -101,6 +102,8 @@ export function RepositoryFindings({
   /** The user's unsent edit of the agent's access (plan REP, R1). */
   access?: AgentAccessEditDto | null;
   onAccessChange?(edit: AgentAccessEditDto | null): void;
+  /** Plan REP, R2: runs the verification baseline under the checks. */
+  projectId?: string;
 }) {
   const id = useId();
   const given = new Map(repository.corrections.map(item => [item.inferenceId, item.correction]));
@@ -134,6 +137,7 @@ export function RepositoryFindings({
             access={repository.access}
             {...(access !== undefined ? { edit: access } : {})}
             {...(onAccessChange ? { onChange: onAccessChange } : {})}
+            {...(projectId ? { projectId } : {})}
           />
         )}
       </div>

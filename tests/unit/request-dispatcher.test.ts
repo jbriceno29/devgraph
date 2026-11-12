@@ -107,6 +107,8 @@ describe('canales serializados declarados por cada módulo (A1b)', () => {
         [
           'artifact:create',
           'artifact:save',
+          'baseline:accept_known',
+          'baseline:run',
           'changeset:apply',
           'changeset:edit',
           'changeset:reject',

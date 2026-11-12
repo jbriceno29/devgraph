@@ -50,7 +50,7 @@ Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12)
 | `modules/context` | Motor de contexto (resolución, recorrido, ranking, empaquetado) y `ContextSnapshot`. |
 | `modules/execution` | `AgentOrchestrator`, gobernanza, adaptador de Claude Code (Codex sin cablear), validador del diff, worktrees, revisión. |
 | `modules/autopilot` | `FeaturePilot`, política de decisiones, agrupación de tareas, métricas. |
-| `modules/environment` | Dependencias del stack, skills empaquetadas, comandos del proyecto. |
+| `modules/environment` | Dependencias del stack, skills empaquetadas, comandos del proyecto. Línea base de verificación (R2): casos de uso `run-verification-baseline`, `get-verification-baseline` y `accept-known-failures`; corre en una copia de la rama base con `GitBaselineRunner` (en `execution/infrastructure`, junto a las comprobaciones de C6). |
 | `modules/documents` | Documentos Markdown, watcher de `docs/`, commit de documentos. |
 | `modules/activity` | Bandeja de actividad. |
 | `src/platform/` | `sqlite/` (base de datos, migraciones, unidad de trabajo), `claude-cli/`, `codex-cli/`. |

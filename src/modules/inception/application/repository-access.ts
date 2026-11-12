@@ -6,7 +6,8 @@ import type {
   AgentAccessEditDto,
   RepositoryScanDto,
 } from '../../../shared/contracts/repository-scan.js';
-import type { InceptionRepositoryState } from './ports/inception-port.js';
+import type { InceptionRepositoryState, PlanBaseline } from './ports/inception-port.js';
+import { withBaseline } from './baseline-plan.js';
 import { normalizeCorrections } from './repository-evidence.js';
 
 /** Plan REP, R1: what the scan suggests the agent may write and run, before the user edits it. */
@@ -65,14 +66,15 @@ export function editedRepository(
   };
 }
 
-/** The proposal of an existing repository saves its access in the policy (writable paths and checks). */
+/** The proposal of an existing repository saves its access in the policy (writable paths and checks) and its baseline (R2). */
 export function withAgentAccess(
   operations: ChangeOperation[],
   repository: InceptionRepositoryState | null,
+  baseline?: PlanBaseline | null,
 ): ChangeOperation[] {
   if (!repository) return operations;
   const access = accessView(repository);
-  return operations.map(op =>
+  const withAccess = operations.map(op =>
     op.type === 'SET_PROJECT_PROFILE'
       ? {
           ...op,
@@ -81,4 +83,6 @@ export function withAgentAccess(
         }
       : op,
   );
+  // Plan REP, R2: a baseline that fails starts the plan by fixing it.
+  return withBaseline(withAccess, baseline);
 }

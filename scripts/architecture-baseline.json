@@ -66,7 +66,7 @@
   "file-size": {
     "src/modules/execution/application/agent-orchestrator.ts": 1536,
     "src/modules/autopilot/application/feature-pilot.ts": 691,
-    "src/modules/inception/application/project-inception-service.ts": 1142,
+    "src/modules/inception/application/project-inception-service.ts": 1141,
     "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 252,
     "src/desktop/presentation/agents/ExecutionReview.tsx": 305,

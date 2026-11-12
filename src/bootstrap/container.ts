@@ -32,6 +32,7 @@ import { planningServices } from './compose/planning.js';
 import { inceptionServices } from './compose/inception.js';
 import { documentationServices } from './compose/documentation.js';
 import { environmentServices } from './compose/environment.js';
+import { verificationBaselineServices } from './compose/verification-baseline.js';
 import { executionServices } from './compose/execution.js';
 import { autopilotServices } from './compose/autopilot.js';
 import { featureConflictServices } from './compose/feature-conflicts.js';
@@ -104,6 +105,7 @@ export interface Container {
   setSkills(projectId: string, enabled: unknown): Promise<ProjectEnvironmentDto>;
   approveDependencies(projectId: string, packages: unknown): Promise<ProjectEnvironmentDto>;
   docsView(projectId: string): ProjectDocsDto;
+  baseline: ReturnType<typeof verificationBaselineServices>['baseline'];
   docDomains(projectId: string): string[];
   setDocs(projectId: string, input: unknown): ProjectDocsDto;
   commands: ProjectCommands;
@@ -129,6 +131,7 @@ export function createContainer(
     documentationServices,
     executionServices,
     featureConflictServices,
+    verificationBaselineServices,
   ];
   const closers: Array<() => void> = [];
   for (const part of [...parts, autopilotServices]) {

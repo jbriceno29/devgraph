@@ -118,6 +118,28 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
 - Pruebas: un repositorio con una prueba rota da la tarea «Dejar la verificación en verde» y bloquea el piloto.
 - Corrida real con `todo-app` (en verde) y con una copia con una prueba rota.
 
+**Estado (2026-11-12): hecho.**
+
+- **Línea base:** se guarda por proyecto.
+  - Corre en segundo plano sobre una copia de la rama base (en `checks/`, como C6), con la instalación habitual y los límites de tiempo de C6. Nunca usa la rama que el usuario tenga abierta.
+  - Muestra cada comprobación con su recuento (Vitest, Jest, `node:test` y pytest), su duración y el final de la salida.
+  - En el inicio de un repositorio existente arranca sola al aparecer «Qué podrá tocar el agente», con las comprobaciones que haya en pantalla. En Ajustes se puede volver a comprobar.
+- **Si algo falla:**
+  - La propuesta empieza con «Dejar la verificación en verde», con prioridad crítica, en «Fundación». Lleva el final de la salida y un criterio por comando.
+  - El piloto no arranca y explica el motivo.
+- **«Aceptar estos fallos como conocidos»:**
+  - Saca esos comandos de la política, o de la propuesta si aún no se aprobó, y los anota en las reglas. El piloto puede arrancar.
+  - La línea base los sigue corriendo. Cuando vuelven a pasar, o el usuario deja de aceptarlos, vuelven a la verificación.
+- **Corrida real con `haiku`** sobre copias de `todo-app`, con el usuario en otra rama:
+  - **En verde:** «`npm test`: pasan 40» en 1 s, y la propuesta no cambia.
+  - **Con una prueba rota:**
+    1. La línea base dio «pasan 39, fallan 1» y bloqueó.
+    2. La propuesta empezó con «Dejar la verificación en verde» (TASK-001) y el piloto se rechazó con el motivo.
+    3. Al aceptar el fallo, la política quedó sin `npm test` y el piloto se desbloqueó.
+    4. Al volver a comprobar, la línea base siguió corriendo `npm test`.
+  - La primera corrida reveló que aceptar un fallo después de aprobar no lo sacaba de la política. Ya está corregido.
+- **Pendiente:** «Poner al día el proyecto» (R5) repetirá la línea base sobre el estado actual.
+
 ### R3. Mapa de lo que existe (L, 2–3 días)
 
 - **Una ejecución de reconocimiento en solo lectura:**

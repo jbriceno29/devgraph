@@ -1,4 +1,5 @@
 ---
+
 name: avanzar-hoja-de-ruta
 description: Ejecuta un paso de docs/HOJA_DE_RUTA.md de punta a punta, etapa por etapa y sin pausas entre ellas. En cada etapa diseña, implementa y prueba, hace una corrida real con haiku, actualiza los documentos y hace commit y push. Úsala cuando el usuario diga «adelante con el paso X», «continúa la hoja de ruta» o «/avanzar-hoja-de-ruta 4b».
 ---

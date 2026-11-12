@@ -49,6 +49,7 @@ export function inceptionServices(c: Container) {
       referenceFiles: new InceptionReferenceFiles(join(c.workspaceRoot, 'projects')),
       designFiles: new DesignPrototypeWriter(),
       scanner: c.scanner,
+      baselineOf: id => c.baseline.stored(id),
       models: id => ({ planning: c.connection(id).planningModel, available: c.connection(id).availableModels }),
       emit: (channel, payload) => c.emit(channel, payload),
     });

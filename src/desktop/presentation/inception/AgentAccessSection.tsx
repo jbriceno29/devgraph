@@ -5,6 +5,7 @@ import type {
   AgentAccessReason,
 } from '../../../shared/contracts/repository-scan.js';
 import { control, focusRing, secondary } from '../ui.js';
+import { VerificationBaselinePanel } from '../agents/VerificationBaselinePanel.js';
 
 export const ACCESS_REASON: Record<AgentAccessReason, string> = {
   CODE: 'código y recursos',
@@ -23,8 +24,11 @@ export function AgentAccessSection({
   access,
   edit,
   onChange,
+  projectId,
 }: {
   access: AgentAccessDto;
+  /** Plan REP, R2: with it (before approving), the section runs and shows the verification baseline. */
+  projectId?: string;
   edit?: AgentAccessEditDto | null;
   onChange?(edit: AgentAccessEditDto | null): void;
 }) {
@@ -48,6 +52,7 @@ export function AgentAccessSection({
       <PathList paths={paths} reasons={reasons} onChange={change && (writablePaths => change({ writablePaths }))} />
       <p className="mt-3 font-medium text-fg">Comprobaciones al terminar cada tarea</p>
       <Checks commands={commands} onChange={change && (verificationCommands => change({ verificationCommands }))} />
+      {projectId && <VerificationBaselinePanel projectId={projectId} commands={commands} autoRun />}
       {onChange && (edit || access.edited) && (
         <button type="button" onClick={() => onChange(null)} className={`mt-2 min-h-8 px-3 text-xs ${secondary}`}>
           Volver a lo que se detectó

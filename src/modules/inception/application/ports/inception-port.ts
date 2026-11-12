@@ -185,3 +185,16 @@ export interface InceptionRepositoryPort {
   /** Forgets the inception state (restart). Never touches the graph or the repository. */
   delete(projectId: string): void;
 }
+
+export interface DesignPrototypeWriterPort {
+  write(repositoryPath: string, html: string): Promise<string>;
+}
+
+/**
+ * Plan REP, R2: the verification baseline of the repository as the proposal uses it. A failing check puts the task
+ * «Dejar la verificación en verde» first in «Fundación»; one the user accepted as known also leaves the checks.
+ */
+export interface PlanBaseline {
+  checks: Array<{ command: string; passed: boolean; tail: string }>;
+  knownFailing: string[];
+}

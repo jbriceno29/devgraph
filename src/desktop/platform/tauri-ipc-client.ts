@@ -51,6 +51,10 @@ export const workspaceIpc: WorkspaceIpcClient = {
     resolveFeatureConflicts: (projectId, featureId) => invokeCore('feature:resolve_conflicts', [projectId, featureId]),
     getRepositoryGitStatus: projectId => invokeCore('repository:git_status', [projectId]),
     getProjectDocs: projectId => invokeCore('project:docs', [projectId]),
+    getVerificationBaseline: projectId => invokeCore('baseline:get', [projectId]),
+    runVerificationBaseline: (projectId, commands) =>
+      invokeCore('baseline:run', commands ? [projectId, commands] : [projectId]),
+    acceptKnownFailures: (projectId, commands) => invokeCore('baseline:accept_known', [projectId, commands]),
     getFeatureChecks: (projectId, featureId) => invokeCore('feature:checks', [projectId, featureId]),
     runFeatureChecks: (projectId, featureId) => invokeCore('feature:run_checks', [projectId, featureId]),
     setProjectDocs: (projectId, input) => invokeCore('project:set_docs', [projectId, input]),

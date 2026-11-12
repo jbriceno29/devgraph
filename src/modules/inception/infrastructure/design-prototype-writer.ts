@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, realpath, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { DESIGN_PROTOTYPE_PATH } from '../../../shared/ui-spec.js';
-import type { DesignPrototypeWriterPort } from '../application/project-inception-service.js';
+import type { DesignPrototypeWriterPort } from '../application/ports/inception-port.js';
 
 /**
  * Saves the approved prototype in the user's repository (`docs/design/prototype.html`) so every worktree and agent can open it.

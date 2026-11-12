@@ -25,6 +25,7 @@ export function useRepositoryReview(projectId: string, view: InceptionViewDto | 
       onCorrect={(id, text) => setCorrections({ ...editedCorrections, [id]: text })}
       access={access}
       onAccessChange={setAccess}
+      projectId={projectId}
     />
   );
   /** Sends the answers; in brownfield mode the corrections and the access edit go with them. */

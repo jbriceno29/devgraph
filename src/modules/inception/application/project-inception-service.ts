@@ -12,6 +12,7 @@ import {
   type InceptionReferenceFilesPort,
   type InceptionRepositoryPort,
   type InceptionRepositoryState,
+  type DesignPrototypeWriterPort,
   type InceptionUiOption,
   type ReferenceTranslatorPort,
   type UiOptionDraft,
@@ -47,9 +48,6 @@ export interface InceptionPlanningPort {
   reject(changeSetId: string): void;
 }
 /** Saves the approved prototype in the repository; returns its relative path. */
-export interface DesignPrototypeWriterPort {
-  write(repositoryPath: string, html: string): Promise<string>;
-}
 export interface ProjectInceptionDependencies {
   projects: ProjectRepositoryPort;
   graph: KnowledgeGraphRepositoryPort;
@@ -65,6 +63,7 @@ export interface ProjectInceptionDependencies {
   designFiles?: DesignPrototypeWriterPort;
   /** Brownfield mode: reads the configured repository when the inception starts; when it already has code, the assistant works from that evidence. */
   scanner?: RepositoryScannerPort;
+  baselineOf?(projectId: string): import('./ports/inception-port.js').PlanBaseline | null;
   emit?(channel: 'inception:updated' | 'graph:revision_updated', payload: unknown): void;
 }
 
@@ -1104,7 +1103,7 @@ export class ProjectInceptionService {
         rationale: [result.draft.rationale, ...plan.problems.map(problem => `Pendiente: ${problem}`)]
           .filter(Boolean)
           .join('\n'),
-        operations: withAgentAccess(plan.operations, record.repository),
+        operations: withAgentAccess(plan.operations, record.repository, this.deps.baselineOf?.(record.projectId)),
       },
       `inception:${projectId}`,
     );

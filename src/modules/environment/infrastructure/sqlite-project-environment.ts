@@ -57,6 +57,20 @@ export class SqliteProjectEnvironmentRepository {
       .run(enabled ? 1 : 0, JSON.stringify(extraDomains), new Date().toISOString(), projectId);
   }
 
+  /** Plan REP, R2: the stored verification baseline (JSON), or null. */
+  baselineJson(projectId: string): string | null {
+    const row = this.db.prepare('SELECT verification_baseline_json FROM projects WHERE id=?').get(projectId) as
+      | { verification_baseline_json: string | null }
+      | undefined;
+    return row?.verification_baseline_json ?? null;
+  }
+
+  setBaselineJson(projectId: string, json: string): void {
+    this.db
+      .prepare('UPDATE projects SET verification_baseline_json=?,updated_at=? WHERE id=?')
+      .run(json, new Date().toISOString(), projectId);
+  }
+
   setApprovedDependencies(projectId: string, packages: string[]): void {
     this.db
       .prepare('UPDATE projects SET approved_dependencies_json=?,updated_at=? WHERE id=?')

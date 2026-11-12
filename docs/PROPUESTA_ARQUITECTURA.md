@@ -200,7 +200,17 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
   - El bucle es ahora una `pass` por vuelta con pasos con nombre: `settleOpenWork`, `pickNext`, `runTask` y `afterRun`. La aceptación se reparte en `reviewRound`, `revise` y `acceptRun`.
   - Pasan las 587 pruebas sin tocarlas.
   - Corrida real con `haiku`: el piloto lanzó, verificó y aceptó solo dos tareas encadenadas en 24 s, y quedan 11 pruebas en verde en la rama de la feature.
-- **Pendiente:** A3d, el inicio; A3e, el resto.
+- **A3d, el inicio (hecho):** `ProjectInceptionService` pasó de 1141 a 70 líneas.
+  - Queda como fachada sobre el `InceptionKernel`, repartido en `inception-flow` (empezar, responder, aprobar, reiniciar), `inception-import` (prototipos, imágenes y React), `inception-design` (ajustar, elegir y reabrir direcciones), `inception-work` (las llamadas al motor en segundo plano) e `inception-snapshot` (la vista y la Bandeja).
+  - Las funciones largas se partieron:
+    - `importDesign` en `importImage`, `imageOption`, `reactSource` e `importReact`;
+    - la vista en `totalUsage`, `nextActionOf` y `notStarted`;
+    - `start` en `startReferences` y `askGoals`;
+    - `answer` en `answersAndNote`;
+    - `launch` en `storeResult`.
+  - Pasan las 587 pruebas sin tocarlas.
+  - Corrida real con `haiku` del inicio de un repositorio existente con una prueba rota: preguntas, línea base, propuesta con «Dejar la verificación en verde», aprobación y piloto bloqueado. Un primer intento falló dentro del motor al generar la propuesta (`haiku` terminó con `tool_use`); el segundo pasó completo.
+- **Pendiente:** A3e, el resto de archivos grandes del núcleo, los prompts a `prompts/` y `Clock`/`IdGenerator`.
 
 **Estado de A1b (2026-11-12): hecho.** `src/shared/kernel/` (`graph.ts`, `artifacts.ts`) tiene el vocabulario común; el dominio ya no importa `shared/contracts` y los contratos lo reexportan. El informe de métricas pasó a `shared/contracts/metrics-view.ts` (los contratos ya no importan módulos). Cada `ipc.ts` marca con `serial(...)` los canales que mutan estado; el router expone `isSerialized` y el despachador ya no tiene lista propia. Pruebas nuevas: los canales serializados son exactamente los de antes y todo canal que llama el cliente de Tauri tiene handler. En la línea base de capas solo quedan los tres usos de `node:crypto`/`node:path` en `application/` (Clock/IdGenerator en A3).
 

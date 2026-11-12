@@ -155,7 +155,7 @@ reglas fijas:
   - marca que ADR-003 reemplaza a ADR-001,
   - y adapta `docs/UI_SPEC.md`: los tokens pasan a `@theme` de Tailwind.
 
-**Estado de C7a (2026-11-12): hecho.** La migración del ecommerce (C7b) queda pendiente.
+**Estado de C7a (2026-11-12): hecho.** La migración del ecommerce (C7b) se descartó porque era un proyecto de prueba. El cambio de un proyecto Node a Next.js ya quedó probado en las corridas reales de C7a y C6.
 
 - **Perfil `web-nextjs` en el catálogo:**
   - Next.js (App Router), React, Tailwind CSS 4, Drizzle con `postgres`, PGlite en las pruebas, Zod y Vitest con Testing Library.

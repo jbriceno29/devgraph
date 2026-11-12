@@ -12,7 +12,7 @@ Complementa a `docs/PLAN_DE_TRABAJO.md` (plan vigente del núcleo). Nace de la a
 | S3. Prueba a escala real con un proyecto con dependencias | Hecha: corrida real desde el inicio y medición comparada `notas-spa` (empate en calidad, 0 intervenciones, 2,75× el costo por la skill) |
 | S4. Skills incluidas en la app | Hecha con Impeccable, opcional por proyecto y apagada por defecto tras medir su costo |
 | S5. Puertas de calidad que no escribe el agente | Hecha: banderas de calidad y revisión independiente opcional |
-| S6. Higiene del repositorio (CI, formato, documentación) | CI e índice de documentación hechos; formateador pendiente |
+| S6. Higiene del repositorio (CI, formato, documentación) | Hecha |
 
 Mientras dure este plan, **la exploración visual (V1–V4) queda congelada**: no se le añade alcance hasta cerrar S3.
 
@@ -141,7 +141,7 @@ Objetivo: las tareas que lo necesitan reciben skills especializadas (diseño de 
 
 ### S6. Higiene del repositorio (S–M)
 
-> **Estado (2026-11-11):** `.github/workflows/ci.yml` (Node 22: `npm ci`, `typecheck`, `test`) y `docs/README.md` (índice vigente / referencia / histórico; no se movió ningún documento para no romper enlaces). Referencias IPC y de base de datos al día. Pendiente: formateador.
+> **Estado (2026-11-11):** `.github/workflows/ci.yml` (Node 22: `npm ci`, `typecheck`, `test`) y `docs/README.md` (índice vigente / referencia / histórico; no se movió ningún documento para no romper enlaces). Referencias IPC y de base de datos al día. **Formato (2026-11-12, decisión del usuario: todo el repositorio de una vez):** Biome 2.6.5 solo como formateador (120 columnas, comillas simples, directivas de Tailwind activadas), `npm run format` y `format:check` en CI; excluidos las skills de terceros (su hash), los lockfiles, las pruebas ocultas de los benchmarks, `docs/` y `src-tauri/`. Los dos commits de formato están en `.git-blame-ignore-revs` (`git config blame.ignoreRevsFile .git-blame-ignore-revs`). El linter de Biome sigue apagado: activarlo es otra decisión.
 
 - CI (GitHub Actions) con `npm run typecheck` y `npm test`.
 - Formateador para código nuevo o tocado, sin reformatear todo de golpe; empezar por partir las líneas de más de 400 caracteres en los archivos que se toquen.

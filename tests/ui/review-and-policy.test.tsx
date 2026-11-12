@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ExecutionReview } from '../../src/desktop/presentation/agents/ExecutionReview.js';
 import { ExecutionPolicyForm } from '../../src/desktop/presentation/agents/ExecutionPolicyForm.js';
@@ -99,6 +99,8 @@ describe('ExecutionReview', () => {
     );
     expect(await screen.findByText('src/tasks.js')).toBeTruthy();
     expect(screen.getByText('Contenido omitido (ruta prohibida por la política).')).toBeTruthy();
+    expect(screen.getByText('+export const tasks = [];').getAttribute('data-tone')).toBe('add');
+    expect(screen.getByText(/Al aceptarla se integrará en/)).toBeTruthy();
     expect(screen.getByText('Acciones denegadas (1)')).toBeTruthy();
     expect(screen.getByText('Log de verificación')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Aceptar e integrar en feature/feat-001-tareas' }));
@@ -193,6 +195,11 @@ describe('ExecutionReview', () => {
       />,
     );
     expect(await screen.findByText('Aceptada e integrada')).toBeTruthy();
+    // Past tense once it is in (C6): no «se integrará».
+    expect(screen.getByText(/^Integrada en/).textContent).toBe(
+      'Integrada en feature/feat-001-tareas · commit cccccccc',
+    );
+    expect(document.body.textContent).not.toContain('se integrará');
     expect(screen.queryByRole('button', { name: /Aceptar/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pedir ajustes' })).toBeNull();
   });
@@ -351,11 +358,24 @@ describe('Inspector status control', () => {
         onChangeStatus={onChange}
       />,
     );
-    const select = screen.getByLabelText('Nuevo estado') as HTMLSelectElement;
-    expect([...select.options].map(option => option.value)).toEqual(['READY', 'ARCHIVED']);
-    fireEvent.click(screen.getByRole('button', { name: 'Cambiar estado' }));
+    const group = screen.getByRole('region', { name: 'Estado de la tarea' });
+    expect(
+      within(group)
+        .getAllByRole('button')
+        .map(button => button.textContent),
+    ).toEqual(['Marcar como lista', 'Archivar']);
+    expect(within(group).queryByRole('combobox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar como lista' }));
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('READY'));
     expect((await screen.findByRole('alert')).textContent).toContain('depende de tareas sin terminar');
+    // Archiving asks first and Cancel changes nothing.
+    fireEvent.click(screen.getByRole('button', { name: 'Archivar' }));
+    expect(screen.getByText('Sale del plan y nadie la ejecutará. ¿Archivar la tarea?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Archivar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sí, archivar' }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith('ARCHIVED'));
   });
   it('speaks plain Spanish: no ids, readable attributes, relations and status options', () => {
     const uuid = '0d5b6c1e-1111-4222-8333-444455556666';
@@ -374,6 +394,9 @@ describe('Inspector status control', () => {
         featureId: 'feat',
         acceptance_criteria: ['Valida títulos', 'Guarda'],
         meta: { owner: 'Ana', urgent: true },
+        work_type: 'TASK',
+        priority: 'MEDIUM',
+        recommended_profile_role: 'DEVELOPER',
       },
       relationships: [
         {
@@ -415,11 +438,16 @@ describe('Inspector status control', () => {
     expect(screen.getByText('Criterios de aceptación')).toBeTruthy();
     expect(screen.getByText('Valida títulos')).toBeTruthy();
     expect(container.textContent).toContain('Urgent: Sí');
+    expect(screen.getByText('Tipo de trabajo').nextElementSibling?.textContent).toBe('Tarea');
+    expect(screen.getByText('Prioridad').nextElementSibling?.textContent).toBe('Media');
+    expect(container.textContent).not.toMatch(/MEDIUM|DEVELOPER|Recommended/);
     expect(screen.getByText('Requerida por')).toBeTruthy();
     expect(screen.getByText('Terminada')).toBeTruthy();
     expect(
-      [...(screen.getByLabelText('Nuevo estado') as HTMLSelectElement).options].map(option => option.textContent),
-    ).toEqual(['Lista']);
+      within(screen.getByRole('region', { name: 'Estado de la tarea' }))
+        .getAllByRole('button')
+        .map(button => button.textContent),
+    ).toEqual(['Marcar como lista']);
     expect(screen.getByRole('complementary', { name: 'Inspector' }).className).toContain('clamp(');
   });
   it('offers the next step for a task only when the shell provides it', () => {
@@ -478,5 +506,19 @@ describe('Inspector status control', () => {
       />,
     );
     expect(screen.getByText('Hay una ejecución en curso; el estado lo controla la ejecución.')).toBeTruthy();
+  });
+});
+
+describe('diffLineTone', () => {
+  it('colors additions, deletions and hunk headers, but not the file headers', async () => {
+    const { diffLineTone } = await import('../../src/desktop/presentation/agents/ExecutionReview.js');
+    expect(['+a', '-b', '@@ -1 +1 @@', '+++ b/x', '--- a/x', ' c'].map(diffLineTone)).toEqual([
+      'add',
+      'remove',
+      'hunk',
+      'context',
+      'context',
+      'context',
+    ]);
   });
 });

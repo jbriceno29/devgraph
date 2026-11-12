@@ -138,8 +138,11 @@ describe('«Integrar en main» in the feature pilot panel', () => {
     }
     ipc(pilot({ ...ready, targetBranch: null, integratedAt: '2026-11-10T10:00:00Z' }), async () => merged);
     panel();
-    expect(await screen.findByRole('button', { name: 'Integrar en la rama principal' })).toBeTruthy();
-    expect(screen.getByText(/Ya la integraste el .*puedes repetirlo sin riesgo/)).toBeTruthy();
+    // Already integrated (C6): it says so, and repeating it is a secondary action.
+    const again = await screen.findByRole('button', { name: 'Volver a integrar en la rama principal' });
+    expect(again.className).not.toContain('bg-accent');
+    expect(screen.getByText('FEAT-001 está integrada en la rama principal')).toBeTruthy();
+    expect(screen.getByText(/La integraste el .*puedes repetirlo sin riesgo/)).toBeTruthy();
   });
 });
 

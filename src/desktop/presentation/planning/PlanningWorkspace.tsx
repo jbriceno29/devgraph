@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GraphCanvas } from '../graph/GraphCanvas.js';
+import { GraphCanvas, type GraphCanvasFilter } from '../graph/GraphCanvas.js';
+import { useUnsavedChanges } from '../../state/unsaved-changes.js';
 import type { ChangeSetDto } from '../../../shared/contracts/ipc-contracts.js';
 import type { GraphEdgeView, GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import { useWorkspaceNavigation } from '../../state/workspace-navigation-context.js';
@@ -34,7 +35,15 @@ const describe = (operation: Record<string, unknown>) =>
     : operationLabel(String(operation.type ?? 'CAMBIO'));
 
 /** Planificador: el motor propone cambios al grafo (sin tocar archivos), se previsualizan como elementos fantasma y el usuario decide si aplicarlos. */
-export function PlanningWorkspace({ changeSetId }: { changeSetId?: string | null } = {}) {
+export function PlanningWorkspace({
+  changeSetId,
+  graphFilter,
+  onGraphFilterChange,
+}: {
+  changeSetId?: string | null;
+  graphFilter?: GraphCanvasFilter;
+  onGraphFilterChange?(filter: GraphCanvasFilter): void;
+} = {}) {
   const state = useWorkspaceNavigation(),
     workspace = state.workspace!;
   const [changeSets, setChangeSets] = useState<ChangeSetDto[]>([]),
@@ -45,6 +54,7 @@ export function PlanningWorkspace({ changeSetId }: { changeSetId?: string | null
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState<unknown>(null);
+  useUnsavedChanges('«¿Qué quieres cambiar?»', prompt.trim() !== '');
   const [engine, setEngine] = useState<{ name: string; models: string[]; defaultModel: string | null } | null>(null),
     [model, setModel] = useState('');
   // Actualización visual por feature: referencias (las traduce el mismo modelo que en el inicio) y docs/UI_SPEC.md.
@@ -155,7 +165,8 @@ export function PlanningWorkspace({ changeSetId }: { changeSetId?: string | null
         ghostEdges={ghosts.edges}
         selectedId={state.selectedEntityId}
         onSelect={id => void state.selectEntity(id)}
-        onFilter={(nodeTypes, edgeTypes) => void state.refreshGraph({ entityTypes: nodeTypes, edgeTypes })}
+        {...(graphFilter ? { filter: graphFilter } : {})}
+        {...(onGraphFilterChange ? { onFilterChange: onGraphFilterChange } : {})}
       />
       <aside
         className="flex w-[clamp(17rem,36vw,24rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface-raised"

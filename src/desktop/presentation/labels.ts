@@ -170,3 +170,15 @@ export const shortDate = (value: string | null | undefined) => {
     ? ''
     : new Date(time).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
+
+/** Values of the inspector attributes that the core stores as codes (C1 of the UX audit). */
+const ATTRIBUTE_VALUE: Record<string, Record<string, string>> = {
+  work_type: { TASK: 'Tarea', BUG: 'Error', SPIKE: 'Investigación', IMPROVEMENT: 'Mejora' },
+  priority: { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' },
+};
+ATTRIBUTE_VALUE.workType = ATTRIBUTE_VALUE.work_type!;
+/** The attribute's value in Spanish when it is a known code; otherwise the value unchanged. */
+export const attributeValue = (key: string, value: unknown): unknown =>
+  typeof value === 'string' ? (ATTRIBUTE_VALUE[key]?.[value] ?? value) : value;
+/** Attributes that say nothing to the user (who runs the task is decided by the app). */
+export const HIDDEN_ATTRIBUTES: ReadonlySet<string> = new Set(['recommended_profile_role', 'recommendedProfileRole']);

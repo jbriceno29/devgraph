@@ -142,11 +142,18 @@ export function ExecutionReview({
         </div>
       )}
       <p className="text-[11px] text-fg-muted">
-        Se integrará en la rama <span className="font-mono text-fg">{execution.baseBranch ?? '—'}</span>
-        {execution.mergedCommit && (
+        {execution.mergedCommit ? (
           <>
-            {' '}
-            · commit integrado <span className="font-mono text-fg">{execution.mergedCommit.slice(0, 8)}</span>
+            Integrada en <span className="font-mono text-fg">{execution.baseBranch ?? '—'}</span> · commit{' '}
+            <span className="font-mono text-fg">{execution.mergedCommit.slice(0, 8)}</span>
+          </>
+        ) : detail.canAccept ? (
+          <>
+            Al aceptarla se integrará en <span className="font-mono text-fg">{execution.baseBranch ?? '—'}</span>
+          </>
+        ) : (
+          <>
+            Rama de destino: <span className="font-mono text-fg">{execution.baseBranch ?? '—'}</span>
           </>
         )}
       </p>
@@ -173,9 +180,7 @@ export function ExecutionReview({
                     <span className="text-success">+{file.additions}</span>{' '}
                     <span className="text-danger">−{file.deletions}</span>
                   </summary>
-                  <pre className="max-h-80 overflow-auto border-t border-border p-3 text-[11px] leading-relaxed text-fg-muted">
-                    {file.patch ?? 'Contenido omitido (ruta prohibida por la política).'}
-                  </pre>
+                  <DiffView patch={file.patch} />
                 </details>
               </li>
             ))}
@@ -272,5 +277,37 @@ export function ExecutionReview({
         </p>
       )}
     </section>
+  );
+}
+
+/** Tone of each line of a unified diff: additions, deletions, hunk headers and the rest (C6). */
+export function diffLineTone(line: string): 'add' | 'remove' | 'hunk' | 'context' {
+  if (line.startsWith('+++') || line.startsWith('---')) return 'context';
+  if (line.startsWith('+')) return 'add';
+  if (line.startsWith('-')) return 'remove';
+  if (line.startsWith('@@')) return 'hunk';
+  return 'context';
+}
+const diffTone = {
+  add: 'bg-success-soft text-success',
+  remove: 'bg-danger-soft text-danger',
+  hunk: 'text-accent',
+  context: 'text-fg-muted',
+};
+function DiffView({ patch }: { patch: string | null }) {
+  if (patch === null)
+    return (
+      <p className="border-t border-border p-3 text-[11px] text-fg-muted">
+        Contenido omitido (ruta prohibida por la política).
+      </p>
+    );
+  return (
+    <pre className="max-h-80 overflow-auto border-t border-border py-2 text-[11px] leading-relaxed">
+      {patch.split('\n').map((line, index) => (
+        <span key={index} data-tone={diffLineTone(line)} className={`block px-3 ${diffTone[diffLineTone(line)]}`}>
+          {line || ' '}
+        </span>
+      ))}
+    </pre>
   );
 }

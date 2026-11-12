@@ -159,6 +159,7 @@ describe('ActivityService', () => {
     expect(approval).toMatchObject({
       id: 'APPROVAL_PENDING:ap',
       executionId: 'e2',
+      approvalRequestId: 'ap',
       workItemId: 't2',
       needsAttention: true,
       target: 'agents',

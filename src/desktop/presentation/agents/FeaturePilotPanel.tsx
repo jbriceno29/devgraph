@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useUnsavedChanges } from '../../state/unsaved-changes.js';
 import type { AutonomyLevelDto, FeaturePilotDto, FeatureReportDto } from '../../../shared/contracts/agent-view.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import { statusLabel as workStatus } from '../labels.js';
@@ -30,21 +31,25 @@ const statusLabel: Record<string, string> = {
   FAILED: 'Error',
 };
 
+type AutonomyDraft = ReturnType<typeof draftOf>;
+/** The editable form of a feature's autonomy (numbers as text, as the inputs hold them). */
+const draftOf = (autonomy: FeaturePilotDto['autonomy']) => ({
+  level: autonomy.level,
+  executionModel: autonomy.executionModel ?? '',
+  escalationModel: autonomy.escalationModel ?? '',
+  maxAttempts: String(autonomy.maxAttempts),
+  threshold: String(Math.round(autonomy.usagePauseThreshold * 100)),
+  groupTasks: autonomy.groupTasks,
+  maxGroupSize: String(autonomy.maxGroupSize),
+  reviewModel: autonomy.reviewModel ?? '',
+});
+
 /** Autonomy per feature and the autopilot's controls, status and decision log. */
 export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nodes: GraphNodeView[] }) {
   const features = nodes.filter(node => node.type === 'FEATURE');
   const [featureId, setFeatureId] = useState(features[0]?.id ?? '');
   const [state, setState] = useState<FeaturePilotDto | null>(null);
-  const [draft, setDraft] = useState<{
-    level: AutonomyLevelDto;
-    executionModel: string;
-    escalationModel: string;
-    maxAttempts: string;
-    threshold: string;
-    groupTasks: boolean;
-    maxGroupSize: string;
-    reviewModel: string;
-  } | null>(null);
+  const [draft, setDraft] = useState<AutonomyDraft | null>(null);
   const [confirming, setConfirming] = useState(false),
     [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false),
@@ -61,20 +66,7 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
     try {
       const next = await window.workspaceIpc.queries.getFeaturePilot(projectId, featureId);
       setState(next);
-      setDraft(current =>
-        current && current.level === next.autonomy.level
-          ? current
-          : {
-              level: next.autonomy.level,
-              executionModel: next.autonomy.executionModel ?? '',
-              escalationModel: next.autonomy.escalationModel ?? '',
-              maxAttempts: String(next.autonomy.maxAttempts),
-              threshold: String(Math.round(next.autonomy.usagePauseThreshold * 100)),
-              groupTasks: next.autonomy.groupTasks,
-              maxGroupSize: String(next.autonomy.maxGroupSize),
-              reviewModel: next.autonomy.reviewModel ?? '',
-            },
-      );
+      setDraft(current => (current && current.level === next.autonomy.level ? current : draftOf(next.autonomy)));
     } catch (reason) {
       setError(text(reason));
     }
@@ -117,18 +109,13 @@ export function FeaturePilotPanel({ projectId, nodes }: { projectId: string; nod
         maxGroupSize: Number(draft.maxGroupSize),
         reviewModel: draft.reviewModel || null,
       });
-      setDraft({
-        level: saved.level,
-        executionModel: saved.executionModel ?? '',
-        escalationModel: saved.escalationModel ?? '',
-        maxAttempts: String(saved.maxAttempts),
-        threshold: String(Math.round(saved.usagePauseThreshold * 100)),
-        groupTasks: saved.groupTasks,
-        maxGroupSize: String(saved.maxGroupSize),
-        reviewModel: saved.reviewModel ?? '',
-      });
+      setDraft(draftOf(saved));
     });
 
+  useUnsavedChanges(
+    'la autonomía de la feature',
+    Boolean(draft && state && JSON.stringify(draft) !== JSON.stringify(draftOf(state.autonomy))),
+  );
   const integrateFeature = window.workspaceIpc.commands.integrateFeature;
   const integrate = integrateFeature ? () => integrateFeature(projectId, featureId) : undefined;
 

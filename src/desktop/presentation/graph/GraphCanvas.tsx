@@ -59,9 +59,17 @@ interface GraphCanvasProps {
   ghostEdges?: GraphEdgeView[];
   selectedId: string | null;
   onSelect(id: string): void;
-  onFilter(nodeTypes: KnowledgeEntityType[], edgeTypes: GraphEdgeType[]): void;
+  /** What is visible. The filter only hides things on this canvas: the shell's graph stays whole. */
+  filter?: GraphCanvasFilter;
+  /** Lets the owner keep the filter when the view unmounts (switching tabs). */
+  onFilterChange?(filter: GraphCanvasFilter): void;
   projectId?: string;
 }
+export interface GraphCanvasFilter {
+  nodeTypes: KnowledgeEntityType[];
+  edgeTypes: GraphEdgeType[];
+}
+export const FULL_GRAPH_FILTER: GraphCanvasFilter = { nodeTypes, edgeTypes };
 /** Estado vivo (etapa 6): lo que corre late, lo hecho se asienta, lo que espera se atenúa. `token` es `--status-<token>`. */
 const statusLook: Record<string, { token: string; label: string; live?: boolean; dim?: boolean }> = {
   READY: { token: 'ready', label: 'LISTA' },
@@ -119,7 +127,8 @@ export function GraphCanvas({
   ghostEdges = [],
   selectedId,
   onSelect,
-  onFilter,
+  filter = FULL_GRAPH_FILTER,
+  onFilterChange,
   projectId,
 }: GraphCanvasProps) {
   const [pilots, setPilots] = useState<Map<string, string>>(() => new Map()),
@@ -173,8 +182,8 @@ export function GraphCanvas({
     return totals;
   }, [nodes]);
   const flowTier = new Map((showFlow && flow ? flow.sources : []).map(source => [source.entityId, source.tier]));
-  const [visibleNodes, setVisibleNodes] = useState<Set<KnowledgeEntityType>>(() => new Set(nodeTypes)),
-    [visibleEdges, setVisibleEdges] = useState<Set<GraphEdgeType>>(() => new Set(edgeTypes)),
+  const [visibleNodes, setVisibleNodes] = useState<Set<KnowledgeEntityType>>(() => new Set(filter.nodeTypes)),
+    [visibleEdges, setVisibleEdges] = useState<Set<GraphEdgeType>>(() => new Set(filter.edgeTypes)),
     [filtersOpen, setFiltersOpen] = useState(false);
   const displayNodes = [...nodes, ...ghostNodes],
     displayEdges = [...edges, ...ghostEdges];
@@ -189,20 +198,22 @@ export function GraphCanvas({
     viewH = maxY + NODE_H + PAD * 2 + 48,
     viewLeft = minX - PAD,
     viewTop = -PAD - 24;
-  const updateNode = (type: KnowledgeEntityType) =>
-    setVisibleNodes(previous => {
-      const next = new Set(previous);
-      next.has(type) ? next.delete(type) : next.add(type);
-      onFilter([...next], [...visibleEdges]);
-      return next;
-    });
-  const updateEdge = (type: GraphEdgeType) =>
-    setVisibleEdges(previous => {
-      const next = new Set(previous);
-      next.has(type) ? next.delete(type) : next.add(type);
-      onFilter([...visibleNodes], [...next]);
-      return next;
-    });
+  const toggle = <T,>(set: Set<T>, value: T) => {
+    const next = new Set(set);
+    next.has(value) ? next.delete(value) : next.add(value);
+    return next;
+  };
+  const updateNode = (type: KnowledgeEntityType) => {
+    const next = toggle(visibleNodes, type);
+    setVisibleNodes(next);
+    onFilterChange?.({ nodeTypes: [...next], edgeTypes: [...visibleEdges] });
+  };
+  const updateEdge = (type: GraphEdgeType) => {
+    const next = toggle(visibleEdges, type);
+    setVisibleEdges(next);
+    onFilterChange?.({ nodeTypes: [...visibleNodes], edgeTypes: [...next] });
+  };
+  const shownIds = new Set(displayNodes.filter(node => visibleNodes.has(node.type)).map(node => node.id));
   const hidden = nodeTypes.length - visibleNodes.size + edgeTypes.length - visibleEdges.size;
 
   /** Cambia el zoom manteniendo fijo el punto central de la vista (o el del cursor con la rueda). */
@@ -409,7 +420,7 @@ export function GraphCanvas({
                   );
                 })}
               {displayEdges
-                .filter(edge => visibleEdges.has(edge.type))
+                .filter(edge => visibleEdges.has(edge.type) && shownIds.has(edge.source) && shownIds.has(edge.target))
                 .map(edge => {
                   const a = pointById.get(edge.source),
                     b = pointById.get(edge.target);

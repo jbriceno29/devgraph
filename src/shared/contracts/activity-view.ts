@@ -24,6 +24,8 @@ export interface ActivityItemDto {
   featureId: string | null;
   changeSetId: string | null;
   target: ActivityTarget;
+  /** APPROVAL_PENDING: the request the inbox can answer in place (with `executionId`). */
+  approvalRequestId?: string | null;
 }
 export interface ActivitySummaryDto {
   items: ActivityItemDto[];

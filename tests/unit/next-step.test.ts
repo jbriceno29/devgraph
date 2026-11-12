@@ -242,6 +242,7 @@ describe('nextStep', () => {
       target: { view: 'graph', workItemId: 'f' },
       tone: 'success',
       detail: expect.stringMatching(/FEAT-002 depende de ella/),
+      action: { kind: 'integrate-feature', featureId: 'f', featureKey: 'FEAT-001', targetBranch: 'main', doneTasks: 1 },
     });
     // Independent and work left: keep running tasks.
     expect(nextStep({ nodes: graph(...nodes).nodes, edges: [] }, branch())).toMatchObject({ id: 'run-ready' });

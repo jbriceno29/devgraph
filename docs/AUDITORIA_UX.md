@@ -136,6 +136,20 @@ El inspector solo existe en Grafo. Propuesta: **un único panel de detalle** (ca
 
 Métricas: clics y tiempo por tarea, tareas completadas sin ayuda y momentos de «¿dónde está…?». La métrica que importa para H4 es la **(5)**: tiempo desde el aviso hasta el piloto en marcha otra vez.
 
+### Estado de F0 (2026-11-12)
+
+Hecho, salvo la repetición del recorrido con el arnés en el navegador (pendiente).
+
+| # | Qué se hizo | Dónde |
+| :--- | :--- | :--- |
+| B1 | El filtro solo oculta en el lienzo (también las aristas hacia nodos ocultos); el grafo del shell no cambia y el filtro se guarda en el shell, así que sobrevive al cambio de vista. Planificar comparte el mismo filtro. | `GraphCanvas.tsx` (`filter`, `onFilterChange`), `WorkspaceShell.tsx` |
+| B2 | «Integrar FEAT-00X» integra desde el banner tras una confirmación en línea («¿Juntar N tareas de FEAT-00X en main?»). Sin el comando en el núcleo, el botón dice «Ver FEAT-00X para integrarla». | `next-step.ts` (`action`), `NextStepBanner.tsx` |
+| B4 | `useUnsavedChanges` registra los borradores (documento, política, autonomía, «¿Qué quieres cambiar?») y el shell pregunta antes de cambiar de vista o de proyecto. | `state/unsaved-changes.tsx` |
+| B5 | Botones con el nombre de la acción («Marcar como lista», «Bloquear», «Desbloquear», «Archivar» con confirmación); sin nada preseleccionado. | `ContextualInspector.tsx` (`StatusControl`) |
+| B6 | La bandeja responde la petición de permiso en línea («Aprobar una vez» / «Rechazar»); Escape cierra el diálogo sin decidir. | `ActivityInbox.tsx`, `activity-service.ts` (`approvalRequestId`), `AgentsWorkspace.tsx` |
+| C1 | Resúmenes de la validación en español (y traducción de los guardados en inglés); en el inspector, tipo y prioridad traducidos y el rol recomendado oculto; «cerca del límite» en lugar de `allowed_warning`. | `domain/agents/result-summary.ts`, `labels.ts` |
+| C6 | «Integrada en … · commit …» una vez integrada y «Al aceptarla se integrará…» antes; feature ya integrada con «Volver a integrar» como acción secundaria; diff con color por línea. | `ExecutionReview.tsx`, `FeatureIntegration.tsx` |
+
 ## 7. Cómo repetir la revisión con la app real
 
 El arnés no forma parte del repositorio. Se reconstruye en minutos:

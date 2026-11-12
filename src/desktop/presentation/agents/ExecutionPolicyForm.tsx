@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useUnsavedChanges } from '../../state/unsaved-changes.js';
 import type { ExecutionPolicyDto } from '../../../shared/contracts/agent-view.js';
 import { errorText } from '../errors.js';
 import { control, primary } from '../ui.js';
@@ -42,6 +43,22 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
   const [rules, setRules] = useState<DecisionPolicyDto['rules']>(defaultDecisionPolicy.rules);
   const [maxAutoTasks, setMaxAutoTasks] = useState(String(defaultDecisionPolicy.maxAutoTasksPerFeature));
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  // What the form showed when it last loaded or saved: anything else is an unsaved draft.
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const snapshot = values && JSON.stringify({ values, minutes, turns, rules, maxAutoTasks });
+  useUnsavedChanges('la política de ejecución', Boolean(baseline && snapshot !== baseline));
+  const remember = (policy: ExecutionPolicyDto) => {
+    const decisions = policy.decisionPolicy ?? defaultDecisionPolicy;
+    setBaseline(
+      JSON.stringify({
+        values: toText(policy),
+        minutes: String(policy.maxExecutionMinutes ?? 30),
+        turns: String(policy.maxTurns ?? 0),
+        rules: { ...defaultDecisionPolicy.rules, ...decisions.rules },
+        maxAutoTasks: String(decisions.maxAutoTasksPerFeature),
+      }),
+    );
+  };
 
   useEffect(() => {
     let current = true;
@@ -53,6 +70,7 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
           setMinutes(String(policy.maxExecutionMinutes ?? 30));
           setTurns(String(policy.maxTurns ?? 0));
           loadDecisions(policy);
+          remember(policy);
         }
       })
       .catch(reason => {
@@ -100,8 +118,10 @@ export function ExecutionPolicyForm({ projectId }: { projectId: string }) {
         decisionPolicy: { rules, maxAutoTasksPerFeature: max },
       });
       setValues(toText(saved));
+      setMinutes(String(saved.maxExecutionMinutes ?? 30));
       setTurns(String(saved.maxTurns ?? 0));
       loadDecisions(saved);
+      remember(saved);
       setMessage({
         tone: 'ok',
         text: saved.allowedCommands.length

@@ -45,6 +45,7 @@ import { ClaudeCodeAdapter } from '../../ai/claude-code-adapter.js';
 import { ExecutionEventLog } from '../../filesystem/execution-event-log.js';
 import type { AgentExecution } from '../../../domain/agents/models.js';
 import { coveredWorkItems } from '../../../domain/agents/models.js';
+import { readableResultSummary } from '../../../domain/agents/result-summary.js';
 import type { StartAgentExecutionInput } from '../../../shared/contracts/agent-view.js';
 import type { AgentAdapterPort } from '../../../application/ports/agent-adapter-port.js';
 import { GitIsolationService } from '../../git/git-isolation-service.js';
@@ -1197,7 +1198,7 @@ function toAgentExecutionDto(
     reviewNote: execution.reviewNote ?? null,
     mergedCommit: execution.mergedCommit ?? null,
     reviewedAt: execution.reviewedAt ?? null,
-    resultSummary: execution.resultSummary,
+    resultSummary: readableResultSummary(execution.resultSummary),
     startedAt: execution.startedAt,
     completedAt: execution.completedAt,
     coveredWorkItemIds: coveredWorkItems(execution),

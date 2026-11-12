@@ -17,7 +17,6 @@ it('renders proposed graph nodes as accessible, dashed ghosts before application
       ]}
       selectedId="root"
       onSelect={() => undefined}
-      onFilter={() => undefined}
     />,
   );
   expect(screen.getByLabelText('Propuesta: Feature: Member sign in')).toBeTruthy();
@@ -46,16 +45,7 @@ describe('living graph (Stage 6)', () => {
       },
       queries: { getContextFlow: vi.fn() },
     };
-    render(
-      <GraphCanvas
-        projectId="p1"
-        nodes={nodes}
-        edges={[]}
-        selectedId="root"
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
-    );
+    render(<GraphCanvas projectId="p1" nodes={nodes} edges={[]} selectedId="root" onSelect={() => undefined} />);
     expect(screen.getByLabelText('Tarea: Listar').getAttribute('data-live')).toBe('true');
     expect(screen.getByText('EN CURSO')).toBeTruthy();
     expect(screen.getByText('✓ HECHA')).toBeTruthy();
@@ -83,14 +73,7 @@ describe('living graph (Stage 6)', () => {
       queries: { getContextFlow },
     };
     const { container } = render(
-      <GraphCanvas
-        projectId="p1"
-        nodes={nodes}
-        edges={[]}
-        selectedId="t2"
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
+      <GraphCanvas projectId="p1" nodes={nodes} edges={[]} selectedId="t2" onSelect={() => undefined} />,
     );
     await waitFor(() => expect(screen.getByLabelText('Tarea: Crear').getAttribute('data-context-tier')).toBe('5'));
     expect(getContextFlow).toHaveBeenCalledWith('p1', 't2');
@@ -102,16 +85,7 @@ describe('living graph (Stage 6)', () => {
     expect(screen.getByLabelText('Tarea: Crear').getAttribute('data-context-tier')).toBeNull();
   });
   it('asks for no context when the selection is not a task or the bridge is missing', () => {
-    render(
-      <GraphCanvas
-        projectId="p1"
-        nodes={nodes}
-        edges={[]}
-        selectedId="t2"
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
-    );
+    render(<GraphCanvas projectId="p1" nodes={nodes} edges={[]} selectedId="t2" onSelect={() => undefined} />);
     expect(screen.getByText('EN CURSO')).toBeTruthy();
   });
 });
@@ -133,13 +107,7 @@ describe('lienzo navegable', () => {
   const zoom = (container: HTMLElement) => Number(container.querySelector('svg[data-zoom]')!.getAttribute('data-zoom'));
   it('zooms with accessible buttons and fits the graph to the view', () => {
     const { container } = render(
-      <GraphCanvas
-        nodes={nodes}
-        edges={edges}
-        selectedId={null}
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
+      <GraphCanvas nodes={nodes} edges={edges} selectedId={null} onSelect={() => undefined} />,
     );
     expect(screen.getByRole('toolbar', { name: 'Zoom del grafo' }).textContent).toContain('100 %');
     fireEvent.click(screen.getByRole('button', { name: 'Acercar' }));
@@ -159,13 +127,7 @@ describe('lienzo navegable', () => {
   });
   it('zooms with Ctrl + wheel but leaves the plain wheel to scroll', () => {
     const { container } = render(
-      <GraphCanvas
-        nodes={nodes}
-        edges={edges}
-        selectedId={null}
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
+      <GraphCanvas nodes={nodes} edges={edges} selectedId={null} onSelect={() => undefined} />,
     );
     const viewport = screen.getByRole('region', { name: /Lienzo del grafo/ });
     fireEvent.wheel(viewport, { deltaY: -100 });
@@ -175,13 +137,7 @@ describe('lienzo navegable', () => {
   });
   it('names relations in Spanish only while an end is selected or hovered, and wraps long titles in two lines', () => {
     const { container, rerender } = render(
-      <GraphCanvas
-        nodes={nodes}
-        edges={edges}
-        selectedId={null}
-        onSelect={() => undefined}
-        onFilter={() => undefined}
-      />,
+      <GraphCanvas nodes={nodes} edges={edges} selectedId={null} onSelect={() => undefined} />,
     );
     expect(screen.queryByText('depende de')).toBeNull();
     expect(container.textContent).not.toContain('DEPENDS');
@@ -189,9 +145,7 @@ describe('lienzo navegable', () => {
     expect(screen.getByText('depende de')).toBeTruthy();
     fireEvent.mouseLeave(screen.getByLabelText('Tarea: Listar'));
     expect(screen.queryByText('depende de')).toBeNull();
-    rerender(
-      <GraphCanvas nodes={nodes} edges={edges} selectedId="a" onSelect={() => undefined} onFilter={() => undefined} />,
-    );
+    rerender(<GraphCanvas nodes={nodes} edges={edges} selectedId="a" onSelect={() => undefined} />);
     expect(screen.getByText('depende de')).toBeTruthy();
     const title = [...screen.getByLabelText(/Tarea: Crear el índice/).querySelectorAll('tspan')].map(
       span => span.textContent,
@@ -199,13 +153,22 @@ describe('lienzo navegable', () => {
     expect(title).toEqual(['Crear el índice de', 'búsqueda de texto…']);
   });
   it('shows readable filters and counts only what is hidden', () => {
-    const onFilter = vi.fn();
+    const onFilterChange = vi.fn();
     render(
-      <GraphCanvas nodes={nodes} edges={edges} selectedId={null} onSelect={() => undefined} onFilter={onFilter} />,
+      <GraphCanvas
+        nodes={nodes}
+        edges={edges}
+        selectedId={null}
+        onSelect={() => undefined}
+        onFilterChange={onFilterChange}
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
     fireEvent.click(screen.getByRole('button', { name: 'Depende de' }));
-    expect(onFilter).toHaveBeenLastCalledWith(expect.any(Array), expect.not.arrayContaining(['DEPENDS_ON']));
+    expect(onFilterChange).toHaveBeenLastCalledWith({
+      nodeTypes: expect.any(Array),
+      edgeTypes: expect.not.arrayContaining(['DEPENDS_ON']),
+    });
     expect(screen.getByRole('button', { name: 'Cerrar filtros · 1 ocultos' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tarea' }).getAttribute('aria-pressed')).toBe('true');
   });

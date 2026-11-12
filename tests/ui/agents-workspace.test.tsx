@@ -234,7 +234,7 @@ it('explains when no READY WorkItems are available', async () => {
   expect(screen.getByText('No hay tareas listas para ejecutar').parentElement!.textContent).toMatch(/Grafo.*«Lista»/);
 });
 
-it('shows a named approval dialog and sends rejection when it closes', async () => {
+it('shows a named approval dialog: Rechazar rejects, Escape closes without deciding', async () => {
   HTMLDialogElement.prototype.showModal = function () {
     this.setAttribute('open', '');
   };
@@ -268,9 +268,35 @@ it('shows a named approval dialog and sends rejection when it closes', async () 
     expect(ipc.commands.resolveExecutionApproval).toHaveBeenCalledWith({
       executionId: 'execution-1',
       requestId: 'approval-123',
-      decision: { approved: false, reason: 'Aprobación rechazada o diálogo cerrado.' },
+      decision: { approved: false, reason: 'Aprobación rechazada por el usuario.' },
     }),
   );
+});
+
+it('closing the approval dialog with Escape leaves the request pending (B6)', async () => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
+  const ipc = client();
+  ipc.commands.resolveExecutionApproval = vi.fn(async () => ({ resolved: true as const }));
+  ipc.queries.listExecutions = vi.fn(async () => [{ ...execution, status: 'AWAITING_APPROVAL' as const }]);
+  ipc.queries.listExecutionEvents = vi.fn(async () => [
+    {
+      id: 'approval-record',
+      sequenceNo: 1,
+      createdAt: 'now',
+      event: { type: 'APPROVAL_REQUIRED', timestamp: 'now', requestId: 'approval-123', actionType: 'COMMAND' },
+    },
+  ]);
+  Object.defineProperty(window, 'workspaceIpc', { configurable: true, value: ipc });
+  render(<AgentsWorkspace projectId="project" nodes={[]} selectedEntityId={null} />);
+  const dialog = await screen.findByRole('dialog', { name: 'Aprobación requerida' });
+  expect(dialog.textContent).toContain('sigue pendiente en Actividad');
+  (dialog as HTMLDialogElement).returnValue = '';
+  dialog.removeAttribute('open');
+  fireEvent(dialog, new Event('close'));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(ipc.commands.resolveExecutionApproval).not.toHaveBeenCalled();
 });
 
 it('splits Ejecutar, Revisión, Piloto, Comandos and Ajustes into accessible tabs, with policy and auth apart from launching', async () => {

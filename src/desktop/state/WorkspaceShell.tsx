@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GraphCanvas } from '../presentation/graph/GraphCanvas.js';
+import { FULL_GRAPH_FILTER, GraphCanvas, type GraphCanvasFilter } from '../presentation/graph/GraphCanvas.js';
 import { ContextualInspector } from '../presentation/inspector/ContextualInspector.js';
 import { DocumentsPanel } from '../presentation/documents/DocumentsPanel.js';
 import { PlanningWorkspace } from '../presentation/planning/PlanningWorkspace.js';
@@ -15,7 +15,7 @@ import { VIEWS, viewInfo } from '../presentation/shell/views.js';
 import { nextStep, type ShellTarget, type ShellView } from '../presentation/shell/next-step.js';
 import { useWorkspaceNavigation } from './workspace-navigation-context.js';
 import { ProjectCreateForm } from './project-create-form.js';
-import type { GraphEdgeType, KnowledgeEntityType } from '../../shared/contracts/graph-view.js';
+import { UnsavedChangesProvider, useConfirmDiscard } from './unsaved-changes.js';
 import type { WorkspaceLoadedStateDto } from '../../shared/contracts/ipc-contracts.js';
 
 const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
@@ -30,7 +30,9 @@ export function WorkspaceShell() {
       </div>
     );
   return workspace ? (
-    <ProjectShell workspace={workspace} />
+    <UnsavedChangesProvider>
+      <ProjectShell workspace={workspace} />
+    </UnsavedChangesProvider>
   ) : (
     <main className="flex min-h-screen flex-col bg-surface text-fg">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-7 py-3">
@@ -103,8 +105,11 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
   );
   // Sin plan todavía, el proyecto abre en Inicio (el asistente); con plan, en Actividad.
   const [view, setView] = useState<ShellView>(() => (hasPlan ? 'activity' : 'inception')),
-    [focus, setFocus] = useState<{ changeSetId?: string | null; executionId?: string | null }>({});
+    [focus, setFocus] = useState<{ changeSetId?: string | null; executionId?: string | null }>({}),
+    // The graph filter lives here so it survives switching views; it never touches the shared graph.
+    [graphFilter, setGraphFilter] = useState<GraphCanvasFilter>(FULL_GRAPH_FILTER);
   const heading = useRef<HTMLHeadingElement>(null);
+  const confirmDiscard = useConfirmDiscard();
   const activity = useActivity(projectId);
   const step = useMemo(() => nextStep(workspace.graph, activity.summary), [workspace.graph, activity.summary]);
   const hasFeatures = nodes.some(node => node.type === 'FEATURE' && node.status !== 'ARCHIVED');
@@ -112,6 +117,7 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
   useResetOnChange(projectId, () => {
     setView(hasPlan ? 'activity' : 'inception');
     setFocus({});
+    setGraphFilter(FULL_GRAPH_FILTER);
   });
   const inception = activity.summary?.inception ?? null;
   /** Cambia de vista (y selecciona lo indicado) desde la bandeja, el banner o un atajo; lleva el foco al título. */
@@ -121,12 +127,13 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
         input.view === 'planning' && input.changeSetId && input.changeSetId === inception?.changeSetId
           ? { view: 'inception' }
           : input;
+      if (target.view !== view && !confirmDiscard()) return;
       if (target.workItemId) void state.selectEntity(target.workItemId);
       setFocus({ changeSetId: target.changeSetId ?? null, executionId: target.executionId ?? null });
       setView(target.view);
       requestAnimationFrame(() => heading.current?.focus());
     },
-    [state.selectEntity, inception?.changeSetId],
+    [state.selectEntity, inception?.changeSetId, view, confirmDiscard],
   );
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -152,11 +159,22 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
     await state.refreshGraph();
     await state.selectEntity(inspector.entity.id);
   };
+  const banner = (
+    <NextStepBanner
+      step={step}
+      onGo={go}
+      onIntegrateFeature={integrateFeature ? featureId => integrateFeature(projectId, featureId) : undefined}
+      onDone={() => {
+        void activity.reload();
+        void state.refreshGraph();
+      }}
+    />
+  );
   const content =
     view === 'activity' ? (
       <div className="mx-auto min-h-0 w-full max-w-4xl space-y-4 overflow-y-auto">
         {hasFeatures ? (
-          <NextStepBanner step={step} onGo={go} />
+          banner
         ) : (
           <EmptyProject
             projectName={workspace.project.name}
@@ -172,12 +190,13 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
             summary={activity.summary}
             loading={activity.loading}
             error={activity.error}
+            onChanged={() => void activity.reload()}
           />
         )}
       </div>
     ) : view === 'graph' ? (
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <NextStepBanner step={step} onGo={go} />
+        {banner}
         <div className="flex min-h-0 min-w-0 flex-1 gap-4">
           <GraphCanvas
             projectId={projectId}
@@ -185,9 +204,8 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
             edges={workspace.graph.edges}
             selectedId={selectedEntityId}
             onSelect={id => void state.selectEntity(id)}
-            onFilter={(nodeTypes: KnowledgeEntityType[], edgeTypes: GraphEdgeType[]) =>
-              void state.refreshGraph({ entityTypes: nodeTypes, edgeTypes })
-            }
+            filter={graphFilter}
+            onFilterChange={setGraphFilter}
           />
           <ContextualInspector
             details={inspector}
@@ -211,7 +229,11 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
         </div>
       </div>
     ) : view === 'planning' ? (
-      <PlanningWorkspace changeSetId={focus.changeSetId ?? null} />
+      <PlanningWorkspace
+        changeSetId={focus.changeSetId ?? null}
+        graphFilter={graphFilter}
+        onGraphFilterChange={setGraphFilter}
+      />
     ) : view === 'inception' ? (
       <InceptionAssistant
         projectId={projectId}
@@ -237,10 +259,14 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
       <Sidebar
         projects={projects}
         activeProject={workspace.project}
-        onOpenProject={id => void state.openProject(id)}
+        onOpenProject={id => {
+          if (id !== projectId && !confirmDiscard()) return;
+          void state.openProject(id);
+        }}
         onRefreshProjects={() => void state.refreshProjects()}
         view={view}
         onSelectView={next => {
+          if (next !== view && !confirmDiscard()) return;
           setFocus({});
           setView(next);
         }}
@@ -249,8 +275,10 @@ function ProjectShell({ workspace }: { workspace: WorkspaceLoadedStateDto }) {
         nodes={nodes}
         selectedId={selectedEntityId}
         onSelectNode={id => {
+          const leaving = view === 'activity' || view === 'documents';
+          if (leaving && !confirmDiscard()) return;
           void state.selectEntity(id);
-          if (view === 'activity' || view === 'documents') setView('graph');
+          if (leaving) setView('graph');
         }}
       />
       <main className="flex min-w-0 flex-1 flex-col">

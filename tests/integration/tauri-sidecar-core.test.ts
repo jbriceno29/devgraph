@@ -189,7 +189,9 @@ describe('Tauri to TypeScript sidecar protocol', () => {
     expect(initial.branchOrWorktree).toBeTruthy();
     const completed = await waitForCompleted(core, project.id, initial.id);
     expect(completed.status).toBe('COMPLETED');
-    expect(completed.resultSummary).toBe('Diff audit passed. No verification commands are allowlisted.');
+    expect(completed.resultSummary).toBe(
+      'Los cambios solo tocan rutas permitidas. No hay comandos de verificación configurados.',
+    );
     expect(completed.branchOrWorktree).toContain(join('projects', project.id, 'worktrees', initial.id));
     const records = (await core.handle({ channel: 'execution:list_events', args: [initial.id] })) as Array<{
       event: AgentEvent;

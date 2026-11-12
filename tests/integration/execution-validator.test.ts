@@ -70,7 +70,7 @@ describe('ExecutionValidator', () => {
       readFileSync(join(workspace, 'projects', projectId, 'executions', id, 'changes.patch'), 'utf8'),
     ).not.toContain('secret=changed');
     expect(readFileSync(join(workspace, 'projects', projectId, 'executions', id, 'test-output.log'), 'utf8')).toContain(
-      'Sandbox audit failed',
+      'El agente tocó rutas que no tiene permitidas',
     );
   });
 
@@ -97,7 +97,7 @@ describe('ExecutionValidator', () => {
     expect(result).toMatchObject({
       passed: true,
       finalCommit: base,
-      resultSummary: 'Diff audit passed. No verification commands are allowlisted.',
+      resultSummary: 'Los cambios solo tocan rutas permitidas. No hay comandos de verificación configurados.',
     });
     expect(readFileSync(join(workspace, 'projects', projectId, 'executions', id, 'changes.patch'), 'utf8')).toContain(
       'feature.ts',

@@ -1,4 +1,5 @@
 import type { KnowledgeGraphRepositoryPort } from '../ports/knowledge-graph-repository-port.js';
+import { readableResultSummary } from '../../domain/agents/result-summary.js';
 import type { EntityInspectorDto } from '../../shared/contracts/ipc-contracts.js';
 export class GetEntityInspectorDetailsUseCase {
   constructor(private readonly graph: KnowledgeGraphRepositoryPort) {}
@@ -36,7 +37,9 @@ export class GetEntityInspectorDetailsUseCase {
       },
       attributes: details.attributes,
       relationships,
-      executionHistory: this.graph.findExecutionHistory(entityId),
+      executionHistory: this.graph
+        .findExecutionHistory(entityId)
+        .map(run => ({ ...run, resultSummary: readableResultSummary(run.resultSummary) })),
     };
   }
 }

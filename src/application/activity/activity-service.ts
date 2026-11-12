@@ -1,6 +1,7 @@
 import type { ActivityItemDto, ActivitySummaryDto } from '../../shared/contracts/activity-view.js';
 import type { InceptionActivityDto } from '../../shared/contracts/inception-view.js';
 import type { ActivityExecutionRow, ActivitySourcePort, ActivityTaskRow } from '../ports/activity-port.js';
+import { readableResultSummary } from '../../domain/agents/result-summary.js';
 
 export const DEFAULT_ACTIVITY_LIMIT = 50;
 
@@ -189,6 +190,7 @@ export class ActivityService {
         needsAttention: true,
         workItemId: approval.workItemId,
         executionId: approval.executionId,
+        approvalRequestId: approval.id,
         target: 'agents',
       });
     }
@@ -261,7 +263,7 @@ function review(
 
 /** First readable line of an agent summary, without markdown marks, capped for a list. */
 function firstLine(text: string | null): string | null {
-  const line = text
+  const line = readableResultSummary(text)
     ?.split('\n')
     .map(part => part.replace(/[*#`>_]+/g, '').trim())
     .find(Boolean);

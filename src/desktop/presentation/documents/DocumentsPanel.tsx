@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import type { ArtifactDocumentDto, CreateArtifactDocumentInput } from '../../../shared/contracts/artifact-view.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import { ErrorNotice } from '../errors.js';
+import { useUnsavedChanges } from '../../state/unsaved-changes.js';
 import { control, focusRing, primary } from '../ui.js';
 
 const artifactTypes = ['PRD', 'ARCHITECTURE', 'SPEC', 'IMPLEMENTATION_PLAN', 'DOMAIN_DOC', 'OTHER'] as const;
@@ -25,6 +26,7 @@ export function DocumentsPanel({ projectId, nodes }: { projectId: string; nodes:
     [artifactType, setArtifactType] = useState<(typeof artifactTypes)[number]>('SPEC'),
     [title, setTitle] = useState(''),
     [targetEntityId, setTargetEntityId] = useState('');
+  useUnsavedChanges('el documento', dirty);
   const targets = useMemo(() => nodes.filter(eligibleTarget), [nodes]);
   const selectedTargetId = targets.some(node => node.id === targetEntityId) ? targetEntityId : (targets[0]?.id ?? '');
   const selected = documents.find(document => document.id === selectedId) ?? null;

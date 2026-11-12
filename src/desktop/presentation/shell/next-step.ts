@@ -15,6 +15,15 @@ export interface NextStep {
   actionLabel: string;
   target: ShellTarget;
   tone: 'neutral' | 'attention' | 'success';
+  /** The banner runs this itself (after an inline confirmation) instead of navigating to `target`. */
+  action?: NextStepAction;
+}
+export interface NextStepAction {
+  kind: 'integrate-feature';
+  featureId: string;
+  featureKey: string;
+  targetBranch: string | null;
+  doneTasks: number;
 }
 
 const byKey = (a: GraphNodeView, b: GraphNodeView) => a.key.localeCompare(b.key, 'es', { numeric: true });
@@ -78,6 +87,13 @@ function pendingIntegration(
       actionLabel: `Integrar ${feature.key}`,
       target: { view: 'graph', workItemId: feature.id },
       tone: 'success',
+      action: {
+        kind: 'integrate-feature',
+        featureId: feature.id,
+        featureKey: feature.key,
+        targetBranch: branch.targetBranch,
+        doneTasks: (tasksOf.get(feature.id) ?? []).filter(task => task.status === 'DONE').length,
+      },
     };
   }
   return null;

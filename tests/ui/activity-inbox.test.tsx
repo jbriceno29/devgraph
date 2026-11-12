@@ -163,6 +163,45 @@ describe('ActivityInbox', () => {
     expect(value.queries.getActivity).not.toHaveBeenCalled();
   });
 
+  it('answers a permission request in place: approve once or reject, then refreshes (B6)', async () => {
+    const resolveExecutionApproval = vi.fn(async () => ({ resolved: true as const }));
+    Object.defineProperty(window, 'workspaceIpc', {
+      configurable: true,
+      value: { commands: { resolveExecutionApproval } },
+    });
+    const onChanged = vi.fn(),
+      onNavigate = vi.fn();
+    const approval = item({
+      id: 'APPROVAL_PENDING:req-1',
+      kind: 'APPROVAL_PENDING',
+      title: 'Un agente pide permiso en TASK-001',
+      detail: 'COMMAND: npm install',
+      needsAttention: true,
+      executionId: 'e1',
+      approvalRequestId: 'req-1',
+    });
+    render(
+      <ActivityInbox
+        projectId="p"
+        onNavigate={onNavigate}
+        summary={{ attentionCount: 1, running: [], items: [approval] }}
+        onChanged={onChanged}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Aprobar una vez' }));
+    await waitFor(() =>
+      expect(resolveExecutionApproval).toHaveBeenCalledWith({
+        executionId: 'e1',
+        requestId: 'req-1',
+        decision: { approved: true, scope: 'ONCE' },
+      }),
+    );
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    resolveExecutionApproval.mockRejectedValueOnce(new Error('La solicitud ya no está pendiente.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('ya no está pendiente');
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
   it('works without the workspace bridge', async () => {
     render(<ActivityInbox projectId="p" onNavigate={() => undefined} />);
     expect(await screen.findByText(/Todo al día/)).toBeTruthy();

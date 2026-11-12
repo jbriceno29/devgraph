@@ -212,10 +212,13 @@ export function AgentsWorkspace({
   const handleApprovalClose = () => {
     const dialog = dialogRef.current;
     if (!dialog || !pendingApproval || !selectedExecution) return;
-    const approved = dialog.returnValue === 'approve';
+    const answer = dialog.returnValue;
     const requestId = String(pendingApproval.event.requestId ?? '');
     dialog.returnValue = '';
     setHandledApprovalId(requestId);
+    // Escape closes without deciding: the request stays pending in Actividad (B6).
+    if (answer !== 'approve' && answer !== 'reject') return;
+    const approved = answer === 'approve';
     setError(null);
     void window.workspaceIpc.commands
       .resolveExecutionApproval({
@@ -223,7 +226,7 @@ export function AgentsWorkspace({
         requestId,
         decision: approved
           ? { approved: true, scope: 'ONCE' }
-          : { approved: false, reason: 'Aprobación rechazada o diálogo cerrado.' },
+          : { approved: false, reason: 'Aprobación rechazada por el usuario.' },
       })
       .then(() => window.workspaceIpc.queries.listExecutions(projectId).then(setExecutions))
       .catch(setError);
@@ -577,7 +580,9 @@ export function AgentsWorkspace({
                 <dd className="mt-0.5 break-all font-mono text-fg">{String(pendingApproval.event.target ?? '')}</dd>
               </div>
             </dl>
-            <p className="mt-3 text-xs text-fg-muted">Si cierras este diálogo con Escape, la solicitud se rechaza.</p>
+            <p className="mt-3 text-xs text-fg-muted">
+              Si cierras con Escape no se decide nada: la solicitud sigue pendiente en Actividad.
+            </p>
             <form method="dialog" className="mt-5 flex justify-end gap-3">
               <button type="submit" value="reject" autoFocus className={`min-h-10 px-4 text-sm ${danger}`}>
                 Rechazar
@@ -658,6 +663,12 @@ function describeRateLimit(event: AgentEventRecordDto['event']): string {
   const used =
     typeof event.utilization === 'number' ? `${Math.round(event.utilization * 100)} % usado` : 'uso desconocido';
   const status =
-    event.status === 'allowed' ? '' : event.status === 'rejected' ? ' · agotado' : ` · ${String(event.status)}`;
+    event.status === 'allowed'
+      ? ''
+      : event.status === 'allowed_warning'
+        ? ' · cerca del límite'
+        : event.status === 'rejected'
+          ? ' · agotado'
+          : ` · ${String(event.status).replaceAll('_', ' ')}`;
   return `${window}: ${used}${status}`;
 }

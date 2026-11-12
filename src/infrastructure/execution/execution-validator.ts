@@ -7,6 +7,7 @@ import type { AutonomyPolicy } from '../../domain/governance/models.js';
 import type { ExecutionValidatorPort, WorkspaceEnvironmentPort } from '../../application/ports/agent-execution-port.js';
 import type { ProjectEnvironment } from '../../domain/projects/stack-catalog.js';
 import { qualityFlags } from '../../domain/work-management/quality-flags.js';
+import { resultSummary as summary } from '../../domain/agents/result-summary.js';
 
 const execFileAsync = promisify(execFile);
 type GitRunner = (args: string[]) => Promise<string>;
@@ -98,7 +99,7 @@ export class ExecutionValidator implements ExecutionValidatorPort {
         violations.filter(path => path !== '.git'),
         [...untracked, ...ignoredPaths],
       );
-      const resultSummary = `Sandbox audit failed. Unauthorized paths: ${violations.join(', ')}`;
+      const resultSummary = summary.sandboxViolation(violations);
       await writeFile(join(executionDirectory, 'test-output.log'), `${resultSummary}\n`, 'utf8');
       return {
         passed: false,
@@ -156,10 +157,7 @@ export class ExecutionValidator implements ExecutionValidatorPort {
     return {
       passed: !failed,
       finalCommit,
-      resultSummary: failed
-        ? `Verification command failed: ${failed.command}`
-        : 'Diff audit passed.' +
-          (testReport.results.length ? ' Configured checks passed.' : ' No verification commands are allowlisted.'),
+      resultSummary: failed ? summary.checkFailed(failed.command) : summary.passed(testReport.results.length > 0),
       testSummary: {
         passed: !failed,
         commands: testReport.results,

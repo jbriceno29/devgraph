@@ -5,6 +5,8 @@ import { useState, type ReactNode } from 'react';
 import { ContextPills } from '../planning/ContextPills.js';
 import {
   capitalize,
+  HIDDEN_ATTRIBUTES,
+  attributeValue,
   edgeLabel,
   entityLabel,
   executionStatusLabel,
@@ -29,6 +31,9 @@ const attributeNames: Record<string, string> = {
   acceptance_criteria: 'Criterios de aceptación',
   acceptanceCriteria: 'Criterios de aceptación',
   priority: 'Prioridad',
+  work_type: 'Tipo de trabajo',
+  workType: 'Tipo de trabajo',
+  scope_notes: 'Notas de alcance',
   estimate: 'Estimación',
   owner: 'Responsable',
   relative_path: 'Archivo',
@@ -103,9 +108,16 @@ export function ContextualInspector({
       relationships.find(edge => edge.sourceId === entity.parentId)?.sourceLabel ??
       relationships.find(edge => edge.targetId === entity.parentId)?.targetLabel)
     : undefined;
-  const properties = Object.entries(attributes).filter(
-    ([key, value]) => !looksLikeId(key, value) && value !== null && value !== undefined && value !== '',
-  );
+  const properties = Object.entries(attributes)
+    .filter(
+      ([key, value]) =>
+        !HIDDEN_ATTRIBUTES.has(key) &&
+        !looksLikeId(key, value) &&
+        value !== null &&
+        value !== undefined &&
+        value !== '',
+    )
+    .map(([key, value]) => [key, attributeValue(key, value)] as const);
   const runs = [...executionHistory].sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
   return (
     <aside aria-label="Inspector" className={shell}>
@@ -303,6 +315,19 @@ function plain(value: unknown): string {
   return String(value);
 }
 /** Cambio manual de estado de una tarea; solo se ofrecen las transiciones que el núcleo permite. */
+/** Each manual change of a task is a button named after what it does; nothing is preselected (B5). */
+const taskActions: Record<string, { label: string; primary?: boolean; confirm?: string }> = {
+  READY: { label: 'Marcar como lista', primary: true },
+  BLOCKED: { label: 'Bloquear' },
+  DRAFT: { label: 'Volver a borrador' },
+  ARCHIVED: { label: 'Archivar', confirm: 'Sale del plan y nadie la ejecutará. ¿Archivar la tarea?' },
+};
+const actionButton = (primary: boolean | undefined) =>
+  `min-h-9 flex-1 rounded-lg px-3 text-xs disabled:opacity-50 ${focusRing} ${
+    primary
+      ? 'bg-accent font-medium text-accent-fg hover:opacity-90'
+      : 'border border-border-strong text-fg hover:border-accent'
+  }`;
 function StatusControl({
   current,
   options,
@@ -312,51 +337,54 @@ function StatusControl({
   options: string[];
   onChange(status: string): Promise<void>;
 }) {
-  const [target, setTarget] = useState(options[0] ?? ''),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
+    [confirming, setConfirming] = useState<string | null>(null),
     [error, setError] = useState<string | null>(null);
-  const apply = async () => {
-    if (!target) return;
+  const apply = async (status: string) => {
+    setConfirming(null);
     setBusy(true);
     setError(null);
     try {
-      await onChange(target);
+      await onChange(status);
     } catch (reason) {
       setError(errorText(reason));
     } finally {
       setBusy(false);
     }
   };
+  const choose = (status: string) => (taskActions[status]?.confirm ? setConfirming(status) : void apply(status));
+  const label = (status: string) =>
+    status === 'READY' && current === 'BLOCKED' ? 'Desbloquear' : (taskActions[status]?.label ?? statusLabel(status));
   return (
     <section aria-label="Estado de la tarea" className="rounded-xl border border-border bg-surface-sunken p-3">
       <h3 className={`mb-2 ${heading}`}>Estado</h3>
       {options.length === 0 ? (
         <p className="text-xs text-fg-muted">{statusHelp[current] ?? 'Este estado no admite cambios manuales.'}</p>
+      ) : confirming ? (
+        <div role="group" aria-label="Confirmar cambio" className="space-y-2">
+          <p className="text-xs text-fg">{taskActions[confirming]?.confirm}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void apply(confirming)} className={actionButton(false)}>
+              Sí, {label(confirming).toLowerCase()}
+            </button>
+            <button type="button" onClick={() => setConfirming(null)} className={actionButton(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-wrap gap-2">
-          <label htmlFor="work-item-status" className="sr-only">
-            Nuevo estado
-          </label>
-          <select
-            id="work-item-status"
-            value={target}
-            onChange={event => setTarget(event.target.value)}
-            className={`min-h-9 min-w-[8rem] flex-1 rounded-lg border border-border-strong bg-surface-raised px-2 text-xs text-fg ${focusRing}`}
-          >
-            {options.map(option => (
-              <option key={option} value={option}>
-                {statusLabel(option)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => void apply()}
-            disabled={busy}
-            className={`min-h-9 flex-1 rounded-lg border border-border-strong px-3 text-xs text-fg hover:border-accent disabled:opacity-50 ${focusRing}`}
-          >
-            Cambiar estado
-          </button>
+          {options.map(option => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => choose(option)}
+              disabled={busy}
+              className={actionButton(taskActions[option]?.primary)}
+            >
+              {label(option)}
+            </button>
+          ))}
         </div>
       )}
       {current === 'IN_REVIEW' && options.length > 0 && (

@@ -6,6 +6,7 @@ import type {
   ActivityTarget,
 } from '../../../shared/contracts/activity-view.js';
 import { notifyAttention } from '../../platform/notifications.js';
+import { errorText } from '../errors.js';
 
 export interface ActivityNavigation {
   view: ActivityTarget;
@@ -107,6 +108,8 @@ interface InboxProps {
   summary?: ActivitySummaryDto | null;
   loading?: boolean;
   error?: string | null;
+  /** Called after the inbox changed something itself (an approval answered in place). */
+  onChanged?(): void;
 }
 
 /** Project activity inbox: what needs the user, what is running, and what happened lately.
@@ -125,8 +128,17 @@ export function ActivityInbox(props: InboxProps) {
 }
 
 function LoadingInbox({ projectId, onNavigate }: InboxProps) {
-  const { summary, loading, error } = useActivity(projectId);
-  return <InboxView projectId={projectId} onNavigate={onNavigate} summary={summary} loading={loading} error={error} />;
+  const { summary, loading, error, reload } = useActivity(projectId);
+  return (
+    <InboxView
+      projectId={projectId}
+      onNavigate={onNavigate}
+      summary={summary}
+      loading={loading}
+      error={error}
+      onChanged={() => void reload()}
+    />
+  );
 }
 
 function InboxView({
@@ -134,6 +146,7 @@ function InboxView({
   summary,
   loading,
   error,
+  onChanged,
 }: InboxProps & { summary: ActivitySummaryDto | null; loading: boolean; error: string | null }) {
   const items = summary?.items ?? [];
   const attention = items.filter(item => item.needsAttention);
@@ -146,6 +159,16 @@ function InboxView({
       executionId: item.executionId,
       changeSetId: item.changeSetId,
     });
+  const answer = async (item: ActivityItemDto, approved: boolean) => {
+    await window.workspaceIpc.commands.resolveExecutionApproval({
+      executionId: item.executionId!,
+      requestId: item.approvalRequestId!,
+      decision: approved
+        ? { approved: true, scope: 'ONCE' }
+        : { approved: false, reason: 'Aprobación rechazada por el usuario.' },
+    });
+    onChanged?.();
+  };
 
   return (
     <section
@@ -166,7 +189,14 @@ function InboxView({
         </p>
       )}
       {attention.length > 0 && (
-        <Group title="Requiere tu atención" count={attention.length} items={attention} onOpen={open} highlight />
+        <Group
+          title="Requiere tu atención"
+          count={attention.length}
+          items={attention}
+          onOpen={open}
+          onAnswer={answer}
+          highlight
+        />
       )}
       {running.length > 0 && <Group title="En curso" count={running.length} items={running} onOpen={open} />}
       {recent.length > 0 && <Group title="Reciente" count={recent.length} items={recent} onOpen={open} />}
@@ -179,12 +209,14 @@ function Group({
   count,
   items,
   onOpen,
+  onAnswer,
   highlight = false,
 }: {
   title: string;
   count: number;
   items: ActivityItemDto[];
   onOpen(item: ActivityItemDto): void;
+  onAnswer?(item: ActivityItemDto, approved: boolean): Promise<void>;
   highlight?: boolean;
 }) {
   const headingId = useId();
@@ -195,27 +227,50 @@ function Group({
       </h3>
       <ul className="space-y-2">
         {items.map(item => (
-          <Entry key={item.id} item={item} onOpen={onOpen} highlight={highlight} />
+          <Entry key={item.id} item={item} onOpen={onOpen} onAnswer={onAnswer} highlight={highlight} />
         ))}
       </ul>
     </section>
   );
 }
 
+const entryButton = (highlight: boolean) =>
+  `min-h-9 shrink-0 rounded-lg border px-3 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${highlight ? 'border-accent/60 bg-surface-raised text-accent hover:border-accent' : 'border-border-strong text-fg hover:border-accent'}`;
+
 function Entry({
   item,
   onOpen,
+  onAnswer,
   highlight,
 }: {
   item: ActivityItemDto;
   onOpen(item: ActivityItemDto): void;
+  onAnswer?: ((item: ActivityItemDto, approved: boolean) => Promise<void>) | undefined;
   highlight: boolean;
 }) {
   const titleId = useId(),
     when = relativeTime(item.at);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  // An approval is answered here, without opening the execution (B6).
+  const answerable = Boolean(
+    onAnswer && item.kind === 'APPROVAL_PENDING' && item.approvalRequestId && item.executionId,
+  );
+  const answer = async (approved: boolean) => {
+    if (!onAnswer) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onAnswer(item, approved);
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <li
-      className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${highlight ? 'border-accent/40 bg-accent-soft' : 'border-border bg-surface-sunken'}`}
+      className={`flex flex-wrap items-start gap-3 rounded-lg border px-3 py-2 ${highlight ? 'border-accent/40 bg-accent-soft' : 'border-border bg-surface-sunken'}`}
     >
       <div className="min-w-0 flex-1">
         <p id={titleId} className="text-sm font-medium text-fg">
@@ -227,15 +282,43 @@ function Entry({
             <time dateTime={item.at}>{when}</time>
           </p>
         )}
+        {error && (
+          <p role="alert" className="mt-1 text-xs text-danger">
+            {error}
+          </p>
+        )}
       </div>
-      <button
-        type="button"
-        aria-describedby={titleId}
-        onClick={() => onOpen(item)}
-        className={`min-h-9 shrink-0 rounded-lg border px-3 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${highlight ? 'border-accent/60 bg-surface-raised text-accent hover:border-accent' : 'border-border-strong text-fg hover:border-accent'}`}
-      >
-        {actionLabel[item.kind]}
-      </button>
+      {answerable ? (
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            aria-describedby={titleId}
+            disabled={busy}
+            onClick={() => void answer(false)}
+            className={entryButton(false)}
+          >
+            Rechazar
+          </button>
+          <button
+            type="button"
+            aria-describedby={titleId}
+            disabled={busy}
+            onClick={() => void answer(true)}
+            className={entryButton(true)}
+          >
+            Aprobar una vez
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          aria-describedby={titleId}
+          onClick={() => onOpen(item)}
+          className={entryButton(highlight)}
+        >
+          {actionLabel[item.kind]}
+        </button>
+      )}
     </li>
   );
 }

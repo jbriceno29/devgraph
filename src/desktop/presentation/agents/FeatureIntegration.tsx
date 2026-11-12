@@ -61,7 +61,7 @@ export function FeatureIntegration({
       className={`space-y-2 rounded-lg border border-success/40 bg-success-soft p-3 text-xs text-fg ${className}`}
     >
       <p id={`${id}-title`} className="font-semibold text-success">
-        {featureKey} está terminada
+        {state.integratedAt ? `${featureKey} está integrada ${into(target)}` : `${featureKey} está terminada`}
       </p>
       <p id={`${id}-help`} className="text-fg-muted">
         Junta el trabajo de la feature {into(target)}. No envía nada a ningún remoto y no toca tu carpeta si tiene
@@ -69,7 +69,8 @@ export function FeatureIntegration({
       </p>
       {state.integratedAt && !result && (
         <p className="text-fg-muted">
-          Ya la integraste el {new Date(state.integratedAt).toLocaleDateString('es')}; puedes repetirlo sin riesgo.
+          La integraste el {new Date(state.integratedAt).toLocaleDateString('es')}. Si después se aceptaron más tareas,
+          puedes repetirlo sin riesgo.
         </p>
       )}
       {!confirming && (
@@ -82,9 +83,9 @@ export function FeatureIntegration({
           }}
           disabled={busy}
           aria-describedby={`${id}-help`}
-          className={`min-h-9 w-full text-xs ${result ? secondary : primary}`}
+          className={`min-h-9 w-full text-xs ${result || state.integratedAt ? secondary : primary}`}
         >
-          {integrateLabel(target)}
+          {state.integratedAt ? `Volver a integrar ${into(target)}` : integrateLabel(target)}
         </button>
       )}
       {confirming && (

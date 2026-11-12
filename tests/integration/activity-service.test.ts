@@ -2,14 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  openDatabase,
-  closeDatabase,
-  type SqliteDatabase,
-} from '../../src/infrastructure/persistence/sqlite/database.js';
-import { SqliteActivityRepository } from '../../src/infrastructure/persistence/repositories/sqlite-activity-repository.js';
-import { ActivityService } from '../../src/application/activity/activity-service.js';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
+import { openDatabase, closeDatabase, type SqliteDatabase } from '../../src/platform/sqlite/database.js';
+import { SqliteActivityRepository } from '../../src/modules/activity/infrastructure/sqlite-activity-repository.js';
+import { ActivityService } from '../../src/modules/activity/application/activity-service.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
 import type { ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 
 const dbs: SqliteDatabase[] = [];

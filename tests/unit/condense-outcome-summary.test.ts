@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { condenseOutcomeSummary } from '../../src/domain/work-management/task-outcome.js';
+import { condenseOutcomeSummary } from '../../src/modules/execution/domain/task-outcome.js';
 
 const summary = `Listo.
 

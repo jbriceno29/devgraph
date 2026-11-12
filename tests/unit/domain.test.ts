@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { describeEdgeRules, GraphTopologyService } from '@domain/graph/graph-topology-service.js';
-import type { KnowledgeEntity, GraphRelationship } from '@domain/graph/knowledge-entity.js';
-import { transitionWorkItem, canTransitionWorkItem, type WorkItem } from '@domain/work-management/entities.js';
-import { transitionExecution, canTransitionExecution, type AgentExecution } from '@domain/agents/models.js';
+import { describeEdgeRules, GraphTopologyService } from '../../src/modules/knowledge/domain/graph-topology-service.js';
+import type { KnowledgeEntity, GraphRelationship } from '../../src/modules/knowledge/domain/knowledge-entity.js';
+import {
+  transitionWorkItem,
+  canTransitionWorkItem,
+  type WorkItem,
+} from '../../src/modules/knowledge/domain/work-items.js';
+import {
+  transitionExecution,
+  canTransitionExecution,
+  type AgentExecution,
+} from '../../src/modules/execution/domain/models.js';
 import { DomainError } from '@shared/types/domain-error.js';
 const base = (id: string, type: KnowledgeEntity['entityType']): KnowledgeEntity => ({
   id,

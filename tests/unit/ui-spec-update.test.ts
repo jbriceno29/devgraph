@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { applyUiSpecPlan, missingUiSpecSections } from '../../src/application/planning/ui-spec-update.js';
-import { ChangeSetValidator } from '../../src/application/planning/changeset-validator.js';
+import { applyUiSpecPlan, missingUiSpecSections } from '../../src/modules/planning/application/ui-spec-update.js';
+import { ChangeSetValidator } from '../../src/modules/planning/application/changeset-validator.js';
 import {
   normalizeOperation,
   planningReferencesBlock,
   uiSpecPlanningBlock,
-} from '../../src/infrastructure/ai/change-set-planning-contract.js';
+} from '../../src/modules/planning/infrastructure/change-set-planning-contract.js';
 import { UI_SPEC_SECTIONS } from '../../src/shared/ui-spec.js';
-import type { ChangeOperation, ChangeSet } from '../../src/domain/knowledge/change-set.js';
-import type { KnowledgeEntity } from '../../src/domain/graph/knowledge-entity.js';
+import type { ChangeOperation, ChangeSet } from '../../src/modules/knowledge/domain/change-set.js';
+import type { KnowledgeEntity } from '../../src/modules/knowledge/domain/knowledge-entity.js';
 
 const full = UI_SPEC_SECTIONS.map(section => `## ${section}\n\nx`).join('\n\n');
 const feature: ChangeOperation = {

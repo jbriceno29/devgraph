@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createRequestDispatcher } from '../../src/infrastructure/ipc/sidecar/request-dispatcher.js';
-import type { WorkspaceRequest } from '../../src/infrastructure/ipc/sidecar/workspace-core.js';
+import { createRequestDispatcher } from '../../src/bootstrap/request-dispatcher.js';
+import type { WorkspaceRequest } from '../../src/bootstrap/workspace-core.js';
 
 function deferred() {
   let resolve!: () => void;

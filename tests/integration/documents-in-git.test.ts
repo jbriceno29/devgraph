@@ -4,21 +4,24 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import { GitDocumentCommitter } from '../../src/infrastructure/git/git-document-committer.js';
-import { TransactionalMarkdownFileStore } from '../../src/infrastructure/filesystem/transactional-markdown-file-store.js';
-import { SqliteProjectRepository } from '../../src/infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteKnowledgeGraphRepository } from '../../src/infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteChangeSetRepository } from '../../src/infrastructure/persistence/repositories/sqlite-change-set-repository.js';
-import { SqliteRepositoryLocationRepository } from '../../src/infrastructure/persistence/repositories/sqlite-repository-location-repository.js';
-import { SqliteChangeSetApplier } from '../../src/infrastructure/persistence/sqlite/sqlite-change-set-applier.js';
-import { ChangeSetPlanningService } from '../../src/application/planning/change-set-planning-service.js';
-import { CreateProjectUseCase } from '../../src/application/projects/create-project.js';
-import { SqliteUnitOfWork } from '../../src/infrastructure/persistence/sqlite/unit-of-work.js';
-import type { AgentAdapterPort, AgentRunInput } from '../../src/application/ports/agent-adapter-port.js';
-import type { AgentCapabilities, AgentEvent } from '../../src/domain/agents/models.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import { GitDocumentCommitter } from '../../src/modules/documents/infrastructure/git-document-committer.js';
+import { TransactionalMarkdownFileStore } from '../../src/modules/documents/infrastructure/transactional-markdown-file-store.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteChangeSetRepository } from '../../src/modules/knowledge/infrastructure/sqlite-change-set-repository.js';
+import { SqliteRepositoryLocationRepository } from '../../src/modules/projects/infrastructure/sqlite-repository-location-repository.js';
+import { SqliteChangeSetApplier } from '../../src/modules/knowledge/infrastructure/sqlite-change-set-applier.js';
+import { ChangeSetPlanningService } from '../../src/modules/planning/application/change-set-planning-service.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
+import type {
+  AgentAdapterPort,
+  AgentRunInput,
+} from '../../src/modules/execution/application/ports/agent-adapter-port.js';
+import type { AgentCapabilities, AgentEvent } from '../../src/modules/execution/domain/models.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 
 const roots: string[] = [];
 const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];

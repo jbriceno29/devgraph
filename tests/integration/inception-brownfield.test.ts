@@ -3,18 +3,21 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import type { InceptionEnginePort, InceptionProjectInput } from '../../src/application/ports/inception-port.js';
-import type { RepositoryScannerPort } from '../../src/application/ports/repository-scan-port.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import type {
+  InceptionEnginePort,
+  InceptionProjectInput,
+} from '../../src/modules/inception/application/ports/inception-port.js';
+import type { RepositoryScannerPort } from '../../src/modules/projects/application/ports/repository-scan-port.js';
 import type { InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 import { MAX_SCAN_BYTES, type RepositoryScanSummaryDto } from '../../src/shared/contracts/repository-scan.js';
 import {
   buildProposalPrompt,
   buildQuestionsPrompt,
   buildUiExplorationPrompt,
-} from '../../src/infrastructure/ai/inception-contract.js';
+} from '../../src/modules/inception/infrastructure/inception-contract.js';
 import { proposal, usage } from './inception-fixtures.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 
 const roots: string[] = [];
 const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];
@@ -274,7 +277,9 @@ describe('brownfield inception: the assistant starts from the code that already 
 
   it('without a repository nothing is scanned; a scan that fails stops the step with the reason and can be retried', async () => {
     let fail = true;
-    const real = new (await import('@infrastructure/filesystem/repository-scanner.js')).GitRepositoryScanner();
+    const real = new (
+      await import('../../src/modules/projects/infrastructure/repository-scanner.js')
+    ).GitRepositoryScanner();
     const { base, engine, projectId, call, settled } = await setup({
       scanner: {
         scan: async path => {

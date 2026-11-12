@@ -2,18 +2,18 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
 import type {
   InceptionEnginePort,
   InceptionProjectInput,
   ReferenceTranslatorPort,
   UiOptionDraft,
-} from '../../src/application/ports/inception-port.js';
+} from '../../src/modules/inception/application/ports/inception-port.js';
 import type { ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import { MAX_PROTOTYPE_CHARS, type InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 import { proposal, usage } from './inception-fixtures.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 import { UI_SPEC_SECTIONS } from '../../src/shared/ui-spec.js';
 
 const roots: string[] = [];

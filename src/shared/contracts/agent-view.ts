@@ -203,7 +203,7 @@ export interface FeaturePilotDto {
   integration?: FeatureIntegrationStateDto | null;
 }
 export interface FeatureReportDto {
-  report: import('../../application/execution/feature-metrics.js').FeatureReport;
+  report: import('../../modules/autopilot/application/feature-metrics.js').FeatureReport;
   markdown: string;
 }
 export interface ResolveExecutionApprovalInput {

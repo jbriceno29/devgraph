@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCorrections, normalizeInferences } from '../../src/application/inception/repository-evidence.js';
+import {
+  normalizeCorrections,
+  normalizeInferences,
+} from '../../src/modules/inception/application/repository-evidence.js';
 import {
   brownfieldQuestionsSchema,
   buildProposalPrompt,
@@ -8,9 +11,9 @@ import {
   parseQuestions,
   questionsSchema,
   repositoryBlock,
-} from '../../src/infrastructure/ai/inception-contract.js';
+} from '../../src/modules/inception/infrastructure/inception-contract.js';
 import { MAX_SCAN_BYTES, summarizeScan, type RepositoryScanDto } from '../../src/shared/contracts/repository-scan.js';
-import type { InceptionProjectInput } from '../../src/application/ports/inception-port.js';
+import type { InceptionProjectInput } from '../../src/modules/inception/application/ports/inception-port.js';
 
 const scan = (over: Partial<RepositoryScanDto> = {}): RepositoryScanDto => ({
   repositoryName: 'tienda',

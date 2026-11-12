@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
 import type {
   InceptionEnginePort,
   InceptionProjectInput,
   ReferenceTranslatorPort,
-} from '../../src/application/ports/inception-port.js';
+} from '../../src/modules/inception/application/ports/inception-port.js';
 import type { InceptionReferenceInput, InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 
 const roots: string[] = [];

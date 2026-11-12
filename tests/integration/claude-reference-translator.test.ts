@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClaudeReferenceTranslator } from '../../src/infrastructure/ai/claude-reference-translator.js';
+import { ClaudeReferenceTranslator } from '../../src/modules/inception/infrastructure/claude-reference-translator.js';
 
 const roots: string[] = [];
 afterEach(() => {

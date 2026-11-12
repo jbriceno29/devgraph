@@ -6,9 +6,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared': `${root}shared`,
-      '@domain': `${root}domain`,
-      '@application': `${root}application`,
-      '@infrastructure': `${root}infrastructure`,
       '@desktop': `${root}desktop`,
     },
   },

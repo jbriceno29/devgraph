@@ -8,7 +8,7 @@ import {
   isSafeRelativePath,
   isSensitivePath,
   redactSecrets,
-} from '@infrastructure/filesystem/repository-scanner.js';
+} from '../../src/modules/projects/infrastructure/repository-scanner.js';
 import { MAX_SCAN_BYTES } from '@shared/contracts/repository-scan.js';
 
 const roots: string[] = [];

@@ -4,14 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDatabase, closeDatabase, type SqliteDatabase } from '@infrastructure/persistence/sqlite/database.js';
-import { SqliteProjectRepository } from '@infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteKnowledgeGraphRepository } from '@infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteUnitOfWork } from '@infrastructure/persistence/sqlite/unit-of-work.js';
-import { CreateProjectUseCase } from '@application/projects/create-project.js';
+import { openDatabase, closeDatabase, type SqliteDatabase } from '../../src/platform/sqlite/database.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
 const handles: SqliteDatabase[] = [];
 const migrationPath = fileURLToPath(
-  new URL('../../src/infrastructure/persistence/sqlite/migrations/001_initial_workspace_schema.sql', import.meta.url),
+  new URL('../../src/platform/sqlite/migrations/001_initial_workspace_schema.sql', import.meta.url),
 );
 const implementationPlanPath = fileURLToPath(new URL('../../docs/IMPLEMENTATION_PLAN.md', import.meta.url));
 function memoryDb(): SqliteDatabase {

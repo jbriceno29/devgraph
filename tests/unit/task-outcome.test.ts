@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractConventions } from '../../src/domain/work-management/task-outcome.js';
+import { extractConventions } from '../../src/modules/execution/domain/task-outcome.js';
 
 describe('extractConventions', () => {
   it('reads bullet rules under a bold or markdown heading, until the next section', () => {

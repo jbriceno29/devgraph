@@ -5,7 +5,7 @@ import {
   orderTasks,
   planTaskGroups,
   type GroupableTask,
-} from '../../src/application/execution/task-grouping.js';
+} from '../../src/modules/autopilot/application/task-grouping.js';
 
 const task = (key: number, over: Partial<GroupableTask> = {}): GroupableTask => ({
   id: `t${key}`,

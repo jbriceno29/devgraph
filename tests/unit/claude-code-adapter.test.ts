@@ -7,9 +7,9 @@ import {
   claudeAgentEnvironment,
   createClaudeStreamState,
   normalizeClaudeEvent,
-} from '../../src/infrastructure/ai/claude-code-adapter.js';
-import { buildChildEnvironment } from '../../src/infrastructure/ai/child-environment.js';
-import type { AgentEvent } from '../../src/domain/agents/models.js';
+} from '../../src/modules/execution/infrastructure/claude-code-adapter.js';
+import { buildChildEnvironment } from '../../src/platform/claude-cli/child-environment.js';
+import type { AgentEvent } from '../../src/modules/execution/domain/models.js';
 
 const fixtures = join(__dirname, '..', 'fixtures', 'claude');
 function replay(name: string, maxTurns?: number): AgentEvent[] {

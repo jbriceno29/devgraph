@@ -3,16 +3,16 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CreateProjectUseCase } from '../../src/application/projects/create-project.js';
-import { ArtifactManagementService } from '../../src/application/artifacts/artifact-management-service.js';
-import { AtomicMarkdownFileStore } from '../../src/infrastructure/filesystem/atomic-markdown-file-store.js';
-import { ArtifactWatcherService } from '../../src/infrastructure/filesystem/artifact-watcher-service.js';
-import { SqliteArtifactRepository } from '../../src/infrastructure/persistence/repositories/sqlite-artifact-repository.js';
-import { SqliteKnowledgeGraphRepository } from '../../src/infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteProjectRepository } from '../../src/infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteRepositoryLocationRepository } from '../../src/infrastructure/persistence/repositories/sqlite-repository-location-repository.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import { SqliteUnitOfWork } from '../../src/infrastructure/persistence/sqlite/unit-of-work.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
+import { ArtifactManagementService } from '../../src/modules/documents/application/artifact-management-service.js';
+import { AtomicMarkdownFileStore } from '../../src/modules/documents/infrastructure/atomic-markdown-file-store.js';
+import { ArtifactWatcherService } from '../../src/modules/documents/infrastructure/artifact-watcher-service.js';
+import { SqliteArtifactRepository } from '../../src/modules/documents/infrastructure/sqlite-artifact-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteRepositoryLocationRepository } from '../../src/modules/projects/infrastructure/sqlite-repository-location-repository.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
 
 describe('Artifact management and Markdown synchronization', () => {
   const temporaryDirectories: string[] = [];

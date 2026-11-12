@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClaudeInceptionEngine } from '../../src/infrastructure/ai/claude-inception-engine.js';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { ClaudeCodeAdapter } from '../../src/infrastructure/ai/claude-code-adapter.js';
-import { closeDatabase, openDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import { ClaudeInceptionEngine } from '../../src/modules/inception/infrastructure/claude-inception-engine.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { ClaudeCodeAdapter } from '../../src/modules/execution/infrastructure/claude-code-adapter.js';
+import { closeDatabase, openDatabase } from '../../src/platform/sqlite/database.js';
 import type { InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 
 const roots: string[] = [];

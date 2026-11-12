@@ -1,6 +1,6 @@
 # Referencia IPC
 
-Fuente: `src/shared/contracts/ipc-contracts.ts` (tipos `WorkspaceIpcCommands`, `WorkspaceIpcQueries` y `WorkspaceIpcEvents`) y `src/infrastructure/ipc/sidecar/request-dispatcher.ts`. Los DTO están en `src/shared/contracts/*.ts`. El cliente de la interfaz (`WorkspaceIpcClient`) envuelve estos canales en métodos tipados (`commands`, `queries`, `events`, el grupo opcional `inception` y `platform.pickFolder`, que abre el selector de carpetas del sistema con el plugin de diálogo de Tauri y no pasa por el núcleo); la implementación real es `src/desktop/platform/tauri-ipc-client.ts`.
+Cada módulo responde sus canales en `src/modules/<módulo>/ipc.ts` (los que cruzan módulos, en `src/bootstrap/handlers/`). Fuente: `src/shared/contracts/ipc-contracts.ts` (tipos `WorkspaceIpcCommands`, `WorkspaceIpcQueries` y `WorkspaceIpcEvents`) y `src/bootstrap/request-dispatcher.ts`. Los DTO están en `src/shared/contracts/*.ts`. El cliente de la interfaz (`WorkspaceIpcClient`) envuelve estos canales en métodos tipados (`commands`, `queries`, `events`, el grupo opcional `inception` y `platform.pickFolder`, que abre el selector de carpetas del sistema con el plugin de diálogo de Tauri y no pasa por el núcleo); la implementación real es `src/desktop/platform/tauri-ipc-client.ts`.
 
 Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo reenvía al sidecar como una línea JSON y devuelve la respuesta (ver `docs/ARQUITECTURA_ACTUAL.md`). Tiempo de espera: 60 s; 330 s para `changeset:propose_from_chat` y `planning:translate_references`.
 

@@ -3,16 +3,16 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ContextEngine } from '../../src/application/context/context-engine.js';
-import { CreateProjectUseCase } from '../../src/application/projects/create-project.js';
-import { SqliteContextRepository } from '../../src/infrastructure/persistence/repositories/sqlite-context-repository.js';
-import { SqliteKnowledgeGraphRepository } from '../../src/infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteProjectRepository } from '../../src/infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteRepositoryLocationRepository } from '../../src/infrastructure/persistence/repositories/sqlite-repository-location-repository.js';
-import { RepositoryContextFileStore } from '../../src/infrastructure/filesystem/repository-context-file-store.js';
-import { SqliteUnitOfWork } from '../../src/infrastructure/persistence/sqlite/unit-of-work.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import type { KnowledgeEntity, GraphRelationship } from '../../src/domain/graph/knowledge-entity.js';
+import { ContextEngine } from '../../src/modules/context/application/context-engine.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
+import { SqliteContextRepository } from '../../src/modules/context/infrastructure/sqlite-context-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteRepositoryLocationRepository } from '../../src/modules/projects/infrastructure/sqlite-repository-location-repository.js';
+import { RepositoryContextFileStore } from '../../src/modules/context/infrastructure/repository-context-file-store.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import type { KnowledgeEntity, GraphRelationship } from '../../src/modules/knowledge/domain/knowledge-entity.js';
 
 const tempDirs: string[] = [];
 afterEach(async () => {

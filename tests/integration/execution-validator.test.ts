@@ -1,11 +1,11 @@
-import { DEFAULT_DECISION_POLICY } from '../../src/domain/autonomy/decision-policy.js';
+import { DEFAULT_DECISION_POLICY } from '../../src/modules/autopilot/domain/decision-policy.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { ExecutionValidator, glob } from '../../src/infrastructure/execution/execution-validator.js';
-import type { AutonomyPolicy } from '../../src/domain/governance/models.js';
+import { ExecutionValidator, glob } from '../../src/modules/execution/infrastructure/execution-validator.js';
+import type { AutonomyPolicy } from '../../src/modules/execution/domain/governance.js';
 
 const roots: string[] = [];
 afterEach(() => {

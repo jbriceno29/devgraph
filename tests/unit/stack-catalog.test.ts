@@ -5,11 +5,11 @@ import {
   applyStackProfile,
   catalogForPrompt,
   findStackProfile,
-} from '../../src/domain/projects/stack-catalog.js';
-import { profileIssues } from '../../src/domain/projects/project-profile.js';
-import { buildFoundationPlan } from '../../src/application/inception/foundation-plan.js';
-import { buildProposalPrompt, proposalSchema } from '../../src/infrastructure/ai/inception-contract.js';
-import type { ChangeOperation, ProjectProfile } from '../../src/domain/knowledge/change-set.js';
+} from '../../src/modules/projects/domain/stack-catalog.js';
+import { profileIssues } from '../../src/modules/projects/domain/project-profile.js';
+import { buildFoundationPlan } from '../../src/modules/inception/application/foundation-plan.js';
+import { buildProposalPrompt, proposalSchema } from '../../src/modules/inception/infrastructure/inception-contract.js';
+import type { ChangeOperation, ProjectProfile } from '../../src/modules/knowledge/domain/change-set.js';
 import { proposal } from '../integration/inception-fixtures.js';
 
 describe('stack catalog (plan S1)', () => {

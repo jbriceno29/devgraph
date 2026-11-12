@@ -8,7 +8,7 @@ import {
   parseUiOptions,
   referencesBlock,
   visualDirectionBlock,
-} from '../../src/infrastructure/ai/inception-contract.js';
+} from '../../src/modules/inception/infrastructure/inception-contract.js';
 
 const project = { name: 'Tareas', description: null, brief: 'Una lista de tareas.', rootId: 'root-1' };
 const questions = [{ id: 'q1', text: '¿Quién la usa?', options: ['Solo yo'], default: 'Solo yo', why: 'Alcance.' }];

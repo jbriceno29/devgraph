@@ -3,8 +3,8 @@
  * the packaged resources point at `sidecar.js`, so moving the core's folders never touches them.
  */
 import { createInterface } from 'node:readline';
-import { createWorkspaceCore } from './infrastructure/ipc/sidecar/workspace-core.js';
-import { createRequestDispatcher } from './infrastructure/ipc/sidecar/request-dispatcher.js';
+import { createWorkspaceCore } from './bootstrap/workspace-core.js';
+import { createRequestDispatcher } from './bootstrap/request-dispatcher.js';
 
 const output = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);
 const root = process.env.GRAPHDEV_WORKSPACE_ROOT;

@@ -74,8 +74,10 @@ const setup = cwd => {
     if (run.status !== 0) throw new Error(`setup failed in ${cwd}: ${command} ${rest.join(' ')}\n${run.stderr}`);
   }
 };
-const { buildClaudePermissionArgs } = await import(join(ROOT, 'dist/main/infrastructure/ai/claude-code-adapter.js'));
-const { buildChildEnvironment } = await import(join(ROOT, 'dist/main/infrastructure/ai/child-environment.js'));
+const { buildClaudePermissionArgs } = await import(
+  join(ROOT, 'dist/main/modules/execution/infrastructure/claude-code-adapter.js')
+);
+const { buildChildEnvironment } = await import(join(ROOT, 'dist/main/platform/claude-cli/child-environment.js'));
 const log = (...parts) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...parts);
 const git = (cwd, ...rest) => execFileSync('git', rest, { cwd, encoding: 'utf8' }).trim();
 
@@ -232,10 +234,8 @@ async function chatArm(name, newSessionPerFeature) {
 }
 
 async function workspaceArm(name = 'workspace', grouped = false) {
-  const { createWorkspaceCore } = await import(join(ROOT, 'dist/main/infrastructure/ipc/sidecar/workspace-core.js'));
-  const { openDatabase, closeDatabase } = await import(
-    join(ROOT, 'dist/main/infrastructure/persistence/sqlite/database.js')
-  );
+  const { createWorkspaceCore } = await import(join(ROOT, 'dist/main/bootstrap/workspace-core.js'));
+  const { openDatabase, closeDatabase } = await import(join(ROOT, 'dist/main/platform/sqlite/database.js'));
   const repo = join(out, `${name}-repo`);
   cloneBase(repo);
   const workspaceRoot = join(out, name);

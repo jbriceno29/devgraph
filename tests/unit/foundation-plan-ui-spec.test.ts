@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildFoundationPlan } from '../../src/application/inception/foundation-plan.js';
-import { buildProposalPrompt, uiSpecRule } from '../../src/infrastructure/ai/inception-contract.js';
+import { buildFoundationPlan } from '../../src/modules/inception/application/foundation-plan.js';
+import { buildProposalPrompt, uiSpecRule } from '../../src/modules/inception/infrastructure/inception-contract.js';
 import { UI_SPEC_PATH, UI_SPEC_SECTIONS } from '../../src/shared/ui-spec.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 import { proposal } from '../integration/inception-fixtures.js';
 
 const spec = (

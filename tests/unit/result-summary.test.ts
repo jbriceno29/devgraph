@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readableResultSummary, resultSummary } from '../../src/domain/agents/result-summary.js';
+import { readableResultSummary, resultSummary } from '../../src/modules/execution/domain/result-summary.js';
 
 describe('resultados de la validación en español (C1)', () => {
   it('builds the summaries in Spanish', () => {

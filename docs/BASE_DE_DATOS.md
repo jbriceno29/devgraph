@@ -1,6 +1,6 @@
 # Base de datos
 
-Fuente: `src/infrastructure/persistence/sqlite/migrations/*.sql` y `database.ts`.
+Fuente: `src/platform/sqlite/migrations/*.sql` y `database.ts`.
 
 ## Cómo se organiza
 

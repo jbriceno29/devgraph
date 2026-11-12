@@ -3,14 +3,17 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import type { InceptionEnginePort, ReferenceTranslatorPort } from '../../src/application/ports/inception-port.js';
-import type { ChangeSetPlannerPort } from '../../src/application/ports/change-set-planning-port.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import type {
+  InceptionEnginePort,
+  ReferenceTranslatorPort,
+} from '../../src/modules/inception/application/ports/inception-port.js';
+import type { ChangeSetPlannerPort } from '../../src/modules/planning/application/ports/change-set-planning-port.js';
 import type { ChangeSetDto, GraphViewDto } from '../../src/shared/contracts/ipc-contracts.js';
 import type { InceptionReferenceDto, InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 import { UI_SPEC_SECTIONS } from '../../src/shared/ui-spec.js';
-import { buildPlannerPrompt } from '../../src/infrastructure/ai/change-set-planning-contract.js';
+import { buildPlannerPrompt } from '../../src/modules/planning/infrastructure/change-set-planning-contract.js';
 import { proposal, usage } from './inception-fixtures.js';
 
 const roots: string[] = [];

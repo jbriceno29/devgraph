@@ -3,7 +3,7 @@ import {
   buildReferencePrompt,
   normalizeTranslation,
   parseReferenceTranslations,
-} from '../../src/infrastructure/ai/reference-translation-contract.js';
+} from '../../src/modules/inception/infrastructure/reference-translation-contract.js';
 
 const everything = {
   summary: 'Panel con barra lateral.',

@@ -3,10 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClaudeCodeAdapter } from '../../src/infrastructure/ai/claude-code-adapter.js';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import type { AgentEvent } from '../../src/domain/agents/models.js';
+import { ClaudeCodeAdapter } from '../../src/modules/execution/infrastructure/claude-code-adapter.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import type { AgentEvent } from '../../src/modules/execution/domain/models.js';
 
 const fixture = join(__dirname, '..', 'fixtures', 'claude', 'edit-file.stream.jsonl');
 const roots: string[] = [];

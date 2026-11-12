@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ProjectInceptionService } from '../../src/application/inception/project-inception-service.js';
-import type { InceptionRecord } from '../../src/application/ports/inception-port.js';
+import { ProjectInceptionService } from '../../src/modules/inception/application/project-inception-service.js';
+import type { InceptionRecord } from '../../src/modules/inception/application/ports/inception-port.js';
 
 /** The service with in-memory stand-ins, to check what happens when the database misbehaves. */
 function service(failSavesWhere: (record: InceptionRecord) => boolean) {

@@ -1,4 +1,4 @@
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 
 /** A complete, valid foundation proposal and the usage the fake engines report; shared by the inception integration tests. `ROOT` stands for the project root's id. */
 export const usage = {

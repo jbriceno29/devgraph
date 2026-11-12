@@ -18,9 +18,10 @@ núcleo Node/TypeScript (el _sidecar_). Visión: `docs/PLAN_DE_TRABAJO.md`. Orde
 
 ## Arquitectura
 
-Monolito modular hexagonal en el núcleo y MVVM en la interfaz (`docs/PROPUESTA_ARQUITECTURA.md`). La migración está en
-curso: el código viejo sigue en `src/domain`, `src/application`, `src/infrastructure` hasta que la hoja de ruta lo mueva
-a `src/modules/<módulo>/{domain,application,infrastructure}`. **Lo nuevo se escribe ya con las reglas de abajo.**
+Monolito modular hexagonal en el núcleo y MVVM en la interfaz (`docs/PROPUESTA_ARQUITECTURA.md`). El núcleo ya está
+en `src/modules/<módulo>/{domain,application,infrastructure}` + `ipc.ts` + `index.ts`, con la composición en
+`src/bootstrap/` y lo técnico compartido en `src/platform/` (detalle en `docs/ARQUITECTURA_ACTUAL.md` §2). Quedan por
+partir los archivos grandes (A3) y pasar la interfaz a MVVM (A4). **Lo nuevo se escribe ya con las reglas de abajo.**
 
 - `src/sidecar.ts` es la entrada estable del núcleo: Rust y los recursos empaquetados apuntan a `sidecar.js`.
 - `src/shared/contracts` son los DTO e IPC que comparten núcleo e interfaz; `src/shared/kernel` el vocabulario común.
@@ -40,7 +41,7 @@ Dependencias:
 2. **[auto]** Un módulo usa otro solo por su `index.ts`.
 3. **[auto]** `domain`, `application`, `shared` y `desktop` no importan `node:*`, `better-sqlite3` ni `child_process`:
    reciben un puerto (`Clock`, `IdGenerator`…).
-4. **[auto]** SQL solo en la persistencia (`src/infrastructure/persistence`, `src/platform/sqlite`,
+4. **[auto]** SQL solo en la persistencia (`src/platform/sqlite`,
    `src/modules/*/infrastructure/sqlite-*.ts`).
 5. Los adaptadores (`new ClaudeCodeAdapter()`, repositorios SQLite…) se crean solo en la composición del núcleo.
 6. **[auto]** `shared/contracts` solo importa `shared/*`; `desktop` solo importa `desktop` y `shared/*`.

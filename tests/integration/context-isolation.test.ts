@@ -3,11 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { RepositoryContextFileStore } from '../../src/infrastructure/filesystem/repository-context-file-store.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import type { AgentAdapterPort, AgentRunInput } from '../../src/application/ports/agent-adapter-port.js';
-import type { AgentCapabilities, AgentEvent } from '../../src/domain/agents/models.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { RepositoryContextFileStore } from '../../src/modules/context/infrastructure/repository-context-file-store.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import type {
+  AgentAdapterPort,
+  AgentRunInput,
+} from '../../src/modules/execution/application/ports/agent-adapter-port.js';
+import type { AgentCapabilities, AgentEvent } from '../../src/modules/execution/domain/models.js';
 
 const roots: string[] = [];
 const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];

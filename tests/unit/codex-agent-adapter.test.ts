@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCodexEvent } from '../../src/infrastructure/ai/codex-agent-adapter.js';
+import { normalizeCodexEvent } from '../../src/modules/execution/infrastructure/codex-agent-adapter.js';
 
 describe('Codex JSONL event normalization', () => {
   it('maps thread and assistant message events into domain events', () => {

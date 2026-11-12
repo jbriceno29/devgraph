@@ -10,9 +10,9 @@ flowchart LR
     UI["Webview: React/Tailwind<br/>src/desktop"]
     Host["Comando workspace_request<br/>RestartingSidecar"]
   end
-  subgraph Core["Sidecar Node/TypeScript — src/infrastructure/ipc/sidecar"]
+  subgraph Core["Sidecar Node/TypeScript — src/sidecar.ts + src/bootstrap"]
     Disp["request-dispatcher<br/>(serializa comandos)"]
-    WC["workspace-core"]
+    WC["workspace-core<br/>(contenedor + ipc.ts de cada módulo)"]
     App["Aplicación: orquestador, piloto,<br/>contexto, planificación, inicio, actividad"]
     DB[("SQLite por proyecto<br/>workspace.sqlite")]
   end
@@ -37,17 +37,27 @@ flowchart LR
 
 ## 2. Capas del núcleo
 
-Dependencias hacia adentro: infraestructura → aplicación → dominio. La aplicación depende de **puertos** (`src/application/ports/`) que implementa la infraestructura.
+Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12). Cada módulo vive en `src/modules/<módulo>/` con `domain/` (reglas puras), `application/` (casos de uso y `ports/`), `infrastructure/` (adaptadores: SQLite, Git, Claude…), `ipc.ts` (sus canales) e `index.ts` (lo único que otros módulos pueden importar). Las reglas están en `CLAUDE.md` y las comprueba `npm run check:arch`.
 
-| Capa | Carpeta | Contenido |
-| :--- | :--- | :--- |
-| Dominio | `src/domain/` | Proyectos y repositorios, grafo (`knowledge-entity`, topología), `ChangeSet`, `ContextSnapshot`, trabajo (`work-management`, `TaskOutcome`, extracción de convenciones), agentes, gobernanza, autonomía (`models.ts`: niveles `MANUAL`/`AUTO_ACCEPT`/`PILOT`, estados del piloto; `decision-policy.ts`: categorías de decisión y propuestas del agente). |
-| Aplicación | `src/application/` | `execution/` (`agent-orchestrator`, `feature-pilot`, `feature-metrics`), `context/` (motor de contexto), `planning/` (planificación de ChangeSets y validador), `inception/` (asistente de inicio), `activity/` (bandeja), `artifacts/`, `governance/`, `graph/`, `projects/`, `ports/`. |
-| Infraestructura | `src/infrastructure/` | `ai/` (adaptador y planificador de Claude Code, motor de inicio y traductor de referencias, catálogo de proveedores, rutas del CLI; código de Codex desconectado), `git/` (aislamiento con worktrees, integración, inicialización de repositorios, commit de documentos), `execution/` (validador del diff), `filesystem/` (Markdown atómico/transaccional, watcher, log de eventos), `persistence/` (SQLite, migraciones, repositorios), `ipc/sidecar/` (entrada, despachador, `workspace-core`). |
-| Contratos compartidos | `src/shared/contracts/` | DTO y canales IPC (`ipc-contracts.ts`) que usan el núcleo y la interfaz. |
-| Escritorio | `src/desktop/` | `platform/tauri-ipc-client.ts` y `notifications.ts`; `state/` (shell, navegación, tema); `presentation/` (`shell/`, `graph/`, `agents/`, `planning/`, `documents/`, `inception/`, `inspector/`), `theme/` (tokens; ver `MIGRACION.md`). |
+| Carpeta | Contenido |
+| :--- | :--- |
+| `src/sidecar.ts` | Entrada estable del núcleo (`dist/main/sidecar.js`). |
+| `src/bootstrap/` | `workspace-core.ts` (une contenedor y router), `container.ts` y `compose/*.ts` (los únicos que crean adaptadores), `ipc-router.ts`, `request-dispatcher.ts`, `project-workspace-store.ts` y `handlers/` (flujos que cruzan módulos: abrir proyecto, inspector, propuesta desde el chat…). |
+| `modules/projects` | Proyecto, repositorio, catálogo de stacks, acceso del agente (R1), escaneo del repositorio, carpetas de proyectos. |
+| `modules/knowledge` | Grafo, topología, `ChangeSet` y su aplicación transaccional, estado de ADR y tareas, vista del grafo e inspector. |
+| `modules/planning` | Planificador de ChangeSets (Claude; Codex sin cablear), validador, referencias de Planificar, `UI_SPEC`. |
+| `modules/inception` | Asistente de inicio, motor y contrato, traductor de referencias, prototipos. |
+| `modules/context` | Motor de contexto (resolución, recorrido, ranking, empaquetado) y `ContextSnapshot`. |
+| `modules/execution` | `AgentOrchestrator`, gobernanza, adaptador de Claude Code (Codex sin cablear), validador del diff, worktrees, revisión. |
+| `modules/autopilot` | `FeaturePilot`, política de decisiones, agrupación de tareas, métricas. |
+| `modules/environment` | Dependencias del stack, skills empaquetadas, comandos del proyecto. |
+| `modules/documents` | Documentos Markdown, watcher de `docs/`, commit de documentos. |
+| `modules/activity` | Bandeja de actividad. |
+| `src/platform/` | `sqlite/` (base de datos, migraciones, unidad de trabajo), `claude-cli/`, `codex-cli/`. |
+| `src/shared/` | `contracts/` (DTO e IPC), `ipc-handlers.ts`, utilidades que comparte la interfaz. |
+| `src/desktop/` | Interfaz (`platform/`, `state/`, `presentation/`, `theme/`); MVVM llega en A4. |
 
-`workspace-core.ts` ensambla todo y conecta un único adaptador de agente: **Claude Code**. `CodexAgentAdapter` y `CodexChangeSetPlanner` siguen en el código, sin cablear (Etapa 4 del plan).
+`compose/base.ts` conecta un único adaptador de agente: **Claude Code**. `CodexAgentAdapter` y `CodexChangeSetPlanner` siguen en el código, sin cablear (Etapa 4 del plan).
 
 ## 3. Dónde vive cada cosa
 
@@ -71,7 +81,7 @@ Dependencias hacia adentro: infraestructura → aplicación → dominio. La apli
 
 ## 5. Piloto automático
 
-`FeaturePilot` (`src/application/execution/feature-pilot.ts`) recorre las tareas `READY` de una feature por orden de dependencias, lanza la siguiente, acepta cuando se cumplen las puertas, y reintenta con el error como contexto (el último intento puede usar el modelo de escalamiento). Se pausa (`PAUSED`) al superar el umbral de uso (85 % por defecto) y se reanuda al renovarse la ventana; pasa a `WAITING_USER` con una razón cuando necesita una decisión. Solo corre un piloto activo por proyecto. Cada decisión queda en `pilot_events`.
+`FeaturePilot` (`src/modules/autopilot/application/feature-pilot.ts`) recorre las tareas `READY` de una feature por orden de dependencias, lanza la siguiente, acepta cuando se cumplen las puertas, y reintenta con el error como contexto (el último intento puede usar el modelo de escalamiento). Se pausa (`PAUSED`) al superar el umbral de uso (85 % por defecto) y se reanuda al renovarse la ventana; pasa a `WAITING_USER` con una razón cuando necesita una decisión. Solo corre un piloto activo por proyecto. Cada decisión queda en `pilot_events`.
 
 La política de decisiones (`decision-policy.ts`) clasifica cada operación de una propuesta del agente en cinco categorías configurables (`NEW_TASK`, `TASK_DEPENDENCY`, `TASK_STATUS`, `DECISION_RECORD`, `SCOPE_CHANGE`) como automática o «preguntar», más `PROJECT_FOUNDATION`, que siempre pregunta. Hay un tope de tareas automáticas por feature (5 por defecto). Si toda la propuesta es automática se aplica y el piloto sigue; si no, queda pendiente en Planificar.
 

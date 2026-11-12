@@ -42,8 +42,10 @@ const policy = {
   deniedPaths: ['.env*'],
   allowedCommands: ['node --test'],
 };
-const { buildClaudePermissionArgs } = await import(join(ROOT, 'dist/main/infrastructure/ai/claude-code-adapter.js'));
-const { buildChildEnvironment } = await import(join(ROOT, 'dist/main/infrastructure/ai/child-environment.js'));
+const { buildClaudePermissionArgs } = await import(
+  join(ROOT, 'dist/main/modules/execution/infrastructure/claude-code-adapter.js')
+);
+const { buildChildEnvironment } = await import(join(ROOT, 'dist/main/platform/claude-cli/child-environment.js'));
 const log = (...parts) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...parts);
 
 function cloneBase(target) {
@@ -136,10 +138,8 @@ async function chatArm() {
 }
 
 async function workspaceArm() {
-  const { createWorkspaceCore } = await import(join(ROOT, 'dist/main/infrastructure/ipc/sidecar/workspace-core.js'));
-  const { openDatabase, closeDatabase } = await import(
-    join(ROOT, 'dist/main/infrastructure/persistence/sqlite/database.js')
-  );
+  const { createWorkspaceCore } = await import(join(ROOT, 'dist/main/bootstrap/workspace-core.js'));
+  const { openDatabase, closeDatabase } = await import(join(ROOT, 'dist/main/platform/sqlite/database.js'));
   const repo = join(out, 'workspace-repo');
   cloneBase(repo);
   const workspaceRoot = join(out, 'workspace');

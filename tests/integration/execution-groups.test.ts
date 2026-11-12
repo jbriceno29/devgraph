@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openDatabase, closeDatabase, type SqliteDatabase } from '@infrastructure/persistence/sqlite/database.js';
-import { SqliteAgentExecutionRepository } from '@infrastructure/persistence/repositories/sqlite-agent-execution-repository.js';
-import { coveredWorkItems, type AgentExecution } from '../../src/domain/agents/models.js';
+import { openDatabase, closeDatabase, type SqliteDatabase } from '../../src/platform/sqlite/database.js';
+import { SqliteAgentExecutionRepository } from '../../src/modules/execution/infrastructure/sqlite-agent-execution-repository.js';
+import { coveredWorkItems, type AgentExecution } from '../../src/modules/execution/domain/models.js';
 
 const handles: SqliteDatabase[] = [];
 afterEach(() => {

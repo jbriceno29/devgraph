@@ -72,7 +72,10 @@ export function importViolation(file, target) {
     case 'desktop':
       return shared || target.startsWith('src/desktop/') ? null : 'desktop solo importa desktop y shared/*';
     case 'domain':
-      return to?.layer === 'domain' || target.startsWith('src/shared/kernel/') || target.startsWith('src/shared/types/')
+      return to?.layer === 'domain' ||
+        target.startsWith('src/shared/kernel/') ||
+        target.startsWith('src/shared/types/') ||
+        /^src\/modules\/[^/]+\/index\.ts$/.test(target)
         ? null
         : 'domain solo importa domain, shared/kernel y shared/types';
     case 'application':

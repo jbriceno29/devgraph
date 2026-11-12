@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { cpSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { contentHash, loadBundledSkills, materializeSkill } from '../../src/infrastructure/skills/skill-bundle.js';
-import { isInterfaceWork, stackHasInterface } from '../../src/domain/projects/skill-selection.js';
-import { buildClaudeArgs } from '../../src/infrastructure/ai/claude-code-adapter.js';
+import {
+  contentHash,
+  loadBundledSkills,
+  materializeSkill,
+} from '../../src/modules/environment/infrastructure/skill-bundle.js';
+import { isInterfaceWork, stackHasInterface } from '../../src/modules/environment/domain/skill-selection.js';
+import { buildClaudeArgs } from '../../src/modules/execution/infrastructure/claude-code-adapter.js';
 
 const SKILLS = resolve('skills');
 

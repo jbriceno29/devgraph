@@ -9,10 +9,9 @@
   },
   "include": [
     "src/sidecar.ts",
-    "src/application/**/*.ts",
-    "src/domain/**/*.ts",
-    "src/infrastructure/persistence/**/*.ts",
-    "src/infrastructure/ipc/sidecar/**/*.ts",
+    "src/bootstrap/**/*.ts",
+    "src/modules/**/*.ts",
+    "src/platform/**/*.ts",
     "src/shared/**/*.ts"
   ],
   "exclude": ["tests", "node_modules", "dist"]

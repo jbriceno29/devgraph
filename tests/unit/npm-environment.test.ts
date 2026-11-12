@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NpmEnvironment, npmName } from '../../src/infrastructure/execution/npm-environment.js';
-import { environmentFor } from '../../src/domain/projects/stack-catalog.js';
+import { NpmEnvironment, npmName } from '../../src/modules/environment/infrastructure/npm-environment.js';
+import { environmentFor } from '../../src/modules/projects/domain/stack-catalog.js';
 
 /** npm is never reached in these cases except where noted: a missing binary would make the test fail loudly. */
 const environment = environmentFor('web-spa-react', ['left-pad'])!;

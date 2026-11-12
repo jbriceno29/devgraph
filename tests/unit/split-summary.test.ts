@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitSummaryByTask } from '../../src/domain/work-management/task-outcome.js';
+import { splitSummaryByTask } from '../../src/modules/execution/domain/task-outcome.js';
 
 describe('splitSummaryByTask', () => {
   it('splits by markdown headings, bold keys or «Parte n de m» lines, keeping the preamble with the first section', () => {

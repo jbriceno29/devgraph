@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ClaudeChangeSetPlanner } from '../../src/infrastructure/ai/claude-change-set-planner.js';
-import { plainSchema } from '../../src/infrastructure/ai/change-set-planning-contract.js';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { createRequestDispatcher } from '../../src/infrastructure/ipc/sidecar/request-dispatcher.js';
-import { ClaudeCodeAdapter } from '../../src/infrastructure/ai/claude-code-adapter.js';
+import { ClaudeChangeSetPlanner } from '../../src/modules/planning/infrastructure/claude-change-set-planner.js';
+import { plainSchema } from '../../src/modules/planning/infrastructure/change-set-planning-contract.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { createRequestDispatcher } from '../../src/bootstrap/request-dispatcher.js';
+import { ClaudeCodeAdapter } from '../../src/modules/execution/infrastructure/claude-code-adapter.js';
 
 const roots: string[] = [];
 const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];

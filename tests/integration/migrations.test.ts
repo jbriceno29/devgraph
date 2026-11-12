@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIGRATIONS, closeDatabase, openDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import { MIGRATIONS, closeDatabase, openDatabase } from '../../src/platform/sqlite/database.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -44,10 +44,7 @@ describe('versioned schema migrations', () => {
     legacy.exec(
       readFileSync(
         fileURLToPath(
-          new URL(
-            '../../src/infrastructure/persistence/sqlite/migrations/001_initial_workspace_schema.sql',
-            import.meta.url,
-          ),
+          new URL('../../src/platform/sqlite/migrations/001_initial_workspace_schema.sql', import.meta.url),
         ),
         'utf8',
       ),
@@ -78,10 +75,7 @@ describe('migration 012: the inception table is rebuilt for the new stage (and 0
     const previous = new Database(filename);
     for (const file of MIGRATIONS.filter(item => item.version <= 11).map(item => item.file))
       previous.exec(
-        readFileSync(
-          fileURLToPath(new URL(`../../src/infrastructure/persistence/sqlite/migrations/${file}`, import.meta.url)),
-          'utf8',
-        ),
+        readFileSync(fileURLToPath(new URL(`../../src/platform/sqlite/migrations/${file}`, import.meta.url)), 'utf8'),
       );
     previous.pragma('user_version = 11');
     previous
@@ -128,9 +122,7 @@ describe('migration 012: the inception table is rebuilt for the new stage (and 0
 
 describe('opening an existing project', () => {
   it('migrates a version-1 project workspace when the app opens it, as the app does (regression)', async () => {
-    const { ProjectWorkspaceStore } = await import(
-      '../../src/infrastructure/persistence/sqlite/project-workspace-store.js'
-    );
+    const { ProjectWorkspaceStore } = await import('../../src/bootstrap/project-workspace-store.js');
     const root = mkdtempSync(join(tmpdir(), 'graphdev2-open-'));
     roots.push(root);
     const store = new ProjectWorkspaceStore(root);

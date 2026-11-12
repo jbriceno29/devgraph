@@ -3,17 +3,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildFoundationPlan } from '../../src/application/inception/foundation-plan.js';
-import { ChangeSetValidator } from '../../src/application/planning/changeset-validator.js';
-import type { KnowledgeEntity } from '../../src/domain/graph/knowledge-entity.js';
-import type { ChangeSet } from '../../src/domain/knowledge/change-set.js';
+import { buildFoundationPlan } from '../../src/modules/inception/application/foundation-plan.js';
+import { ChangeSetValidator } from '../../src/modules/planning/application/changeset-validator.js';
+import type { KnowledgeEntity } from '../../src/modules/knowledge/domain/knowledge-entity.js';
+import type { ChangeSet } from '../../src/modules/knowledge/domain/change-set.js';
 import {
   DECISION_STATUS_RULE,
   canTransitionDecision,
   decisionTransitions,
-} from '../../src/domain/knowledge/decision-status.js';
-import { buildPlannerPrompt } from '../../src/infrastructure/ai/change-set-planning-contract.js';
-import { createWorkspaceCore } from '../../src/infrastructure/ipc/sidecar/workspace-core.js';
+} from '../../src/modules/knowledge/domain/decision-status.js';
+import { buildPlannerPrompt } from '../../src/modules/planning/infrastructure/change-set-planning-contract.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
 import { proposal } from './inception-fixtures.js';
 
 const dirs: string[] = [];

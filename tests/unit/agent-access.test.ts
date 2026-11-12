@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { proposeAgentAccess, writablePathIssue } from '../../src/domain/projects/agent-access.js';
+import { proposeAgentAccess, writablePathIssue } from '../../src/modules/projects/domain/agent-access.js';
 
 describe('proposeAgentAccess (plan REP, R1)', () => {
   it('takes the code folders, the tests and the root configuration of a Next repository, not docs or tooling', () => {

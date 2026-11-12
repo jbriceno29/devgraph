@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { qualityFlags } from '../../src/domain/work-management/quality-flags.js';
-import { buildReviewPrompt, parseReview, MAX_REVIEW_DIFF } from '../../src/infrastructure/ai/change-review-contract.js';
+import { qualityFlags } from '../../src/modules/execution/domain/quality-flags.js';
+import {
+  buildReviewPrompt,
+  parseReview,
+  MAX_REVIEW_DIFF,
+} from '../../src/modules/execution/infrastructure/change-review-contract.js';
 
 describe('quality flags (plan S5)', () => {
   it('flags deleted or skipped tests and edited verification config, not new config or ordinary changes', () => {

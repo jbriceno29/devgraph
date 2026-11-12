@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
 import type { CommandRunDto } from '../../src/shared/contracts/agent-view.js';
 
 const roots: string[] = [];

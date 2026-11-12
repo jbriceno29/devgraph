@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentOrchestrator, branchSlug, describePolicy } from '../../src/application/execution/agent-orchestrator.js';
-import type { AgentAdapterPort } from '../../src/application/ports/agent-adapter-port.js';
+import {
+  AgentOrchestrator,
+  branchSlug,
+  describePolicy,
+} from '../../src/modules/execution/application/agent-orchestrator.js';
+import type { AgentAdapterPort } from '../../src/modules/execution/application/ports/agent-adapter-port.js';
 import type {
   AgentExecutionRepositoryPort,
   ExecutionValidatorPort,
   GitIsolationPort,
-} from '../../src/application/ports/agent-execution-port.js';
-import type { AgentCapabilities, AgentEvent, AgentExecution } from '../../src/domain/agents/models.js';
-import { canTransitionWorkItem, type WorkItemStatus } from '../../src/domain/work-management/entities.js';
+} from '../../src/modules/execution/application/ports/agent-execution-port.js';
+import type { AgentCapabilities, AgentEvent, AgentExecution } from '../../src/modules/execution/domain/models.js';
+import { canTransitionWorkItem, type WorkItemStatus } from '../../src/modules/knowledge/domain/work-items.js';
 
 const capabilities: AgentCapabilities = {
   supportsResume: false,

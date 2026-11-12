@@ -3,19 +3,22 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
-import type { ChangeSetPlannerPort, ChangeSetDraft } from '../../src/application/ports/change-set-planning-port.js';
-import { ChangeSetPlanningService } from '../../src/application/planning/change-set-planning-service.js';
-import { CodexChangeSetPlanner } from '../../src/infrastructure/ai/codex-change-set-planner.js';
-import { SqliteChangeSetRepository } from '../../src/infrastructure/persistence/repositories/sqlite-change-set-repository.js';
-import { SqliteKnowledgeGraphRepository } from '../../src/infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteProjectRepository } from '../../src/infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteRepositoryLocationRepository } from '../../src/infrastructure/persistence/repositories/sqlite-repository-location-repository.js';
-import { SqliteChangeSetApplier } from '../../src/infrastructure/persistence/sqlite/sqlite-change-set-applier.js';
-import { TransactionalMarkdownFileStore } from '../../src/infrastructure/filesystem/transactional-markdown-file-store.js';
-import { CreateProjectUseCase } from '../../src/application/projects/create-project.js';
-import { SqliteUnitOfWork } from '../../src/infrastructure/persistence/sqlite/unit-of-work.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
+import type {
+  ChangeSetPlannerPort,
+  ChangeSetDraft,
+} from '../../src/modules/planning/application/ports/change-set-planning-port.js';
+import { ChangeSetPlanningService } from '../../src/modules/planning/application/change-set-planning-service.js';
+import { CodexChangeSetPlanner } from '../../src/modules/planning/infrastructure/codex-change-set-planner.js';
+import { SqliteChangeSetRepository } from '../../src/modules/knowledge/infrastructure/sqlite-change-set-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteRepositoryLocationRepository } from '../../src/modules/projects/infrastructure/sqlite-repository-location-repository.js';
+import { SqliteChangeSetApplier } from '../../src/modules/knowledge/infrastructure/sqlite-change-set-applier.js';
+import { TransactionalMarkdownFileStore } from '../../src/modules/documents/infrastructure/transactional-markdown-file-store.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
 
 const tempDirs: string[] = [];
 afterEach(async () => {

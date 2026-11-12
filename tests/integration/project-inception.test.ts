@@ -3,16 +3,20 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
-import type { InceptionEnginePort } from '../../src/application/ports/inception-port.js';
-import type { ChangeOperation } from '../../src/domain/knowledge/change-set.js';
+import { createWorkspaceCore } from '../../src/bootstrap/workspace-core.js';
+import { openDatabase, closeDatabase } from '../../src/platform/sqlite/database.js';
+import type { InceptionEnginePort } from '../../src/modules/inception/application/ports/inception-port.js';
+import type { ChangeOperation } from '../../src/modules/knowledge/domain/change-set.js';
 import type { ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import type { InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
-import { DEFAULT_DECISION_POLICY, decide, normalizeDecisionPolicy } from '../../src/domain/autonomy/decision-policy.js';
-import { ChangeSetValidator } from '../../src/application/planning/changeset-validator.js';
-import { NO_INSTALL_RULE } from '../../src/application/inception/foundation-plan.js';
-import { APP_RULES } from '../../src/domain/projects/stack-catalog.js';
+import {
+  DEFAULT_DECISION_POLICY,
+  decide,
+  normalizeDecisionPolicy,
+} from '../../src/modules/autopilot/domain/decision-policy.js';
+import { ChangeSetValidator } from '../../src/modules/planning/application/changeset-validator.js';
+import { NO_INSTALL_RULE } from '../../src/modules/inception/application/foundation-plan.js';
+import { APP_RULES } from '../../src/modules/projects/domain/stack-catalog.js';
 
 const roots: string[] = [];
 const cores: Array<ReturnType<typeof createWorkspaceCore>> = [];

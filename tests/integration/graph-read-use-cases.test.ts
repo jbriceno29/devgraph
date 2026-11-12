@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { openDatabase, closeDatabase, type SqliteDatabase } from '@infrastructure/persistence/sqlite/database.js';
-import { SqliteProjectRepository } from '@infrastructure/persistence/repositories/sqlite-project-repository.js';
-import { SqliteKnowledgeGraphRepository } from '@infrastructure/persistence/repositories/sqlite-knowledge-graph-repository.js';
-import { SqliteUnitOfWork } from '@infrastructure/persistence/sqlite/unit-of-work.js';
-import { CreateProjectUseCase } from '@application/projects/create-project.js';
-import { GetGraphViewUseCase } from '@application/graph/get-graph-view.js';
-import { GetEntityInspectorDetailsUseCase } from '@application/graph/get-entity-inspector-details.js';
+import { openDatabase, closeDatabase, type SqliteDatabase } from '../../src/platform/sqlite/database.js';
+import { SqliteProjectRepository } from '../../src/modules/projects/infrastructure/sqlite-project-repository.js';
+import { SqliteKnowledgeGraphRepository } from '../../src/modules/knowledge/infrastructure/sqlite-knowledge-graph-repository.js';
+import { SqliteUnitOfWork } from '../../src/platform/sqlite/unit-of-work.js';
+import { CreateProjectUseCase } from '../../src/modules/projects/application/create-project.js';
+import { GetGraphViewUseCase } from '../../src/modules/knowledge/application/get-graph-view.js';
+import { GetEntityInspectorDetailsUseCase } from '../../src/modules/knowledge/application/get-entity-inspector-details.js';
 import { layoutGraph } from '@desktop/presentation/graph/graph-layout.js';
-import type { KnowledgeEntity } from '@domain/graph/knowledge-entity.js';
+import type { KnowledgeEntity } from '../../src/modules/knowledge/domain/knowledge-entity.js';
 const handles: SqliteDatabase[] = [];
 const now = '2026-11-10T00:00:00.000Z';
 function setup() {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prepareReferences } from '../../src/application/inception/reference-files.js';
+import { prepareReferences } from '../../src/modules/inception/application/reference-files.js';
 
 const b64 = (bytes: number[] | string) =>
   Buffer.from(typeof bytes === 'string' ? bytes : Uint8Array.from(bytes)).toString('base64');

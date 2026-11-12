@@ -1,6 +1,7 @@
 /**
  * Lifecycle of a decision record (ADR). Only ACCEPTED decisions reach the agents' context; SUPERSEDED ones are listed
- * as excluded. A draft is accepted or rejected by the user; an accepted one can be superseded or reopened as a draft.
+ * as excluded. A draft is accepted or rejected by the user; an accepted one can be superseded or reopened as a draft,
+ * and a rejected or superseded one reopened (a misclick is never final).
  */
 export type DecisionStatus = 'DRAFT' | 'ACCEPTED' | 'REJECTED' | 'SUPERSEDED';
 
@@ -8,7 +9,7 @@ const TRANSITIONS: Record<DecisionStatus, DecisionStatus[]> = {
   DRAFT: ['ACCEPTED', 'REJECTED'],
   ACCEPTED: ['SUPERSEDED', 'DRAFT'],
   REJECTED: ['DRAFT'],
-  SUPERSEDED: [],
+  SUPERSEDED: ['DRAFT'],
 };
 
 export const isDecisionStatus = (value: string): value is DecisionStatus => value in TRANSITIONS;

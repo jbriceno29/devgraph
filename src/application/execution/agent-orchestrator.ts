@@ -1476,7 +1476,9 @@ export function describePolicy(
   const commands = policy.allowedCommands.length
     ? `Solo puedes ejecutar estos comandos, exactamente como están escritos (puedes añadir argumentos al final, pero no tuberías, redirecciones ni \`&&\`):\n${list(policy.allowedCommands)}\nAl terminar, el sistema los ejecuta de nuevo para verificar tu trabajo.`
     : 'No tienes permitido ejecutar comandos. El sistema no ejecutará pruebas por ti: indica en tu resumen cómo verificar el cambio.';
-  return `# Política de ejecución\nCualquier acción fuera de esta política será denegada, y los cambios en rutas no autorizadas se revierten y hacen fallar la ejecución.\n\nRutas donde puedes crear o modificar archivos:\n${policy.writablePaths.length ? list(policy.writablePaths) : '- (ninguna)'}${policy.readonlyPaths.length ? `\n\nRutas de solo lectura:\n${list(policy.readonlyPaths)}` : ''}${policy.deniedPaths.length ? `\n\nRutas prohibidas (no las leas ni las modifiques):\n${list(policy.deniedPaths)}` : ''}\n\nComandos:\n${commands}`;
+  const files =
+    'Crea y edita archivos solo con las herramientas de escritura y edición (crean las carpetas que falten); nunca con la shell (`mkdir`, `touch`, `cat >`, `echo >`, heredocs): se deniega.';
+  return `# Política de ejecución\nCualquier acción fuera de esta política será denegada, y los cambios en rutas no autorizadas se revierten y hacen fallar la ejecución.\n\nRutas donde puedes crear o modificar archivos:\n${policy.writablePaths.length ? list(policy.writablePaths) : '- (ninguna)'}${policy.readonlyPaths.length ? `\n\nRutas de solo lectura:\n${list(policy.readonlyPaths)}` : ''}${policy.deniedPaths.length ? `\n\nRutas prohibidas (no las leas ni las modifiques):\n${list(policy.deniedPaths)}` : ''}\n\n${files}\n\nComandos:\n${commands}`;
 }
 
 function describeRevision(revision: {

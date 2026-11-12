@@ -51,11 +51,11 @@ const changeSet = (operations: ChangeSet['operations']): ChangeSet => ({
 });
 
 describe('decision records (ADR) lifecycle', () => {
-  it('allows draft → accepted/rejected, accepted → superseded/draft, rejected → draft, and nothing from superseded', () => {
+  it('allows draft → accepted/rejected, accepted → superseded/draft, rejected or superseded → draft', () => {
     expect(decisionTransitions('DRAFT')).toEqual(['ACCEPTED', 'REJECTED']);
     expect(decisionTransitions('ACCEPTED')).toEqual(['SUPERSEDED', 'DRAFT']);
     expect(decisionTransitions('REJECTED')).toEqual(['DRAFT']);
-    expect(decisionTransitions('SUPERSEDED')).toEqual([]);
+    expect(decisionTransitions('SUPERSEDED')).toEqual(['DRAFT']);
     expect(decisionTransitions('READY')).toEqual([]);
     expect(canTransitionDecision('DRAFT', 'DONE')).toBe(false);
     expect(DECISION_STATUS_RULE).toContain('DRAFT→ACCEPTED|REJECTED');

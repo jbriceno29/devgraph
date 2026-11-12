@@ -434,6 +434,8 @@ describe('AgentOrchestrator task prompt', () => {
     expect(text).toContain('- `src/**`\n- `tests/**`');
     expect(text).toContain('- `node --test`');
     expect(text).toContain('no tuberías, redirecciones ni `&&`');
+    // A real run tried `mkdir … && cat > … <<EOF` and was denied: files are created with the tools.
+    expect(text).toContain('nunca con la shell (`mkdir`, `touch`, `cat >`, `echo >`, heredocs)');
     expect(text).toContain('Rutas prohibidas (no las leas ni las modifiques):\n- `.env*`');
     expect(text).toContain('Rutas de solo lectura:\n- `docs/adr/**`');
   });

@@ -211,3 +211,28 @@ export interface ResolveExecutionApprovalInput {
   requestId: string;
   decision: { approved: true; scope: 'ONCE' | 'SESSION'; note?: string } | { approved: false; reason: string };
 }
+
+/** Project commands the user runs from the app (npm test, npm run dev…), each in its own worktree of a branch. */
+export type CommandRunStatusDto = 'PREPARING' | 'RUNNING' | 'EXITED' | 'FAILED' | 'STOPPED';
+export interface CommandRunDto {
+  id: string;
+  projectId: string;
+  ref: string;
+  script: string;
+  /** What runs, for display (e.g. «npm run dev»). */
+  command: string;
+  status: CommandRunStatusDto;
+  exitCode: number | null;
+  /** The local URL a dev server printed, when it printed one. */
+  url: string | null;
+  /** The tail of the output (the renderer also gets every chunk as an event). */
+  output: string;
+  startedAt: string;
+  endedAt: string | null;
+}
+export interface ProjectScriptsDto {
+  ref: string;
+  /** null: the branch has no package.json. */
+  manager: 'npm' | 'pnpm' | null;
+  scripts: Record<string, string>;
+}

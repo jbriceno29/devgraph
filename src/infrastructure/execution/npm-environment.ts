@@ -54,7 +54,7 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
     workingDirectory: string;
     projectName: string;
     environment: ProjectEnvironment;
-  }): Promise<{ log: string; commit: string | null; installed?: boolean }> {
+  }): Promise<{ log: string; commit: string | null; installed?: boolean; manager?: Manager }> {
     const cwd = input.workingDirectory,
       log: string[] = [];
     let manifest = await readManifest(cwd);
@@ -77,7 +77,7 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
       );
     // The worktree is fresh and the agent has not run yet: plain Git is safe here, with hooks disabled all the same.
     const changed = (await git(cwd, ['status', '--porcelain', '--', MANIFEST, LOCKFILE])).trim();
-    if (!changed) return { log: log.join('\n'), commit: null };
+    if (!changed) return { log: log.join('\n'), commit: null, manager: 'npm' };
     await git(cwd, ['add', '--', MANIFEST, ...((await exists(join(cwd, LOCKFILE))) ? [LOCKFILE] : [])]);
     const identity = await git(cwd, ['config', 'user.email']).then(
       value => (value.trim() ? [] : DEFAULT_IDENTITY),
@@ -94,14 +94,14 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
       `chore(entorno): dependencias del perfil ${input.environment.stackProfileId}`,
     ]);
     log.push(`Commit del entorno con ${MANIFEST}${changed.includes(LOCKFILE) ? ` y ${LOCKFILE}` : ''}.`);
-    return { log: log.join('\n'), commit: (await git(cwd, ['rev-parse', 'HEAD'])).trim() };
+    return { log: log.join('\n'), commit: (await git(cwd, ['rev-parse', 'HEAD'])).trim(), manager: 'npm' };
   }
 
   /** Plan S2 for a repository that follows no profile (brownfield, or created before the catalog). */
   private async provisionExisting(
     cwd: string,
     manifest: Manifest | null,
-  ): Promise<{ log: string; commit: string | null; installed: boolean }> {
+  ): Promise<{ log: string; commit: string | null; installed: boolean; manager?: Manager }> {
     if (manifest === null)
       return { log: `Sin ${MANIFEST}: no hay dependencias que instalar.`, commit: null, installed: false };
     if (!declaredNames(manifest).length)
@@ -113,7 +113,7 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
       `Repositorio sin perfil del catálogo: se instala lo que declara ${MANIFEST} con ${manager}${frozen ? ` (${lockfile})` : ', sin lockfile'}.`,
     ];
     log.push(await this.run(manager, cwd, frozen ? INSTALL[manager].frozen : INSTALL[manager].update));
-    if (frozen) return { log: log.join('\n'), commit: null, installed: true };
+    if (frozen) return { log: log.join('\n'), commit: null, installed: true, manager };
     // No lockfile yet: the one just written is committed apart, so every later run installs the same versions.
     const commit = await commitEnvironment(
       cwd,
@@ -121,7 +121,7 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
       `chore(entorno): lockfile de las dependencias (${lockfile})`,
     );
     if (commit) log.push(`Commit del entorno con ${lockfile}.`);
-    return { log: log.join('\n'), commit, installed: true };
+    return { log: log.join('\n'), commit, installed: true, manager };
   }
 
   async reconcile(input: {

@@ -273,7 +273,7 @@ it('shows a named approval dialog and sends rejection when it closes', async () 
   );
 });
 
-it('splits Ejecutar, Revisión, Piloto and Ajustes into accessible tabs, with policy and auth apart from launching', async () => {
+it('splits Ejecutar, Revisión, Piloto, Comandos and Ajustes into accessible tabs, with policy and auth apart from launching', async () => {
   const ipc = client();
   Object.defineProperty(window, 'workspaceIpc', { configurable: true, value: ipc });
   render(
@@ -285,18 +285,18 @@ it('splits Ejecutar, Revisión, Piloto and Ajustes into accessible tabs, with po
   );
   const list = await screen.findByRole('tablist', { name: 'Secciones de Agentes' });
   const tabs = within(list).getAllByRole('tab');
-  expect(tabs.map(tab => tab.textContent)).toEqual(['Ejecutar', 'Revisión', 'Piloto', 'Ajustes']);
+  expect(tabs.map(tab => tab.textContent)).toEqual(['Ejecutar', 'Revisión', 'Piloto', 'Comandos', 'Ajustes']);
   expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
   expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tabs[0]!.id);
   expect(screen.queryByLabelText('Rutas escribibles')).toBeNull();
   expect(screen.queryByText(/Capacidades/)).toBeNull();
   fireEvent.keyDown(tabs[0]!, { key: 'End' });
-  expect(document.activeElement).toBe(tabs[3]);
+  expect(document.activeElement).toBe(tabs[4]);
   expect(await screen.findByLabelText('Rutas escribibles')).toBeTruthy();
   expect(screen.getByText('Capacidades de Claude Code CLI')).toBeTruthy();
   expect(document.body.textContent).not.toContain('Codex');
   expect(screen.queryByRole('button', { name: /Iniciar ejecución/ })).toBeNull();
-  fireEvent.keyDown(tabs[3]!, { key: 'ArrowRight' });
+  fireEvent.keyDown(tabs[4]!, { key: 'ArrowRight' });
   expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
 });
 

@@ -216,6 +216,12 @@ describe('dependencies managed by the app (plan S2)', () => {
     });
     expect(adapter.inputs[0]!.prompt).toContain('# Entorno del proyecto');
     expect(adapter.inputs[0]!.policy!.readonlyPaths).toContain('node_modules');
+    // With the environment installed the agent may also run the project's scripts; acceptance still rests on the verification commands.
+    expect(adapter.inputs[0]!.policy!.allowedCommands).toEqual(
+      expect.arrayContaining(['node check.mjs', 'npm run', 'npm test']),
+    );
+    expect(adapter.inputs[0]!.prompt).toContain('`npm run` y `npm test`');
+    expect(adapter.inputs[0]!.prompt).toContain('sin tuberías, redirecciones');
     const executions = await (cores[0]!.handle({ channel: 'execution:list', args: [projectId] }) as Promise<
       Array<{ id: string }>
     >);
@@ -329,7 +335,7 @@ describe('dependencies managed by the app (plan S2)', () => {
       expect(JSON.parse(git('show', 'feature/feat-001-notas:package.json')).dependencies).toEqual({ react: '^19.0.0' });
     });
     it('uses pnpm when the repository has pnpm-lock.yaml', async () => {
-      const { pilot, until, npmCalls } = await setup(
+      const { pilot, until, npmCalls, adapter } = await setup(
         'good',
         undefined,
         {},
@@ -338,6 +344,7 @@ describe('dependencies managed by the app (plan S2)', () => {
       await pilot('start', { acknowledgeCost: true });
       await until(value => value.run?.status === 'COMPLETED' || value.run?.status === 'WAITING_USER');
       expect(npmCalls()).toEqual(['pnpm install --frozen-lockfile --ignore-scripts --reporter=silent']);
+      expect(adapter.inputs[0]!.policy!.allowedCommands).toEqual(expect.arrayContaining(['pnpm run', 'pnpm test']));
     });
     it('without a manifest installs nothing and leaves the prompt alone', async () => {
       const { pilot, until, npmCalls, adapter } = await setup('good', undefined, {}, { profile: null });

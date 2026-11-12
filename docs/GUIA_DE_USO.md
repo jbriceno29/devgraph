@@ -93,6 +93,11 @@ En «Planificar», al pedir una feature nueva sobre un proyecto en marcha, puede
 - **Paquetes nuevos.** Si el agente añade a `package.json` un paquete fuera del perfil, la ejecución se detiene con la lista; el piloto te espera. En «Agentes», en la revisión de esa ejecución, pulsa «Aprobar» para que la aplicación lo instale en adelante y reanuda; si no lo apruebas, relanza la tarea y el agente buscará otra forma.
 - **Skills.** La aplicación trae la skill de diseño «Impeccable» (no se descarga nada). Está **apagada por defecto**: actívala en «Agentes» → «Configuración» → «Stack y skills». Con ella activa, solo las tareas de interfaz la reciben. En la medición multiplicó por 3–4,5 el costo de cada tarea de interfaz, así que úsala cuando el aspecto visual importe más que el costo. Tus skills personales de Claude Code nunca se usan en las ejecuciones.
 
+## Correr los comandos del proyecto
+
+- **Tú, desde la app.** En «Agentes» → «Comandos» eliges una rama (la tuya o la de una feature) y uno de los scripts de su `package.json` (`dev`, `test`, `build`…). La app hace una copia de esa rama, instala sus dependencias (la primera vez tarda un poco; después usa la caché) y corre el script: ves la salida en vivo, puedes detenerlo y, si es un servidor de desarrollo, la app muestra su dirección (por ejemplo `http://localhost:5173/`) con un botón para copiarla y abrirla en tu navegador. Tu carpeta no se toca y la copia se borra al terminar. Hasta 4 comandos a la vez; al cerrar la app se detienen todos.
+- **El agente, mientras trabaja.** Cuando el proyecto tiene dependencias instaladas, el agente también puede correr los scripts (`npm run <script>`, `npm test`, o con `pnpm`), uno por comando. Un servidor de desarrollo se corta por tiempo, así que solo le sirve para comprobar que arranca. Lo que decide si una tarea se acepta siguen siendo los comandos de verificación del proyecto.
+
 ## Comprobaciones que no dependen del agente
 
 - Si una ejecución borra pruebas, las salta (`skip`, `only`) o cambia una configuración de verificación existente (`tsconfig.json`, `vite.config.ts`…), termina igual pero **no se acepta sola**: la revisión en «Agentes» te dice por qué y la aceptas tú si es legítimo.

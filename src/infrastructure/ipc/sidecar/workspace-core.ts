@@ -49,6 +49,7 @@ import { GitIsolationService } from '../../git/git-isolation-service.js';
 import { GitDocumentCommitter } from '../../git/git-document-committer.js';
 import { ExecutionValidator } from '../../execution/execution-validator.js';
 import { NpmEnvironment } from '../../execution/npm-environment.js';
+import { ProjectCommands } from '../../execution/project-commands.js';
 import { ClaudeChangeReviewer } from '../../ai/claude-change-reviewer.js';
 import type { ReviewInput } from '../../ai/change-review-contract.js';
 import type { ChangeReviewPort } from '../../../application/ports/change-review-port.js';
@@ -112,6 +113,8 @@ export function createWorkspaceCore(
       WorkspaceEnvironmentPort,
       'forProject'
     > /** Tests: where the bundled skills are (otherwise next to the core). */;
+    /** Tests: the executables project commands run (otherwise npm and pnpm from PATH). */
+    commandExecutables?: { npm?: string; pnpm?: string };
     skillsDirectory?: string /** Tests: the review engine (otherwise Claude), given the assembled evidence. */;
     changeReviewer?: {
       review(
@@ -267,6 +270,18 @@ export function createWorkspaceCore(
   };
   // Plan S2: the stack profile's dependencies, installed by the app in each run's worktree (log in executions/<id>/environment.log).
   const installer = dependencies.environmentInstaller ?? new NpmEnvironment();
+  // The user's project commands (npm test, npm run dev…) on any branch, each in its own worktree with the environment installed.
+  const commands = new ProjectCommands({
+    workspaceRoot,
+    installer: { provision: input => installer.provision(input) },
+    emit: (channel, payload) => emit(channel as never, payload as never),
+    ...(dependencies.commandExecutables ?? {}),
+  });
+  const repositoryOf = (projectId: string) => {
+    const path = store.openProject(projectId).repositories.findPrimaryForProject(projectId)?.localPath;
+    if (!path) throw new Error('Configura primero un repositorio Git para este proyecto.');
+    return path;
+  };
   const stackRow = (projectId: string) =>
     store
       .openProject(projectId)
@@ -886,6 +901,25 @@ export function createWorkspaceCore(
           return approveDependencies(String(args[0] ?? ''), args[1]);
         case 'environment:set_skills':
           return setSkills(String(args[0] ?? ''), args[1]);
+        case 'commands:refs':
+          return commands.refs(repositoryOf(String(args[0] ?? '')));
+        case 'commands:scripts':
+          return commands.scripts(repositoryOf(String(args[0] ?? '')), String(args[1] ?? ''));
+        case 'commands:list':
+          return commands.list(String(args[0] ?? ''));
+        case 'commands:start': {
+          const projectId = String(args[0] ?? ''),
+            input = (args[1] ?? {}) as { ref?: unknown; script?: unknown };
+          return commands.start({
+            projectId,
+            repositoryRoot: repositoryOf(projectId),
+            ref: String(input.ref ?? ''),
+            script: String(input.script ?? ''),
+            environment: projectEnvironment(projectId).forProject(projectId),
+          });
+        }
+        case 'commands:stop':
+          return commands.stop(String(args[1] ?? ''));
         case 'policy:update': {
           const projectId = String(args[0] ?? '');
           const policy = args[1] as import('../../../shared/contracts/agent-view.js').ExecutionPolicyDto;
@@ -1035,6 +1069,7 @@ export function createWorkspaceCore(
       await inceptions.get(projectId)?.settled(projectId);
     },
     close(): void {
+      commands.shutdown();
       for (const inception of inceptions.values()) inception.shutdown();
       for (const pilot of pilots.values()) pilot.shutdown();
       for (const service of executionServices.values()) service.shutdown();

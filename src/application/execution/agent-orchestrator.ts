@@ -206,6 +206,8 @@ export class AgentOrchestrator {
       const environment = this.environment?.forProject(input.projectId) ?? null;
       // Whether the agent gets the environment section of the prompt: only when something was installed.
       let installedEnvironment = false;
+      // Plan: with dependencies installed, the agent may also run the project's scripts (npm run <script>, npm test).
+      let scriptCommands: string[] = [];
       if (environment) {
         const prepared = await this.environment!.provision({
           projectId: input.projectId,
@@ -222,6 +224,8 @@ export class AgentOrchestrator {
         if (!afterEnvironment || afterEnvironment.status !== 'PREPARING_CONTEXT')
           return await this.discardIsolation(afterEnvironment ?? execution, repositoryRoot, isolated);
         installedEnvironment = prepared.installed !== false;
+        if (installedEnvironment)
+          scriptCommands = [`${prepared.manager ?? 'npm'} run`, `${prepared.manager ?? 'npm'} test`];
         if (prepared.commit) {
           execution = { ...execution, initialCommit: prepared.commit };
           this.repository.updateExecution(execution);
@@ -257,7 +261,7 @@ export class AgentOrchestrator {
       this.moveTask(execution, previous ? 'IN_REVIEW' : 'READY', 'IN_PROGRESS');
       if (previous) await this.supersede(previous, input.feedback!.trim(), repositoryRoot);
       const prompt =
-        (environment && installedEnvironment ? `${describeEnvironment(environment)}\n\n` : '') +
+        (environment && installedEnvironment ? `${describeEnvironment(environment, scriptCommands)}\n\n` : '') +
         (skills.notes.length ? `# Skills de la app\n${skills.notes.join('\n')}\n\n` : '') +
         buildTaskPrompt(
           profile.systemInstructions,
@@ -290,7 +294,7 @@ export class AgentOrchestrator {
           writablePaths: policy.writablePaths,
           readonlyPaths: [...policy.readonlyPaths, ...(environment?.paths ?? []), ...skills.paths],
           deniedPaths: policy.deniedPaths,
-          allowedCommands: policy.allowedCommands,
+          allowedCommands: [...policy.allowedCommands, ...scriptCommands],
         },
         ...(profile.connectionConfig ? { providerConfig: profile.connectionConfig } : {}),
       });
@@ -1522,7 +1526,10 @@ function cleanCommands(values: string[]): string[] {
 }
 
 /** Plan S2: what the app installed and how the agent asks for more (it cannot install anything itself). */
-export function describeEnvironment(environment: { stackProfileId: string | null; allowedPackages: string[] }): string {
+export function describeEnvironment(
+  environment: { stackProfileId: string | null; allowedPackages: string[] },
+  scriptCommands: string[] = [],
+): string {
   const what =
     environment.stackProfileId === null
       ? 'las dependencias que declara package.json (si las hay)'
@@ -1530,5 +1537,5 @@ export function describeEnvironment(environment: { stackProfileId: string | null
   const allowed = environment.allowedPackages.length
     ? `Paquetes ${environment.stackProfileId === null ? 'aprobados además de los que ya declara el proyecto' : 'disponibles o aprobados'}: ${environment.allowedPackages.join(', ')}. `
     : '';
-  return `# Entorno del proyecto\nLa app ya instaló ${what} en node_modules/ (de solo lectura): úsalas, pero no instales nada ni edites node_modules/ ni .npmrc. ${allowed}Si de verdad necesitas otro paquete, añádelo a package.json con su versión: la app lo instalará si está aprobado y, si no, detendrá la ejecución para pedírselo al usuario. Prefiere resolverlo con lo que ya hay.`;
+  return `# Entorno del proyecto\nLa app ya instaló ${what} en node_modules/ (de solo lectura): úsalas, pero no instales nada ni edites node_modules/ ni .npmrc. ${allowed}Si de verdad necesitas otro paquete, añádelo a package.json con su versión: la app lo instalará si está aprobado y, si no, detendrá la ejecución para pedírselo al usuario. Prefiere resolverlo con lo que ya hay.${scriptCommands.length ? ` También puedes correr los scripts de package.json con ${scriptCommands.map(command => `\`${command}\``).join(' y ')} (por ejemplo \`${scriptCommands[0]} build\`), cada uno solo: sin tuberías, redirecciones, \`;\`, \`&&\` ni \`$\`, o se deniega (la salida completa ya te llega); un servidor de desarrollo (\`dev\`) se corta por tiempo: úsalo solo para comprobar que arranca. La aceptación la deciden los comandos de verificación del proyecto, no tus scripts.` : ''}`;
 }

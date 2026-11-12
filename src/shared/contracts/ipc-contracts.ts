@@ -38,6 +38,8 @@ import type {
   FeatureIntegrationResultDto,
   FeatureIntegrationStateDto,
   ProjectEnvironmentDto,
+  CommandRunDto,
+  ProjectScriptsDto,
 } from './agent-view.js';
 
 /** Extras of a planning proposal: translated references and the interface specification. */
@@ -167,6 +169,8 @@ export interface WorkspaceIpcCommands {
   'policy:update': (projectId: string, policy: ExecutionPolicyDto) => Promise<ExecutionPolicyDto>;
   'environment:approve_dependencies': (projectId: string, packages: string[]) => Promise<ProjectEnvironmentDto>;
   'environment:set_skills': (projectId: string, enabled: boolean) => Promise<ProjectEnvironmentDto>;
+  'commands:start': (projectId: string, input: { ref: string; script: string }) => Promise<CommandRunDto>;
+  'commands:stop': (projectId: string, runId: string) => Promise<CommandRunDto>;
   'pilot:set_autonomy': (
     projectId: string,
     featureId: string,
@@ -227,6 +231,9 @@ export interface WorkspaceIpcQueries {
   'execution:get_detail': (executionId: string) => Promise<ExecutionDetailDto>;
   'policy:get': (projectId: string) => Promise<ExecutionPolicyDto>;
   'environment:get': (projectId: string) => Promise<ProjectEnvironmentDto>;
+  'commands:refs': (projectId: string) => Promise<{ refs: string[]; current: string | null }>;
+  'commands:scripts': (projectId: string, ref: string) => Promise<ProjectScriptsDto>;
+  'commands:list': (projectId: string) => Promise<CommandRunDto[]>;
   'pilot:get': (projectId: string, featureId: string) => Promise<FeaturePilotDto>;
   'provider:get_auth': (
     projectId: string,
@@ -246,6 +253,8 @@ export interface WorkspaceIpcEvents {
   'execution:status_changed': { executionId: string; workItemId: string; status: AgentExecutionDto['status'] };
   'execution:event_received': { executionId: string; event: AgentEventDto };
   'pilot:updated': { projectId: string; featureId: string; status: string | null };
+  'command:updated': { projectId: string; run: CommandRunDto };
+  'command:output': { projectId: string; runId: string; chunk: string };
   'inception:updated': { projectId: string; stage: InceptionStage; status: InceptionStatus };
 }
 export type IpcCommandChannel = keyof WorkspaceIpcCommands;
@@ -287,6 +296,9 @@ export interface WorkspaceIpcClient {
     approveDependencies?(projectId: string, packages: string[]): Promise<ProjectEnvironmentDto>;
     /** Plan S4: turn the bundled skills on or off for the project's interface tasks. Optional so existing fakes stay valid. */
     setProjectSkills?(projectId: string, enabled: boolean): Promise<ProjectEnvironmentDto>;
+    /** Project commands from the app. Optional so existing fakes stay valid; the Tauri client implements them. */
+    startCommand?(projectId: string, input: { ref: string; script: string }): Promise<CommandRunDto>;
+    stopCommand?(projectId: string, runId: string): Promise<CommandRunDto>;
     setFeatureAutonomy(
       projectId: string,
       featureId: string,
@@ -317,6 +329,9 @@ export interface WorkspaceIpcClient {
     getExecutionPolicy(projectId: string): Promise<ExecutionPolicyDto>;
     /** Plan S2: stack profile and approved packages. Optional so existing fakes stay valid. */
     getProjectEnvironment?(projectId: string): Promise<ProjectEnvironmentDto>;
+    getCommandRefs?(projectId: string): Promise<{ refs: string[]; current: string | null }>;
+    getProjectScripts?(projectId: string, ref: string): Promise<ProjectScriptsDto>;
+    listCommands?(projectId: string): Promise<CommandRunDto[]>;
     getFeaturePilot(projectId: string, featureId: string): Promise<FeaturePilotDto>;
     /** How the engine authenticates for the project (works without features, unlike getFeaturePilot). Optional so older client fakes stay valid. */
     getProviderAuth?(projectId: string): Promise<{ authMode: 'subscription' | 'api_key'; apiKeyAvailable: boolean }>;
@@ -334,5 +349,8 @@ export interface WorkspaceIpcClient {
     onExecutionStatusChanged(listener: (event: WorkspaceIpcEvents['execution:status_changed']) => void): () => void;
     onExecutionEventReceived(listener: (event: WorkspaceIpcEvents['execution:event_received']) => void): () => void;
     onPilotUpdated(listener: (event: WorkspaceIpcEvents['pilot:updated']) => void): () => void;
+    /** Optional so existing fakes stay valid. */
+    onCommandUpdated?(listener: (event: WorkspaceIpcEvents['command:updated']) => void): () => void;
+    onCommandOutput?(listener: (event: WorkspaceIpcEvents['command:output']) => void): () => void;
   };
 }

@@ -34,6 +34,8 @@ export const SERIALIZED_CHANNELS: ReadonlySet<string> = new Set([
   'policy:update',
   'environment:approve_dependencies',
   'environment:set_skills',
+  'commands:start',
+  'commands:stop',
   'pilot:set_autonomy',
   'pilot:start',
   'pilot:stop',

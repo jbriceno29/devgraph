@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ExecutionReview } from './ExecutionReview.js';
 import { DependencyApproval } from './DependencyApproval.js';
 import { ProjectSkillsForm } from './ProjectSkillsForm.js';
+import { ProjectCommandsPanel } from './ProjectCommandsPanel.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
 import { FeaturePilotPanel } from './FeaturePilotPanel.js';
 import { EngineAuthForm } from './EngineAuthForm.js';
@@ -12,11 +13,12 @@ import { eventLabel, executionStatusLabel, shortDate } from '../labels.js';
 import { ErrorNotice } from '../errors.js';
 import { control, danger, focusRing, primary, secondary } from '../ui.js';
 
-type Tab = 'run' | 'review' | 'pilot' | 'settings';
+type Tab = 'run' | 'review' | 'pilot' | 'commands' | 'settings';
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'run', label: 'Ejecutar' },
   { id: 'review', label: 'Revisión' },
   { id: 'pilot', label: 'Piloto' },
+  { id: 'commands', label: 'Comandos' },
   { id: 'settings', label: 'Ajustes' },
 ];
 const ACTIVE = ['QUEUED', 'PREPARING_CONTEXT', 'RUNNING', 'AWAITING_APPROVAL', 'VALIDATING'];
@@ -54,7 +56,13 @@ export function AgentsWorkspace({
     [handledApprovalId, setHandledApprovalId] = useState(''),
     [tab, setTab] = useState<Tab>('run');
   const dialogRef = useRef<HTMLDialogElement>(null),
-    tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ run: null, review: null, pilot: null, settings: null }),
+    tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({
+      run: null,
+      review: null,
+      pilot: null,
+      commands: null,
+      settings: null,
+    }),
     routed = useRef<string | null>(null);
   const selectedExecution = executions.find(item => item.id === selectedExecutionId) ?? null;
   const selectedProfile = profiles.find(item => item.id === profileId) ?? null;
@@ -519,6 +527,7 @@ export function AgentsWorkspace({
           </div>
         )}
         {tab === 'pilot' && <FeaturePilotPanel projectId={projectId} nodes={nodes} />}
+        {tab === 'commands' && <ProjectCommandsPanel projectId={projectId} />}
         {tab === 'settings' && (
           <div className="grid gap-4 xl:grid-cols-2">
             <ExecutionPolicyForm projectId={projectId} />

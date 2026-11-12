@@ -196,8 +196,11 @@ export interface WorkspaceEnvironmentPort {
     environment: ProjectEnvironment;
   }): Promise<{
     log: string;
-    commit: string | null /** false when there was nothing to install (no manifest or no dependencies). */;
+    commit: string | null;
+    /** false when there was nothing to install (no manifest or no dependencies). */
     installed?: boolean;
+    /** The package manager that installed: the agent runs the project's scripts with it. */
+    manager?: 'npm' | 'pnpm';
   }>;
   /** After the agent ran, before the checks: refuses packages outside the allowed list and reinstalls when the manifest changed. */
   reconcile(input: {

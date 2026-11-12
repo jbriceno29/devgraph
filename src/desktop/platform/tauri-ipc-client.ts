@@ -33,6 +33,8 @@ export const workspaceIpc: WorkspaceIpcClient = {
     updateExecutionPolicy: (projectId, policy) => invokeCore('policy:update', [projectId, policy]),
     approveDependencies: (projectId, packages) => invokeCore('environment:approve_dependencies', [projectId, packages]),
     setProjectSkills: (projectId, enabled) => invokeCore('environment:set_skills', [projectId, enabled]),
+    startCommand: (projectId, input) => invokeCore('commands:start', [projectId, input]),
+    stopCommand: (projectId, runId) => invokeCore('commands:stop', [projectId, runId]),
     setFeatureAutonomy: (projectId, featureId, input) =>
       invokeCore('pilot:set_autonomy', [projectId, featureId, input]),
     startPilot: (projectId, featureId, input) => invokeCore('pilot:start', [projectId, featureId, input]),
@@ -58,6 +60,9 @@ export const workspaceIpc: WorkspaceIpcClient = {
     getExecutionDetail: executionId => invokeCore('execution:get_detail', [executionId]),
     getExecutionPolicy: projectId => invokeCore('policy:get', [projectId]),
     getProjectEnvironment: projectId => invokeCore('environment:get', [projectId]),
+    getCommandRefs: projectId => invokeCore('commands:refs', [projectId]),
+    getProjectScripts: (projectId, ref) => invokeCore('commands:scripts', [projectId, ref]),
+    listCommands: projectId => invokeCore('commands:list', [projectId]),
     getFeaturePilot: (projectId, featureId) => invokeCore('pilot:get', [projectId, featureId]),
     getProviderAuth: projectId => invokeCore('provider:get_auth', [projectId]),
     getContextFlow: (projectId, workItemId) => invokeCore('graph:context_flow', [projectId, workItemId]),
@@ -105,6 +110,12 @@ export const workspaceIpc: WorkspaceIpcClient = {
     },
     onPilotUpdated(listener) {
       return subscribe('pilot:updated', listener);
+    },
+    onCommandUpdated(listener) {
+      return subscribe('command:updated', listener);
+    },
+    onCommandOutput(listener) {
+      return subscribe('command:output', listener);
     },
   },
 };

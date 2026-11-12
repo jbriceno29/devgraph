@@ -1,3 +1,5 @@
 # Mechanical formatting commits (git config blame.ignoreRevsFile .git-blame-ignore-revs)
 # Biome, whole repository
 28aaef1b581d8237720adb45174b772bc23d4617
+# Biome, second pass
+25fe5cdf6d1b64b531ea67c942e8203a28251309

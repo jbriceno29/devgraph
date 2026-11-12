@@ -6,15 +6,30 @@ import type {
 } from '../../modules/execution/application/ports/feature-conflict-port.js';
 import { ResolveFeatureConflicts } from '../../modules/execution/application/resolve-feature-conflicts.js';
 import { GitFeatureConflicts } from '../../modules/execution/infrastructure/git-feature-conflicts.js';
+import { FeatureCheckRegistry } from '../../modules/execution/application/feature-check-registry.js';
+import { GetFeatureChecks } from '../../modules/execution/application/get-feature-checks.js';
+import { RunFeatureChecks } from '../../modules/execution/application/run-feature-checks.js';
+import { featureCheckRunner, integrationCommands } from './feature-checks.js';
 import type { Container } from '../container.js';
 
 /** The conflict use cases of a project (plan UX, F0b): check before integrating, integrate, resolve with an agent. */
 export function featureConflictServices(c: Container) {
   const git = new GitFeatureConflicts();
   const catalog = featureCatalog(c);
+  const registry = new FeatureCheckRegistry(),
+    runner = featureCheckRunner(c),
+    commands = integrationCommands(c);
+  const checks = new GetFeatureChecks(registry, catalog, runner, commands);
   const featureConflicts = {
     check: new CheckFeatureConflicts(git, catalog),
-    integrate: new IntegrateFeature((id, featureId) => c.execution(id).integrateFeature(id, featureId), git, catalog),
+    integrate: new IntegrateFeature(
+      (id, featureId) => c.execution(id).integrateFeature(id, featureId),
+      git,
+      catalog,
+      (id, featureId) => checks.execute(id, featureId),
+    ),
+    checks,
+    runChecks: new RunFeatureChecks(registry, catalog, runner, commands, checks),
     resolve: new ResolveFeatureConflicts(git, catalog, featureTasks(c), c.workspaceRoot),
   };
   return {

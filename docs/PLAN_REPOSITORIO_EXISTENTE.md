@@ -95,7 +95,7 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
 - Corrida real con `haiku` sobre una copia de `salestify-web` (`app/`, `core/`, `modules/`, sin `src/`): la tarea escribió `core/format-price.js` y se completó sin reversión.
 - Inicio real con `sonnet` (elegible en el selector del asistente o con `model` en `inception:start`) sobre una copia de `salestify-web`: inferencias con evidencia, «Qué podrá tocar el agente» con las rutas del repositorio, la edición (quitar `e2e/**`, añadir `server/**`, solo `npm test`) se guardó tal cual en la política al aprobar; 0,31 USD. La primera tarea de «Fundación» con `haiku` se completó sin reversión.
 - Corrección tras esa corrida: `docs/**` entra siempre en las rutas propuestas (motivo «documentación»; los ADR siguen de solo lectura), porque la «Fundación» de un repositorio existente documenta la base.
-- Queda por ajustar R1 en dos pasos del plan CAP. En **C6**, `npm run build` deja de ser comprobación por tarea y pasa a la integración (salvo que sea la única). En **C2**, R1 detecta las variables que el código espera (`.env.example`, `process.env.*`) y las pide como secretos del proyecto.
+- **Hecho en C6:** `npm run build` ya no es comprobación por tarea, salvo que sea la única; corre una vez al integrar la feature. **Pendiente en C2:** R1 detecta las variables que el código espera (`.env.example`, `process.env.*`) y las pide como secretos del proyecto.
 
 ### R2. Línea base de verificación (M, 1 día)
 

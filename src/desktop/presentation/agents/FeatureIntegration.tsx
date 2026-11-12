@@ -5,6 +5,8 @@ import { ErrorNotice } from '../errors.js';
 import { primary, secondary } from '../ui.js';
 import { FeatureConflictsNotice } from './FeatureConflictsNotice.js';
 import { useFeatureConflicts } from './use-feature-conflicts.vm.js';
+import { FeatureChecksNotice } from './FeatureChecksNotice.js';
+import { useFeatureChecks } from './use-feature-checks.vm.js';
 
 /** Se puede integrar: tiene rama de integración y todas sus tareas están hechas o archivadas. */
 export const canIntegrate = (
@@ -35,7 +37,8 @@ export function FeatureIntegration({
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<FeatureIntegrationResultDto | null>(null),
     [error, setError] = useState<unknown>(null);
-  const conflicts = useFeatureConflicts(state);
+  const conflicts = useFeatureConflicts(state),
+    checks = useFeatureChecks(state);
   useResetOnChange(featureKey, () => {
     setConfirming(false);
     setResult(null);
@@ -77,7 +80,8 @@ export function FeatureIntegration({
         </p>
       )}
       <FeatureConflictsNotice featureKey={featureKey} vm={conflicts} />
-      {!confirming && !conflicts.blocksIntegration && (
+      {!conflicts.blocksIntegration && <FeatureChecksNotice vm={checks} />}
+      {!confirming && !conflicts.blocksIntegration && !checks.blocksIntegration && (
         <button
           type="button"
           onClick={() => {
@@ -93,29 +97,12 @@ export function FeatureIntegration({
         </button>
       )}
       {confirming && (
-        <div className="space-y-2">
-          <p className="font-medium">
-            ¿Integrar {featureKey} {into(target)}?
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void run()}
-              disabled={busy}
-              className={`min-h-9 flex-1 text-xs ${primary}`}
-            >
-              {busy ? 'Integrando…' : 'Sí, integrar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={busy}
-              className={`min-h-9 flex-1 text-xs ${secondary}`}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <ConfirmIntegrate
+          question={`¿Integrar ${featureKey} ${into(target)}?`}
+          busy={busy}
+          onConfirm={run}
+          onCancel={() => setConfirming(false)}
+        />
       )}
       {result && <IntegrationResult result={result} />}
       <ErrorNotice error={error} />
@@ -130,5 +117,36 @@ function IntegrationResult({ result }: { result: FeatureIntegrationResultDto }) 
         ? `Ya estaba integrada ${into(result.targetBranch)}.`
         : `Integrada ${into(result.targetBranch)}${result.commit ? ` · commit ${result.commit.slice(0, 7)}` : ''}.`}
     </p>
+  );
+}
+
+function ConfirmIntegrate({
+  question,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  question: string;
+  busy: boolean;
+  onConfirm(): Promise<void>;
+  onCancel(): void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="font-medium">{question}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void onConfirm()}
+          disabled={busy}
+          className={`min-h-9 flex-1 text-xs ${primary}`}
+        >
+          {busy ? 'Integrando…' : 'Sí, integrar'}
+        </button>
+        <button type="button" onClick={onCancel} disabled={busy} className={`min-h-9 flex-1 text-xs ${secondary}`}>
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }

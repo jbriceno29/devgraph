@@ -1,4 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
+import type { GetFeatureChecks } from './application/get-feature-checks.js';
+import type { RunFeatureChecks } from './application/run-feature-checks.js';
+import { checksOf } from './domain/check-summary.js';
 import { join } from 'node:path';
 import type {
   AgentExecutionDto,
@@ -29,6 +32,9 @@ export interface FeatureConflictUseCases {
   check: CheckFeatureConflicts;
   integrate: IntegrateFeature;
   resolve: ResolveFeatureConflicts;
+  /** Plan C6: the integration checks (a build) of a finished feature. */
+  checks: GetFeatureChecks;
+  runChecks: RunFeatureChecks;
 }
 
 /** Runs of the agent (start, review, accept, approvals), the execution policy, the engine's auth and feature integration. */
@@ -108,6 +114,8 @@ function projectHandlers(d: ExecutionIpcDeps): IpcHandlers {
       return result;
     }),
     'feature:check_conflicts': ([id, featureId]) => d.featureConflicts.check.execute(text(id), text(featureId)),
+    'feature:checks': ([id, featureId]) => d.featureConflicts.checks.execute(text(id), text(featureId)),
+    'feature:run_checks': serial(([id, featureId]) => d.featureConflicts.runChecks.execute(text(id), text(featureId))),
     'feature:resolve_conflicts': serial(async ([id, featureId]) => {
       const result = await d.featureConflicts.resolve.execute(text(id), text(featureId));
       d.emit('pilot:updated', { projectId: text(id), featureId: text(featureId), status: null });
@@ -118,7 +126,8 @@ function projectHandlers(d: ExecutionIpcDeps): IpcHandlers {
 
 export function toAgentExecutionDto(execution: AgentExecution): AgentExecutionDto {
   const pending = unapprovedPackages(execution),
-    flags = executionQualityFlags(execution);
+    flags = executionQualityFlags(execution),
+    checks = checksOf(execution.testSummary);
   return {
     id: execution.id,
     projectId: execution.projectId,
@@ -145,5 +154,6 @@ export function toAgentExecutionDto(execution: AgentExecution): AgentExecutionDt
     coveredWorkItemIds: coveredWorkItems(execution),
     ...(pending ? { pendingPackages: pending } : {}),
     ...(flags.length ? { qualityFlags: flags } : {}),
+    ...(checks.length ? { checks } : {}),
   };
 }

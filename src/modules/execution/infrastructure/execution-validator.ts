@@ -1,15 +1,13 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { lstat, mkdir, readFile, readdir, readlink, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { git } from './git-isolation-service.js';
+import { runChecks } from './run-checks.js';
 import type { AutonomyPolicy } from '../domain/governance.js';
 import type { ExecutionValidatorPort, WorkspaceEnvironmentPort } from '../application/ports/agent-execution-port.js';
 import type { ProjectEnvironment } from '../../projects/index.js';
 import { qualityFlags } from '../domain/quality-flags.js';
 import { resultSummary as summary } from '../domain/result-summary.js';
 
-const execFileAsync = promisify(execFile);
 type GitRunner = (args: string[]) => Promise<string>;
 
 /** Captures the isolated diff, audits every changed path and runs only policy-allowlisted checks. */
@@ -146,7 +144,7 @@ export class ExecutionValidator implements ExecutionValidatorPort {
       }
       environmentLog = reconciled.log ? `${reconciled.log}\n\n` : '';
     }
-    const testReport = await this.runAllowedChecks(worktree, policy.allowedCommands);
+    const testReport = await runChecks(worktree, policy.allowedCommands);
     await writeFile(join(executionDirectory, 'test-output.log'), environmentLog + testReport.log, 'utf8');
     const failed = testReport.results.find(result => result.exitCode !== 0);
     // Accepted work is committed on the execution branch so it can be reviewed and merged as a unit.
@@ -216,35 +214,6 @@ export class ExecutionValidator implements ExecutionValidatorPort {
     const restore = violations.filter(path => !untracked.includes(path));
     if (restore.length) await run(['restore', '--source', base, '--staged', '--worktree', '--', ...restore]);
     for (const path of remove) await rm(join(cwd, ...path.split('/')), { recursive: true, force: true });
-  }
-
-  private async runAllowedChecks(cwd: string, commands: string[]) {
-    const results: Array<{ command: string; exitCode: number; output: string }> = [];
-    for (const command of commands) {
-      const argv = parseCommand(command);
-      if (!argv.length) throw new Error(`Invalid allowlisted command: ${command}`);
-      try {
-        const result = await execFileAsync(argv[0]!, argv.slice(1), {
-          cwd,
-          encoding: 'utf8',
-          timeout: 120_000,
-          maxBuffer: 4 * 1024 * 1024,
-          windowsHide: true,
-        });
-        results.push({ command, exitCode: 0, output: result.stdout + result.stderr });
-      } catch (error) {
-        const result = error as { code?: number; stdout?: string; stderr?: string; message?: string };
-        results.push({
-          command,
-          exitCode: typeof result.code === 'number' ? result.code : 1,
-          output: `${result.stdout ?? ''}${result.stderr ?? ''}${result.message ?? ''}`,
-        });
-      }
-    }
-    const log = results.length
-      ? results.map(result => `$ ${result.command}\n${result.output}\n[exit ${result.exitCode}]`).join('\n\n')
-      : 'No verification commands are configured in the autonomy policy.\n';
-    return { results, log };
   }
 }
 
@@ -414,10 +383,4 @@ export function glob(pattern: string, flags = ''): RegExp {
     .replaceAll('\u0000', '.*');
   const source = anchored ? `^${translated}${coversDirectory ? '(?:/.*)?' : ''}$` : `^(?:.*/)?${translated}(?:/.*)?$`;
   return new RegExp(source, flags);
-}
-function parseCommand(command: string): string[] {
-  if (/[;&|`$<>\n\r]/.test(command))
-    throw new Error(`Shell operators are not allowed in verification commands: ${command}`);
-  const tokens = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
-  return tokens.map(token => token.replace(/^(?:"([^"]*)"|'([^']*)')$/, '$1$2'));
 }

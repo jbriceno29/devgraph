@@ -61,6 +61,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | `repository:set_base_branch` ⛓ | Cambia la rama base del proyecto (debe existir). |
 | `project:docs` | Documentación en línea de los agentes (C1): si está activada, los dominios que recibe cada ejecución, los que salen del stack y los que añadió el usuario (`ProjectDocsDto`). |
 | `project:set_docs` ⛓ | Activa o desactiva la documentación en línea y guarda los dominios del usuario (`{ enabled, extraDomains }`); rechaza lo que no sea un nombre de dominio. |
+| `feature:checks` | Comprobaciones de integración de una feature (C6): `NONE` si el proyecto no tiene, `NOT_RUN`, `RUNNING`, `PASSED`, `FAILED` o `STALE` si la feature o la rama base se movieron desde la última comprobación; comandos, resultado de cada uno y final de la salida del que falló (`FeatureChecksDto`). |
+| `feature:run_checks` ⛓ | Lanza en segundo plano las comprobaciones de integración (por ejemplo `next build`) sobre una copia de la rama base con la feature fusionada y responde al momento con `RUNNING`; la interfaz consulta `feature:checks` hasta el resultado. |
 | `feature:check_conflicts` | Con `git merge-tree`, sin tocar nada: archivos que chocan con la rama base, con otras features sin integrar y marcadores sin resolver (`FeatureConflictsDto`). |
 | `feature:resolve_conflicts` ⛓ | Junta la rama base en la feature, commitea los marcadores y crea una tarea `READY` de la feature que los resuelve (`ResolveFeatureConflictsResultDto`). |
 | `metrics:export_report` | Exporta el informe de métricas de una feature a `reports/` y devuelve su ruta. |

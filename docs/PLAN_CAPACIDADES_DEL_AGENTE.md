@@ -126,6 +126,21 @@ reglas fijas:
   integrar una feature (`build`). R1 propone `build` solo para la integración, salvo que sea la única comprobación del
   proyecto. Con C2 en marcha, `build` recibe las variables de alcance «Agentes y verificación».
 
+**Estado (2026-11-12): hecho.**
+
+- **Límites de tiempo:** cada comprobación tiene el suyo: 10 minutos para `build`, e2e y Playwright, y 2 para el resto. Si se agota, se dice «Tiempo agotado» y no «Falló».
+- **Revisión** muestra cada comprobación con su resultado y su duración; el log completo queda plegado.
+- **Comprobaciones al integrar:**
+  - `web-nextjs` usa `next build`, `web-spa-react` usa `vite build`, y un repositorio sin perfil usa su script `build`. R1 ya no lo propone en cada tarea, salvo que sea la única comprobación.
+  - «Comprobar antes de integrar» las ejecuta en segundo plano sobre una copia de la rama base con la feature fusionada, y no mueve ninguna rama.
+  - «Integrar» espera a que hayan pasado con las ramas actuales. Si la feature o la base cambian, pide volver a comprobar.
+- **Corrida real con `haiku`**, sobre la base Next.js de C7a:
+  1. Integrar sin comprobar se rechazó.
+  2. «Comprobar» respondió al momento, y `next build` pasó en 9 s (instalación incluida).
+  3. La feature se integró en `main` sin dejar worktrees.
+  4. `next build` sobre `main`, a mano, compila y prerenderiza `/`.
+- **Pendiente:** con C2, `build` recibirá las variables con alcance «Agentes y verificación».
+
 ### C7. Perfil «Web Next.js» y migración del ecommerce
 - Perfil de catálogo:
   - Next.js (App Router), TypeScript y Tailwind CSS 4.

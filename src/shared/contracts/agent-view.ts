@@ -57,6 +57,8 @@ export interface AgentExecutionDto {
   coveredWorkItemIds: string[] /** Plan S2: paquetes que la ejecución necesita y nadie aprobó (solo en una ejecución fallida por eso). */;
   pendingPackages?: string[] /** Plan S5: señales de que la ejecución pudo debilitar su verificación (pruebas borradas o saltadas, configuración de verificación cambiada). */;
   qualityFlags?: string[];
+  /** Plan C6: each check of the run, in order (the full output is in the verification log). */
+  checks?: Array<{ command: string; passed: boolean; timedOut?: boolean; durationMs?: number }>;
 }
 export interface AgentEventDto {
   type: string;

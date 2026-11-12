@@ -113,7 +113,7 @@ describe('acceso del agente derivado del repositorio (plan REP, R1)', () => {
       ]),
     );
     expect(access.writable.map(path => path.pattern)).not.toEqual(expect.arrayContaining(['.github/**', 'src/**']));
-    expect(access.verificationCommands).toEqual(['npm test', 'npm run lint', 'npm run build']);
+    expect(access.verificationCommands).toEqual(['npm test', 'npm run lint']);
 
     // An unsafe path is refused with the reason; nothing is sent to the engine.
     await expect(

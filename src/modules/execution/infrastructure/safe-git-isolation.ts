@@ -3,6 +3,7 @@ import { mkdir, readdir, realpath, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { GitIsolationPort } from '../application/ports/agent-execution-port.js';
 import { git, GitIsolationService } from './git-isolation-service.js';
+import { activeCheckDirectories } from './feature-checks.js';
 import { checkoutState, readableGitError, resolveBaseBranch, withRepositoryLock } from './git-repository-state.js';
 
 const uuid = /^[a-f0-9-]{36}$/i;
@@ -109,8 +110,8 @@ export class SafeGitIsolation extends GitIsolationService implements GitIsolatio
 }
 
 /**
- * Removes the throwaway worktrees of merges a crash left behind (G9): only folders under the project's `merges/` in the
- * app's data, never the run worktrees (those are kept for review). Returns how many were removed.
+ * Removes the throwaway worktrees of merges and checks a crash left behind (G9): only folders under the project's
+ * `merges/` and `checks/` in the app's data, never the run worktrees (kept for review). Returns how many were removed.
  */
 export async function removeOrphanMergeWorktrees(
   repositoryRoot: string,
@@ -118,17 +119,23 @@ export async function removeOrphanMergeWorktrees(
   projectId: string,
 ): Promise<number> {
   if (!uuid.test(projectId)) return 0;
-  const merges = join(workspaceRoot, 'projects', projectId, 'merges');
   const root = await realpath(repositoryRoot);
-  // Read inside the lock: a merge of this process finishes (and removes its folder) before the scan.
+  // Read inside the lock: a merge of this process finishes (and removes its folder) before the scan. Checks in
+  // progress (plan C6) only take the lock to add and remove their worktree, so they are skipped by name.
   return withRepositoryLock(root, async () => {
-    const orphans = (await readdir(merges).catch(() => [] as string[])).filter(entry => uuid.test(entry));
-    if (!orphans.length) return 0;
-    for (const entry of orphans) {
-      await git(root, ['worktree', 'remove', '--force', join(merges, entry)]).catch(() => undefined);
-      await rm(join(merges, entry), { recursive: true, force: true });
+    let removed = 0;
+    for (const kind of ['merges', 'checks']) {
+      const parent = join(workspaceRoot, 'projects', projectId, kind);
+      const orphans = (await readdir(parent).catch(() => [] as string[])).filter(
+        entry => uuid.test(entry) && !activeCheckDirectories.has(join(parent, entry)),
+      );
+      for (const entry of orphans) {
+        await git(root, ['worktree', 'remove', '--force', join(parent, entry)]).catch(() => undefined);
+        await rm(join(parent, entry), { recursive: true, force: true });
+      }
+      removed += orphans.length;
     }
-    await git(root, ['worktree', 'prune']).catch(() => undefined);
-    return orphans.length;
+    if (removed) await git(root, ['worktree', 'prune']).catch(() => undefined);
+    return removed;
   });
 }

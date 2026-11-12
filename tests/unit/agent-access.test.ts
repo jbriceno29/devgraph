@@ -38,7 +38,7 @@ describe('proposeAgentAccess (plan REP, R1)', () => {
       { pattern: 'coverage/**', reason: 'GENERATED' },
     ]);
     // pnpm lockfile → pnpm; checks in order test, lint, build (no typecheck script).
-    expect(access.verificationCommands).toEqual(['pnpm test', 'pnpm run lint', 'pnpm run build']);
+    expect(access.verificationCommands).toEqual(['pnpm test', 'pnpm run lint']);
   });
   it("skips npm's placeholder test script and a manifest that does not parse", () => {
     const placeholder = JSON.stringify({

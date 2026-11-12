@@ -23,6 +23,8 @@ export interface StackProfile {
   structure: string;
   rules: readonly string[];
   verificationCommands: readonly string[];
+  /** Plan C6: checks that run once on the merged result before a feature is integrated (a build takes minutes). */
+  integrationCommands: readonly string[];
   /** Files and folders outside the default writable ones (src/, tests/, docs/) the stack needs: configuration at the root. */
   writablePaths: readonly string[];
   /** What the scaffold task must create on top of what the app provides. */
@@ -67,6 +69,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'Pruebas con node:test y node:assert/strict en test/, una por módulo de src/.',
     ],
     verificationCommands: ['node --test'],
+    integrationCommands: [],
     writablePaths: ['package.json', 'README.md', '.gitignore', 'test/**'],
     scaffold:
       'Crea package.json sin dependencias ("type": "module"), la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "node --test".',
@@ -106,6 +109,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'Estilos con las variables de src/styles/tokens.css, sin colores ni medidas sueltas; HTML semántico, etiquetas en los formularios y foco visible.',
     ],
     verificationCommands: [...TS_VERIFY],
+    integrationCommands: ['node_modules/.bin/vite build'],
     writablePaths: [...NPM_ROOT_FILES, 'index.html', 'vite.config.ts', 'public/**'],
     scaffold: `${NPM_SCAFFOLD} En vite.config.ts configura Vitest con environment "jsdom".`,
     reviewedAt: REVIEWED,
@@ -151,6 +155,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'La conexión a Postgres sale de DATABASE_URL; nunca se escribe una URL ni una clave en el código.',
     ],
     verificationCommands: [...TS_VERIFY],
+    integrationCommands: ['node_modules/.bin/next build'],
     writablePaths: [
       ...NPM_ROOT_FILES,
       'next.config.ts',
@@ -187,6 +192,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'Las pruebas usan app.inject() sobre la instancia de src/app.ts, sin abrir puertos.',
     ],
     verificationCommands: [...TS_VERIFY],
+    integrationCommands: [],
     writablePaths: [...NPM_ROOT_FILES, 'test/**', 'vitest.config.ts'],
     scaffold: NPM_SCAFFOLD,
     reviewedAt: REVIEWED,
@@ -207,6 +213,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'Códigos de salida: 0 si todo fue bien, 1 en error de uso con un mensaje claro en stderr.',
     ],
     verificationCommands: [...TS_VERIFY],
+    integrationCommands: [],
     writablePaths: [...NPM_ROOT_FILES, 'test/**', 'vitest.config.ts'],
     scaffold: NPM_SCAFFOLD,
     reviewedAt: REVIEWED,
@@ -226,6 +233,7 @@ export const STACK_PROFILES: readonly StackProfile[] = [
       'Pruebas con unittest en tests/, una por módulo.',
     ],
     verificationCommands: ['python3 -m unittest discover -s tests'],
+    integrationCommands: [],
     writablePaths: ['README.md', '.gitignore', 'pyproject.toml'],
     scaffold:
       'Crea la estructura del perfil, un README con cómo ejecutar y probar, y una prueba de humo que pase con "python3 -m unittest discover -s tests".',

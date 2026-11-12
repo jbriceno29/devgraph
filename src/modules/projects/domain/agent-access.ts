@@ -69,18 +69,49 @@ export function proposeAgentAccess(layout: RepositoryLayout): AgentAccessProposa
   return { writable, verificationCommands: checkCommands(layout) };
 }
 
-function checkCommands(layout: RepositoryLayout): string[] {
-  let scripts: Record<string, unknown> = {};
+function scriptsOf(packageJson: string | null): Record<string, unknown> | null {
   try {
-    const manifest = JSON.parse(layout.packageJson ?? '{}') as { scripts?: unknown };
-    if (manifest.scripts && typeof manifest.scripts === 'object') scripts = manifest.scripts as Record<string, unknown>;
+    const manifest = JSON.parse(packageJson ?? '{}') as { scripts?: unknown };
+    return manifest.scripts && typeof manifest.scripts === 'object'
+      ? (manifest.scripts as Record<string, unknown>)
+      : {};
   } catch {
-    return [];
+    return null;
   }
+}
+const hasScript = (scripts: Record<string, unknown>, name: string) =>
+  typeof scripts[name] === 'string' && !PLACEHOLDER.test(String(scripts[name]));
+const scriptCommand = (runner: string, name: string) => (name === 'test' ? `${runner} test` : `${runner} run ${name}`);
+
+/**
+ * Per-task checks from the scripts the repository has. `build` takes minutes and checks the whole app, so it runs once
+ * when a feature is integrated (plan C6), unless it is the only check the repository has.
+ */
+function checkCommands(layout: RepositoryLayout): string[] {
+  const scripts = scriptsOf(layout.packageJson);
+  if (!scripts) return [];
   const runner = layout.topLevel.includes('pnpm-lock.yaml') ? 'pnpm' : 'npm';
-  return CHECK_SCRIPTS.filter(
-    name => typeof scripts[name] === 'string' && !PLACEHOLDER.test(String(scripts[name])),
-  ).map(name => (name === 'test' ? `${runner} test` : `${runner} run ${name}`));
+  const found = CHECK_SCRIPTS.filter(name => hasScript(scripts, name));
+  const perTask = found.length > 1 ? found.filter(name => name !== 'build') : found;
+  return perTask.map(name => scriptCommand(runner, name));
+}
+
+/**
+ * Plan C6: the checks that run on the merged result before a feature is integrated. A catalog profile brings its own
+ * (for example `next build`); a repository without one builds with its `build` script when the per-task checks do not
+ * already run it.
+ */
+export function integrationChecks(input: {
+  profileCommands: readonly string[] | null;
+  packageJson: string | null;
+  pnpm: boolean;
+  verificationCommands: readonly string[];
+}): string[] {
+  if (input.profileCommands) return [...input.profileCommands];
+  const scripts = scriptsOf(input.packageJson);
+  if (!scripts || !hasScript(scripts, 'build')) return [];
+  const build = scriptCommand(input.pnpm ? 'pnpm' : 'npm', 'build');
+  return input.verificationCommands.includes(build) ? [] : [build];
 }
 
 /** A path pattern the user typed for the policy: relative, inside the repository, no shell or parent segments. */

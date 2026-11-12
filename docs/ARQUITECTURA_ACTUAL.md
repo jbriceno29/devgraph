@@ -98,6 +98,11 @@ Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12)
 8. **Pedir ajustes** (`execution:request_changes`) lanza una revisión partiendo del commit anterior con el motivo como contexto.
 9. **Integrar la feature** (`feature:integrate`). Con todas las tareas en `DONE`, fusiona la rama de la feature en la rama base con un commit de merge, en un worktree temporal, sin hooks. Rechaza si la rama base está abierta en otro worktree, si hay conflicto o si el checkout del usuario está en esa rama con cambios sin commitear.
 10. **Conflictos entre features** (F0b; casos de uso `check-feature-conflicts`, `resolve-feature-conflicts` e `integrate-feature`, con `GitFeatureConflicts`). Antes de integrar, el panel de la feature consulta `feature:check_conflicts` (`git merge-tree`) y oculta «Integrar» si chocaría con la rama base. «Resolver con un agente» (`feature:resolve_conflicts`) junta la rama base en la de la feature, commitea los marcadores y crea una tarea `READY` de la feature con una propuesta `USER_BULK_ACTION`; al aceptarla, la feature se integra sin conflicto. `feature:integrate` rechaza una rama con marcadores.
+11. **Comprobaciones de integración** (C6; casos de uso `get-feature-checks` y `run-feature-checks`, con `GitFeatureChecks`).
+    - **Qué se comprueba:** las de un perfil del catálogo (`next build`, `vite build`) o el script `build` de un repositorio sin perfil, si las comprobaciones por tarea no lo incluyen ya.
+    - **Cómo:** `feature:run_checks` fusiona la feature con la rama base en un worktree desechable de `checks/`, instala el entorno y ejecuta los comandos en segundo plano. Solo toma el candado del repositorio para crear y borrar el worktree.
+    - **Bloqueo:** `feature:integrate` se rechaza hasta que hayan pasado con las cabezas actuales de la feature y de la rama base. El resultado vive en memoria, así que tras reiniciar la app hay que volver a comprobar.
+    - **Límites de tiempo:** cada comprobación tiene el suyo (`check-timeouts.ts`): 10 minutos para builds y e2e, 2 para el resto. Revisión muestra cada comprobación con su resultado y su duración.
 
 ## 5. Piloto automático
 

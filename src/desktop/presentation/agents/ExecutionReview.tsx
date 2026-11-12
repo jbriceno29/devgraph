@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ExecutionChecks } from './ExecutionChecks.js';
 import { useResetOnChange } from '../use-reset-on-change.js';
 import type { AgentExecutionDto, ExecutionDetailDto } from '../../../shared/contracts/agent-view.js';
 import { fileChangeLabel } from '../labels.js';
@@ -204,16 +205,7 @@ export function ExecutionReview({
         </div>
       )}
 
-      {detail.testLog && (
-        <details className="rounded-lg border border-border bg-surface-raised">
-          <summary className={`min-h-9 cursor-pointer rounded-lg px-3 py-2.5 text-xs text-fg ${focusRing}`}>
-            Log de verificación
-          </summary>
-          <pre className="max-h-64 overflow-auto border-t border-border p-3 text-[11px] text-fg-muted">
-            {detail.testLog}
-          </pre>
-        </details>
-      )}
+      <ExecutionChecks execution={execution} log={detail.testLog} />
 
       {detail.canAccept && (
         <button

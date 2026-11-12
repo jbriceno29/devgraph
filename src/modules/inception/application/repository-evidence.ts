@@ -18,6 +18,9 @@ export function evidencePaths(scan: RepositoryScanDto): Set<string> {
     ...scan.topLevel.map(entry => entry.replace(/\/$/, '')),
   ]);
 }
+/** Cut at a word with an ellipsis, never in the middle of one (a long VISION was shown as «…outbox, adem»). */
+const shorten = (text: string, max: number) =>
+  text.length <= max ? text : `${text.slice(0, max - 1).replace(/\s+\S*$/, '')}…`;
 const cleanPath = (value: string) => value.trim().replace(/^`|`$/g, '').replace(/^\.\//, '').replace(/\/+$/, '');
 
 /**
@@ -32,7 +35,9 @@ export function normalizeInferences(raw: unknown, scan: RepositoryScanDto): Repo
     const value = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
     const area = String(value.area ?? '').toUpperCase() as RepositoryInferenceArea;
     const statement =
-      typeof value.statement === 'string' ? value.statement.replace(/\s+/g, ' ').trim().slice(0, 240) : '';
+      typeof value.statement === 'string'
+        ? shorten(value.statement.replace(/\s+/g, ' ').trim(), area === 'VISION' ? 600 : 240)
+        : '';
     const evidence = [
       ...new Set(
         (Array.isArray(value.evidence) ? value.evidence : [])

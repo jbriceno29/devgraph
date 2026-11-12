@@ -139,6 +139,10 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
     4. Al volver a comprobar, la línea base siguió corriendo `npm test`.
   - La primera corrida reveló que aceptar un fallo después de aprobar no lo sacaba de la política. Ya está corregido.
 - **Pendiente:** «Poner al día el proyecto» (R5) repetirá la línea base sobre el estado actual.
+- **Corrección (2026-11-12):** con un proyecto real, un monorepo pnpm cuya raíz no declara dependencias (viven en `apps/*`, `packages/*` y `spikes/*`), la copia no se instalaba («nada que instalar»). Por eso `pnpm test`, `typecheck` y `lint` fallaban en 1–2 s con «node_modules missing», y la app pedía «Dejar la verificación en verde» sin motivo.
+  - Ahora un repositorio con `pnpm-workspace.yaml`, `workspaces` o lockfile se instala desde la raíz.
+  - En una copia de ese proyecto, las tres comprobaciones pasaron (42 s con la instalación).
+  - Se corrigió además la visión de R4, que se cortaba a media palabra a los 240 caracteres: ahora admite 600 y corta en una palabra con «…».
 
 ### R3. Mapa de lo que existe (L, 2–3 días)
 

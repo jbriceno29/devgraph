@@ -11,7 +11,8 @@ const execFileAsync = promisify(execFile);
 const SAFE_FLAGS = ['--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'];
 const MANIFEST = 'package.json',
   LOCKFILE = 'package-lock.json',
-  PNPM_LOCKFILE = 'pnpm-lock.yaml';
+  PNPM_LOCKFILE = 'pnpm-lock.yaml',
+  PNPM_WORKSPACE = 'pnpm-workspace.yaml';
 type Manager = 'npm' | 'pnpm';
 /** Each manager's install: `frozen` reproduces the lockfile exactly, `update` follows the manifest and rewrites the lockfile. Scripts never run. */
 const INSTALL: Record<Manager, { frozen: string[]; update: string[]; lockfile: string }> = {
@@ -101,9 +102,10 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
   ): Promise<{ log: string; commit: string | null; installed: boolean; manager?: Manager }> {
     if (manifest === null)
       return { log: `Sin ${MANIFEST}: no hay dependencias que instalar.`, commit: null, installed: false };
-    if (!declaredNames(manifest).length)
-      return { log: `${MANIFEST} no declara dependencias: nada que instalar.`, commit: null, installed: false };
     const manager = await managerOf(cwd);
+    // A workspace root (pnpm-workspace.yaml, "workspaces") often declares nothing itself: its packages do, and its lockfile says so.
+    if (!declaredNames(manifest).length && !(await declaresWorkspace(cwd, manifest)))
+      return { log: `${MANIFEST} no declara dependencias: nada que instalar.`, commit: null, installed: false };
     const lockfile = INSTALL[manager].lockfile;
     const frozen = await exists(join(cwd, lockfile));
     const log = [
@@ -191,6 +193,13 @@ export class NpmEnvironment implements Omit<WorkspaceEnvironmentPort, 'forProjec
       );
     }
   }
+}
+
+/** The repository installs its dependencies from the root even though the root declares none (a monorepo or a lockfile). */
+async function declaresWorkspace(cwd: string, manifest: Manifest): Promise<boolean> {
+  if (manifest.workspaces) return true;
+  for (const file of [PNPM_WORKSPACE, PNPM_LOCKFILE, LOCKFILE]) if (await exists(join(cwd, file))) return true;
+  return false;
 }
 
 const DEFAULT_IDENTITY = ['-c', 'user.name=Graph Workspace', '-c', 'user.email=graph-workspace@localhost'];

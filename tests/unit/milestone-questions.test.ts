@@ -126,3 +126,15 @@ describe('questions of the next milestone (plan REP, R4)', () => {
     expect(checkAgainstMap(operations, null)).toEqual({ operations, problems: [] });
   });
 });
+
+describe('a long inference is cut at a word', () => {
+  it('keeps a vision up to 600 characters and never ends in half a word', () => {
+    const long = `${'palabra '.repeat(90)}final`;
+    const [vision] = normalizeInferences([{ area: 'VISION', statement: long, evidence: ['README.md'] }], scan);
+    expect(vision!.statement.length).toBeLessThanOrEqual(600);
+    expect(vision!.statement).toMatch(/palabra…$/);
+    const [stack] = normalizeInferences([{ area: 'STACK', statement: long, evidence: ['README.md'] }], scan);
+    expect(stack!.statement.length).toBeLessThanOrEqual(240);
+    expect(stack!.statement.endsWith('palabra…')).toBe(true);
+  });
+});

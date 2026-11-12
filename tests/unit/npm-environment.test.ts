@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NpmEnvironment, npmName } from '../../src/modules/environment/infrastructure/npm-environment.js';
@@ -71,5 +71,43 @@ describe('npm environment (plan S2)', () => {
     expect(environmentFor(null, ['zod', 'Mal'])).toMatchObject({ allowedPackages: ['zod'] });
     expect(environmentFor('web-spa-react', ['Mal Nombre', 'zod'])!.allowedPackages).toContain('zod');
     expect(environmentFor('web-spa-react', ['Mal Nombre'])!.allowedPackages).not.toContain('Mal Nombre');
+  });
+});
+
+describe('an existing repository whose root declares no dependencies (a pnpm monorepo, seen with a real project)', () => {
+  const detect = environmentFor(null)!;
+  /** A fake pnpm that records its arguments, so the test checks what would be installed without a network. */
+  function fakePnpm() {
+    const directory = mkdtempSync(join(tmpdir(), 'graphdev2-npm-'));
+    const executable = join(directory, 'pnpm');
+    writeFileSync(executable, `#!/bin/sh\necho "$@" >> "${join(directory, 'calls')}"\n`);
+    chmodSync(executable, 0o755);
+    return {
+      executable,
+      calls: () => (existsSync(join(directory, 'calls')) ? readFileSync(join(directory, 'calls'), 'utf8') : ''),
+    };
+  }
+  it('installs from the root with the lockfile when it is a workspace', async () => {
+    const pnpm = fakePnpm();
+    const root = worktree(JSON.stringify({ name: 'monorepo', private: true, scripts: { test: 'pnpm -r test' } }));
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "apps/*"\n');
+    writeFileSync(join(root, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    const result = await new NpmEnvironment({ pnpm: pnpm.executable }).provision({
+      workingDirectory: root,
+      projectName: 'm',
+      environment: detect,
+    });
+    expect(result).toMatchObject({ installed: true, manager: 'pnpm', commit: null });
+    expect(pnpm.calls()).toContain('install --frozen-lockfile --ignore-scripts');
+  });
+  it('still installs nothing for a root with no dependencies, lockfile or workspace', async () => {
+    const pnpm = fakePnpm();
+    const result = await new NpmEnvironment({ pnpm: pnpm.executable, npm: pnpm.executable }).provision({
+      workingDirectory: worktree(JSON.stringify({ name: 'solo', scripts: { test: 'node --test' } })),
+      projectName: 's',
+      environment: detect,
+    });
+    expect(result).toMatchObject({ installed: false });
+    expect(pnpm.calls()).toBe('');
   });
 });

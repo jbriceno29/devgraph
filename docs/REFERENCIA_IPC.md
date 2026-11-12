@@ -1,6 +1,6 @@
 # Referencia IPC
 
-Fuente: `src/shared/contracts/ipc-contracts.ts` (tipos `WorkspaceIpcCommands`, `WorkspaceIpcQueries` y `WorkspaceIpcEvents`) y `src/infrastructure/ipc/sidecar/request-dispatcher.ts`. Los DTO están en `src/shared/contracts/*.ts`. El cliente de la interfaz (`WorkspaceIpcClient`) envuelve estos canales en métodos tipados (`commands`, `queries`, `events` y el grupo opcional `inception`); la implementación real es `src/desktop/platform/tauri-ipc-client.ts`.
+Fuente: `src/shared/contracts/ipc-contracts.ts` (tipos `WorkspaceIpcCommands`, `WorkspaceIpcQueries` y `WorkspaceIpcEvents`) y `src/infrastructure/ipc/sidecar/request-dispatcher.ts`. Los DTO están en `src/shared/contracts/*.ts`. El cliente de la interfaz (`WorkspaceIpcClient`) envuelve estos canales en métodos tipados (`commands`, `queries`, `events`, el grupo opcional `inception` y `platform.pickFolder`, que abre el selector de carpetas del sistema con el plugin de diálogo de Tauri y no pasa por el núcleo); la implementación real es `src/desktop/platform/tauri-ipc-client.ts`.
 
 Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo reenvía al sidecar como una línea JSON y devuelve la respuesta (ver `docs/ARQUITECTURA_ACTUAL.md`). Tiempo de espera: 60 s; 330 s para `changeset:propose_from_chat` y `planning:translate_references`.
 
@@ -12,7 +12,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 
 | Canal | Descripción |
 | :--- | :--- |
-| `project:create` ⛓ | Crea un proyecto (nombre, slug y, opcionalmente, descripción, objetivos, stack y reglas). |
+| `project:create` ⛓ | Crea un proyecto (nombre, slug y, opcionalmente, descripción, objetivos, stack y reglas). Con `location` deja su código listo en el mismo paso: `NEW_FOLDER` crea la carpeta (inexistente o vacía) con `git init` y un primer commit; `EXISTING_REPOSITORY` conecta una carpeta que ya tiene `.git`. La carpeta se comprueba antes de crear nada y, si ese paso falla, el proyecto no se crea. |
+| `settings:set_projects_folder` ⛓ | Guarda la carpeta de proyectos (ajuste de la app, no del proyecto, en `<datos>/settings.json`): ruta absoluta, sin `..`; la crea si falta y comprueba que se puede escribir. No acepta la carpeta personal ni la raíz. |
 | `project:open` ⛓ | Abre un proyecto y devuelve su estado: resumen, grafo y entidad seleccionada. |
 | `repository:configure` ⛓ | Conecta un repositorio Git existente (ruta absoluta). |
 | `repository:initialize` ⛓ | Crea un repositorio Git nuevo (carpeta inexistente o vacía, ruta absoluta sin `..`) y lo hace el repositorio principal del proyecto. |
@@ -77,6 +78,8 @@ Transporte: la interfaz invoca el comando Tauri `workspace_request`; el host lo 
 | Canal | Descripción |
 | :--- | :--- |
 | `project:list` | Lista los proyectos. |
+| `settings:get` | Ajustes de la app: `projectsFolder` (null hasta que el usuario la elige) y la carpeta sugerida, que es la primera de las habituales (`~/Documents/repos`, `~/Documentos/repos`, `~/repos`, `~/Projects`, `~/code`…) que ya contenga repositorios Git, con su número. |
+| `folder:inspect` | Qué hay en una ruta absoluta: si existe, si es carpeta, si está vacía, si es un repositorio Git y si existe su carpeta padre. Solo lectura. |
 | `graph:get_view` | Grafo del proyecto (nodos y aristas), con filtro opcional por tipos de entidad y de arista. |
 | `graph:context_flow` | Entidades que formaron el contexto de la última ejecución de una tarea (para dibujar el flujo de contexto). |
 | `entity:get_inspector_details` | Detalle de una entidad: atributos, relaciones, resultado de cierre, integración de la feature, historial de ejecuciones y cambios de estado permitidos. |

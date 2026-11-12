@@ -58,6 +58,37 @@ export interface CreateProjectInput {
   objectives?: string[];
   techStack?: Record<string, unknown>;
   rules?: string[];
+  /**
+   * Where the project's code lives, set up together with the project: `NEW_FOLDER` creates the folder (missing or empty)
+   * with `git init` and a first commit; `EXISTING_REPOSITORY` connects a folder that already holds a Git repository.
+   * If this step fails the project is not created. Without it, the repository is connected later (as before).
+   */
+  location?: ProjectLocationInput;
+}
+export interface ProjectLocationInput {
+  mode: 'NEW_FOLDER' | 'EXISTING_REPOSITORY';
+  path: string;
+}
+/** The folder proposed the first time: a usual place that already holds repositories, or ~/Documents/repos. */
+export interface ProjectsFolderSuggestionDto {
+  path: string;
+  exists: boolean;
+  /** Direct subfolders with `.git` (why it was proposed). */
+  repositoryCount: number;
+}
+/** App-wide settings (not per project). `projectsFolder` null: the user has not chosen it yet (first run). */
+export interface AppSettingsDto {
+  projectsFolder: string | null;
+  suggestion: ProjectsFolderSuggestionDto;
+}
+/** What is at a path (normalized, absolute), checked before creating a project there. */
+export interface FolderInspectionDto {
+  path: string;
+  exists: boolean;
+  isDirectory: boolean;
+  empty: boolean;
+  isGitRepository: boolean;
+  parentExists: boolean;
 }
 export interface ProjectSummaryDto {
   id: string;
@@ -132,6 +163,8 @@ export interface ChangeSetDto {
 export interface WorkspaceIpcCommands {
   'project:create': (input: CreateProjectInput) => Promise<ProjectSummaryDto>;
   'project:open': (projectId: string) => Promise<WorkspaceLoadedStateDto>;
+  /** Saves the folder where new projects are created (created if missing; must be writable). */
+  'settings:set_projects_folder': (path: string) => Promise<AppSettingsDto>;
   'repository:configure': (projectId: string, localPath: string) => Promise<{ projectId: string; localPath: string }>;
   'artifact:create': (input: CreateArtifactDocumentInput) => Promise<ArtifactDocumentViewDto>;
   'artifact:save': (
@@ -222,6 +255,9 @@ export interface WorkspaceIpcCommands {
 }
 export interface WorkspaceIpcQueries {
   'project:list': () => Promise<ProjectSummaryDto[]>;
+  'settings:get': () => Promise<AppSettingsDto>;
+  /** Read-only: whether an absolute path is missing, an empty folder, a Git repository or a folder with files. */
+  'folder:inspect': (path: string) => Promise<FolderInspectionDto>;
   'graph:get_view': (projectId: string, filter?: GraphFilterDto) => Promise<GraphViewDto>;
   'entity:get_inspector_details': (entityId: string) => Promise<EntityInspectorDto>;
   'repository:get_path': (projectId: string) => Promise<string | null>;
@@ -270,6 +306,8 @@ export interface WorkspaceIpcClient {
   commands: {
     createProject(input: CreateProjectInput): Promise<ProjectSummaryDto>;
     openProject(projectId: string): Promise<WorkspaceLoadedStateDto>;
+    /** Optional so existing fakes stay valid; without it the app asks for a path in each project, as before. */
+    setProjectsFolder?(path: string): Promise<AppSettingsDto>;
     configureRepository(projectId: string, localPath: string): Promise<{ projectId: string; localPath: string }>;
     createArtifact(input: CreateArtifactDocumentInput): Promise<ArtifactDocumentViewDto>;
     saveArtifact(documentId: string, expectedContentHash: string, content: string): Promise<ArtifactDocumentViewDto>;
@@ -349,6 +387,14 @@ export interface WorkspaceIpcClient {
     getContextFlow(projectId: string, workItemId: string): Promise<ContextFlowDto>;
     getFeatureReport(projectId: string, featureId: string): Promise<FeatureReportDto>;
     getActivity(projectId: string, limit?: number): Promise<ActivitySummaryDto>;
+    /** Optional so existing fakes stay valid. */
+    getAppSettings?(): Promise<AppSettingsDto>;
+    inspectFolder?(path: string): Promise<FolderInspectionDto>;
+  };
+  /** Native desktop features outside the core (the Tauri client implements them; absent in tests and in a plain browser). */
+  platform?: {
+    /** Opens the system's folder picker; null when the user cancels. */
+    pickFolder?(options: { title: string; defaultPath?: string }): Promise<string | null>;
   };
   /** Project inception and repository creation (optional so existing fakes stay valid; the Tauri client implements it). */
   inception?: InceptionIpcClient;

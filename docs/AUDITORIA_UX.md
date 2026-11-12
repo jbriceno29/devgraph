@@ -26,6 +26,8 @@ Fecha: 2026-11-12 · Rama: `feat/claude-code` (commit `97004b1`)
 
 **Fortalezas que conviene conservar:** el motor de «Siguiente paso» (`next-step.ts`, puro y probado), la bandeja de actividad con sus avisos, la traducción de errores a español (`errors.tsx`), los tokens de tema, la revisión de ejecuciones con diff, log y acciones denegadas, el aviso de costo del piloto y la accesibilidad por teclado. La propuesta de abajo **reorganiza** estas piezas, no las reescribe.
 
+> **Actualización (2026-11-12):** hecho fuera de las fases de abajo, a pedido del usuario: asistente de bienvenida «¿En qué carpeta guardas tus proyectos?» (propone la carpeta que ya tiene repositorios, p. ej. `~/Documents/repos`), cada proyecto nuevo se crea como carpeta propia con `git init`, o se conecta un repositorio existente, y selector de carpetas del sistema («Elegir…», plugin de diálogo de Tauri) en todos los campos de ruta. Ya no hace falta escribir rutas a mano ni conectar el repositorio en Inicio o Documentos para los proyectos nuevos.
+
 ## 3. Errores encontrados (P0: dan información falsa o hacen perder trabajo)
 
 Todos se reprodujeron en la app real salvo donde dice «código».

@@ -93,6 +93,14 @@ export class ProjectWorkspaceStore {
     this.open.set(id, workspace);
     return workspace;
   }
+  /** Undoes `createProject` when the rest of its setup fails (only right after creating it: nothing else refers to it yet). */
+  discardProject(id: string): void {
+    if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error('Invalid project id.');
+    const workspace = this.open.get(id);
+    if (workspace) closeDatabase(workspace.database);
+    this.open.delete(id);
+    rmSync(join(this.rootDirectory, 'projects', id), { recursive: true, force: true });
+  }
   closeAll(): void {
     for (const workspace of this.open.values()) closeDatabase(workspace.database);
     this.open.clear();

@@ -84,6 +84,8 @@ import { ClaudeReferenceTranslator } from '../../ai/claude-reference-translator.
 import { SqliteInceptionRepository } from '../../persistence/repositories/sqlite-inception-repository.js';
 import { ClaudeInceptionEngine } from '../../ai/claude-inception-engine.js';
 import { GitRepositoryInitializer } from '../../git/git-repository-initializer.js';
+import { AppSettingsStore, inspectFolder } from '../../filesystem/project-folders.js';
+import { homedir } from 'node:os';
 import { GitRepositoryScanner } from '../../filesystem/repository-scanner.js';
 import { PlanningReferencesService } from '../../../application/planning/planning-references.js';
 import { normalizeTranslation } from '../../ai/reference-translation-contract.js';
@@ -118,7 +120,8 @@ export function createWorkspaceCore(
     > /** Tests: where the bundled skills are (otherwise next to the core). */;
     /** Tests: the executables project commands run (otherwise npm and pnpm from PATH). */
     commandExecutables?: { npm?: string; pnpm?: string };
-    skillsDirectory?: string /** Tests: the review engine (otherwise Claude), given the assembled evidence. */;
+    skillsDirectory?: string /** Tests: the user's home folder (where the projects folder is looked for); otherwise os.homedir(). */;
+    homeDirectory?: string /** Tests: the review engine (otherwise Claude), given the assembled evidence. */;
     changeReviewer?: {
       review(
         input: ReviewInput,
@@ -128,6 +131,7 @@ export function createWorkspaceCore(
   } = {},
 ) {
   const store = new ProjectWorkspaceStore(workspaceRoot);
+  const settings = new AppSettingsStore(workspaceRoot, dependencies.homeDirectory ?? homedir());
   const files = new AtomicMarkdownFileStore();
   const documentCommitter = new GitDocumentCommitter();
   const watchers = new Map<string, ArtifactWatcherService>();
@@ -586,10 +590,36 @@ export function createWorkspaceCore(
         case 'project:list':
           return store.listProjects();
         case 'project:create': {
-          const workspace = store.createProject(args[0] as CreateProjectInput);
+          const { location, ...input } = (args[0] ?? {}) as CreateProjectInput;
+          // The folder is checked before creating anything, so the usual mistakes leave no half-made project behind.
+          if (location) await checkProjectLocation(location);
+          const workspace = store.createProject(input as CreateProjectInput);
           const project = workspace.projects.findById(workspace.id)!;
+          if (location)
+            try {
+              const path =
+                location.mode === 'NEW_FOLDER'
+                  ? (
+                      await new GitRepositoryInitializer().initialize({
+                        path: location.path,
+                        projectName: project.props.name,
+                        description: project.props.description ?? null,
+                      })
+                    ).localPath
+                  : location.path;
+              await getManagement(workspace.id).configureRepository(workspace.id, path);
+            } catch (error) {
+              store.discardProject(workspace.id);
+              throw error;
+            }
           return summarize(project);
         }
+        case 'settings:get':
+          return settings.get();
+        case 'settings:set_projects_folder':
+          return settings.setProjectsFolder(String(args[0] ?? ''));
+        case 'folder:inspect':
+          return inspectFolder(String(args[0] ?? ''));
         case 'project:open': {
           const id = String(args[0] ?? '');
           const workspace = store.openProject(id);
@@ -1093,6 +1123,28 @@ export function createWorkspaceCore(
       store.closeAll();
     },
   };
+  /** A project's folder: a new one must be missing or empty (inside an existing folder); an existing one must hold `.git`. */
+  async function checkProjectLocation(location: NonNullable<CreateProjectInput['location']>): Promise<void> {
+    if (location.mode !== 'NEW_FOLDER' && location.mode !== 'EXISTING_REPOSITORY')
+      throw new Error('Indica si el proyecto va en una carpeta nueva o en un repositorio que ya existe.');
+    const folder = await inspectFolder(location.path);
+    if (location.mode === 'EXISTING_REPOSITORY') {
+      if (!folder.isDirectory) throw new Error(`No existe la carpeta «${folder.path}».`);
+      if (!folder.isGitRepository)
+        throw new Error(
+          `«${folder.path}» no es un repositorio Git (no tiene «.git»). Elige la carpeta que lo contiene.`,
+        );
+      return;
+    }
+    if (!folder.parentExists) throw new Error(`La carpeta que la contendría no existe: «${folder.path}».`);
+    if (folder.exists && !folder.isDirectory) throw new Error(`«${folder.path}» ya existe y no es una carpeta.`);
+    if (folder.exists && !folder.empty)
+      throw new Error(
+        folder.isGitRepository
+          ? `Ya hay un repositorio en «${folder.path}». Si es el código de este proyecto, elige «Ya tengo el código».`
+          : `La carpeta «${folder.path}» ya existe y tiene archivos. Usa otro nombre.`,
+      );
+  }
   function getManagementForDocument(documentId: string): ArtifactManagementService {
     for (const project of store.listProjects()) {
       const workspace = store.openProject(project.id);

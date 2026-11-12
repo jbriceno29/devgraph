@@ -14,7 +14,7 @@ import { useResetOnChange } from '../presentation/use-reset-on-change.js';
 import { VIEWS, viewInfo } from '../presentation/shell/views.js';
 import { nextStep, type ShellTarget, type ShellView } from '../presentation/shell/next-step.js';
 import { useWorkspaceNavigation } from './workspace-navigation-context.js';
-import { ProjectCreateForm } from './project-create-form.js';
+import { ProjectSetup } from './project-create-form.js';
 import { UnsavedChangesProvider, useConfirmDiscard } from './unsaved-changes.js';
 import type { WorkspaceLoadedStateDto } from '../../shared/contracts/ipc-contracts.js';
 
@@ -88,7 +88,7 @@ export function WorkspaceShell() {
           )}
         </div>
         <div className="self-center">
-          <ProjectCreateForm onCreate={state.createProject} disabled={loading} />
+          <ProjectSetup onCreate={state.createProject} disabled={loading} />
         </div>
       </div>
     </main>

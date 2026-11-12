@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
+  CreateProjectInput,
   EntityInspectorDto,
   GraphFilterDto,
   GraphViewDto,
@@ -18,7 +19,8 @@ interface WorkspaceNavigationValue {
   selectedEntityId: string | null;
   loading: boolean;
   error: string | null;
-  createProject(input: { name: string; slug: string }): Promise<void>;
+  /** Throws when the project could not be created (the form shows why, next to the fields). */
+  createProject(input: CreateProjectInput): Promise<void>;
   openProject(projectId: string): Promise<void>;
   selectEntity(entityId: string): Promise<void>;
   refreshGraph(filter?: GraphFilterDto): Promise<void>;
@@ -65,17 +67,12 @@ export function WorkspaceNavigationProvider({ children }: { children: ReactNode 
     }
   }, []);
   const createProject = useCallback(
-    async (input: { name: string; slug: string }) => {
-      setLoading(true);
+    async (input: CreateProjectInput) => {
+      // No global loading here: the shell would swap the form for its loading screen and lose the error to show.
       setError(null);
-      try {
-        const created = await window.workspaceIpc.commands.createProject(input);
-        await refreshProjects();
-        await openProject(created.id);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        setLoading(false);
-      }
+      const created = await window.workspaceIpc.commands.createProject(input);
+      await refreshProjects();
+      await openProject(created.id);
     },
     [openProject, refreshProjects],
   );

@@ -270,6 +270,8 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<SidecarState, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        // The system folder picker ("where do you keep your projects?"); the window may only open it (capabilities/default.json).
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let sidecar = spawn_sidecar(app.handle()).map_err(std::io::Error::other)?;
             app.manage(sidecar);

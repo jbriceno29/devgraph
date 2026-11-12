@@ -41,9 +41,9 @@ Otros scripts (`package.json`):
 
 Guía detallada, con lenguaje llano, en [docs/GUIA_DE_USO.md](docs/GUIA_DE_USO.md). En resumen:
 
-1. **Crear el proyecto** (nombre y slug) desde la pantalla inicial.
-2. **Vista «Inicio»:** describe qué quieres construir. El asistente (modelo `opus` por defecto) te hace hasta 5 preguntas; las respondes (o dejas «decide tú»).
-3. **Conectar o crear el repositorio** (`repository:configure` con una ruta existente, o `repository:initialize` para crear uno nuevo con commit inicial).
+1. **Elegir la carpeta de proyectos** (solo la primera vez): la app propone la que ya tiene tus repositorios, por ejemplo `~/Documents/repos`, con selector de carpetas del sistema.
+2. **Crear el proyecto** con un nombre: «Proyecto nuevo» crea `<carpeta>/<identificador>` con `git init` y un primer commit; «Ya tengo el código» conecta un repositorio que ya existe.
+3. **Vista «Inicio»:** describe qué quieres construir. El asistente (modelo `opus` por defecto) te hace hasta 5 preguntas; las respondes (o dejas «decide tú»).
 4. **Aprobar el plan:** revisas la propuesta única (visión, ADR del stack con alternativas, reglas, verificación y plan con la feature «Fundación»). Puedes pedir cambios con notas y regenerar. Nada se crea hasta que apruebas.
 5. **Ejecutar una tarea** (vista «Agentes») o **activar el piloto** en una feature (aviso de costo obligatorio). La primera tarea es el scaffold de «Fundación».
 6. **Revisar y aceptar:** ves el diff, las comprobaciones y las acciones denegadas; aceptas (squash a la rama de la feature) o pides ajustes. En auto-aceptar y piloto, esto lo hace el sistema si las puertas pasan.

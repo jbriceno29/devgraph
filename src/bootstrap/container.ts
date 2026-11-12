@@ -80,6 +80,8 @@ export interface Container {
   connection(projectId: string): EngineConnection;
   repositoryPath(projectId: string): string | null;
   repositoryOf(projectId: string): string;
+  /** The project's base branch as configured (plan GIT); null without a repository. */
+  baseBranch(projectId: string): string | null;
   engineDirectory(projectId: string): string;
   management(projectId: string): ArtifactManagementService;
   managementForDocument(documentId: string): ArtifactManagementService;

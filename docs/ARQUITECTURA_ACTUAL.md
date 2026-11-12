@@ -65,7 +65,17 @@ Monolito modular (desde A1–A2 de `docs/PROPUESTA_ARQUITECTURA.md`, 2026-11-12)
 - **Artefactos de ejecución:** `<datos>/projects/<id>/executions/<executionId>/` (incluye el `test-output.log` de las comprobaciones); informes de feature en `<datos>/projects/<id>/reports/`.
 - **Worktrees temporales:** `<datos>/projects/<id>/worktrees/<executionId>/`, en una rama `graphdev/<clave>-<id8>`. Las integraciones usan un worktree desechable en `merges/`.
 - **Documentos y código del usuario:** en su repositorio Git. Los documentos que escribe la app (ChangeSets, creados o guardados desde la app) se commitean solos.
-- **Rama por feature:** `feature/<clave>-<título>` (por ejemplo `feature/feat-001-crear-y-consultar-tareas`), creada sin tocar el checkout del usuario.
+- **Rama base del proyecto** (plan GIT): `repositories.default_branch`.
+  - Se detecta al conectar el repositorio: la rama por omisión del remoto, si no `main`, si no `master`, si no la rama abierta.
+  - Se cambia en Ajustes › Repositorio y ramas.
+  - Las features salen de ella y se integran en ella. La app nunca usa la rama que el usuario tenga abierta.
+- **Rama por feature:** `graphdev/feature/<clave>-<título>`, por ejemplo `graphdev/feature/feat-001-crear-y-consultar-tareas`.
+  - Se crea sin tocar el checkout del usuario.
+  - Las ramas `feature/…` anteriores se conservan.
+- **Documentos:** se escriben y commitean en el checkout del usuario solo si está en la rama base y sin un merge, rebase, cherry-pick, revert o bisect a medias. Si no, se rechaza con la salida en el mensaje.
+  - A una feature solo se copian los documentos de la rama base (`SafeGitIsolation.copyPaths`), nunca otros commits.
+- **Escrituras de la app en Git:** pasan por `SafeGitIsolation`, que las serializa por repositorio y traduce los errores de Git que puede provocar el usuario.
+- **Al abrir el proyecto:** se borran los worktrees de `merges/` que dejó un cierre inesperado.
 
 ## 4. Flujo de una ejecución, de «iniciar» a «aceptar»
 

@@ -181,7 +181,7 @@ describe('quality gates the agent does not write (plan S5)', () => {
       },
     });
     expect(adapter.prompts[1]).toContain('El archivo no dice fixed');
-    expect(git('show', 'feature/feat-001-gates:src/TASK-001.txt')).toBe('fixed');
+    expect(git('show', 'graphdev/feature/feat-001-gates:src/TASK-001.txt')).toBe('fixed');
   });
 
   it('stops for the user when the review keeps rejecting', async () => {

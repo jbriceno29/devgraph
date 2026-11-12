@@ -182,7 +182,7 @@ describe('feature autopilot (Stage 3)', () => {
       'TASK_ACCEPTED',
       'COMPLETED',
     ]);
-    expect(git('log', '--format=%s', 'main..feature/feat-001-pilot-feature').split('\n')).toEqual([
+    expect(git('log', '--format=%s', 'main..graphdev/feature/feat-001-pilot-feature').split('\n')).toEqual([
       'TASK-002: TASK-002 work',
       'TASK-001: TASK-001 work',
     ]);
@@ -386,7 +386,7 @@ describe('feature metrics (Stage 5)', () => {
     expect(done.events[3]!.message).toContain(
       'TASK-002, TASK-003, TASK-004: intento 1 de 3 (grupo de 3 tareas en una ejecución)',
     );
-    expect(git('log', '--format=%s', 'main..feature/feat-001-pilot-feature').split('\n')).toEqual([
+    expect(git('log', '--format=%s', 'main..graphdev/feature/feat-001-pilot-feature').split('\n')).toEqual([
       'TASK-002, TASK-003, TASK-004: TASK-002 work · TASK-003 work · TASK-004 work',
       'TASK-001: TASK-001 work',
     ]);
@@ -469,7 +469,7 @@ describe('feature metrics (Stage 5)', () => {
     expect(retried.adapter.prompts[1]).toContain('# Intento anterior');
     expect(retried.adapter.prompts[1]).toContain('## Parte 1 de 2: TASK-001');
     expect(retried.adapter.prompts[1]).toContain('## Parte 2 de 2: TASK-002');
-    expect(retried.git('log', '--format=%s', 'main..feature/feat-001-pilot-feature').split('\n')).toEqual([
+    expect(retried.git('log', '--format=%s', 'main..graphdev/feature/feat-001-pilot-feature').split('\n')).toEqual([
       'TASK-003: TASK-003 work',
       'TASK-001, TASK-002: TASK-001 work · TASK-002 work',
     ]);

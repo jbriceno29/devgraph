@@ -193,6 +193,8 @@ export async function setup(spec: Spec) {
     branches,
     mergeWorktrees,
     withDb,
+    workspaceRoot,
+    rootId: opened.selectedEntityId,
   };
 }
 

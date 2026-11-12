@@ -14,7 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const finished: FeatureIntegrationStateDto = {
-  branchName: 'feature/feat-002-prioridad',
+  branchName: 'graphdev/feature/feat-002-prioridad',
   targetBranch: 'main',
   integratedAt: null,
   taskCount: 1,

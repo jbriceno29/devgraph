@@ -107,7 +107,7 @@ describe('work item lifecycle through the workspace core (Stage 1)', () => {
       args: [{ projectId: project.id, workItemId: 't1', profileId: developer.id }],
     })) as { id: string; baseBranch: string | null; branchOrWorktree: string };
     // A task without a feature gets its own integration branch, created from the checked-out branch without switching it.
-    expect(started.baseBranch).toBe('feature/task-001-create-schema');
+    expect(started.baseBranch).toBe('graphdev/feature/task-001-create-schema');
     expect(execFileSync('git', ['branch', '--show-current'], { cwd: repo, encoding: 'utf8' }).trim()).toBe('main');
     let done: { status: string; initialCommit: string; finalCommit: string | null } | undefined;
     for (let attempt = 0; attempt < 100 && done?.status !== 'COMPLETED'; attempt += 1) {

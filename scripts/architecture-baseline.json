@@ -14,7 +14,7 @@
     "src/modules/planning/application/changeset-validator.ts": 107,
     "src/modules/planning/application/ui-spec-update.ts": 1,
     "src/desktop/presentation/FolderField.tsx": 31,
-    "src/desktop/presentation/agents/AgentsWorkspace.tsx": 506,
+    "src/desktop/presentation/agents/AgentsWorkspace.tsx": 505,
     "src/desktop/presentation/agents/EngineAuthForm.tsx": 21,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 161,
     "src/desktop/presentation/agents/ExecutionReview.tsx": 207,
@@ -64,10 +64,10 @@
     "src/modules/inception/infrastructure/reference-translation-contract.ts": 1
   },
   "file-size": {
-    "src/modules/execution/application/agent-orchestrator.ts": 1538,
+    "src/modules/execution/application/agent-orchestrator.ts": 1536,
     "src/modules/autopilot/application/feature-pilot.ts": 691,
     "src/modules/inception/application/project-inception-service.ts": 1142,
-    "src/desktop/presentation/agents/AgentsWorkspace.tsx": 674,
+    "src/desktop/presentation/agents/AgentsWorkspace.tsx": 672,
     "src/desktop/presentation/agents/ExecutionPolicyForm.tsx": 252,
     "src/desktop/presentation/agents/ExecutionReview.tsx": 313,
     "src/desktop/presentation/agents/FeaturePilotPanel.tsx": 534,

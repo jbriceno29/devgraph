@@ -129,7 +129,8 @@ export interface GitIsolationPort {
     workingDirectory: string;
     branchName: string;
   }): Promise<void>;
-  currentBranch(repositoryRoot: string): Promise<string | null>;
+  /** The project's base branch (features start from it and integrate into it); never what the user has checked out. */
+  baseBranch(repositoryRoot: string): Promise<string | null>;
   branchExists(repositoryRoot: string, branchName: string): Promise<boolean>;
   createIntegrationBranch(input: { repositoryRoot: string; preferredName: string; sourceRef: string }): Promise<string>;
   mergeInto(input: {
@@ -144,6 +145,16 @@ export interface GitIsolationPort {
     | { ok: false; reason: 'CONFLICT' | 'CHECKED_OUT'; detail: string; conflicts: string[] }
   >;
   uncommittedPaths(repositoryRoot: string, paths: string[]): Promise<string[]>;
+  /** Copies `paths` from `sourceRef` into `targetBranch` with one commit (only those files, never other commits). */
+  copyPaths(input: {
+    repositoryRoot: string;
+    workspaceRoot: string;
+    projectId: string;
+    targetBranch: string;
+    sourceRef: string;
+    paths: string[];
+    message: string;
+  }): Promise<{ ok: true; commit: string; changed: boolean } | { ok: false; reason: 'CHECKED_OUT'; detail: string }>;
   commitFiles(
     repositoryRoot: string,
     commit: string,

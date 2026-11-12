@@ -149,11 +149,12 @@ function harness(
       baseBranch: 'main',
     })),
     discard: vi.fn(async () => undefined),
-    currentBranch: vi.fn(async () => 'main'),
+    baseBranch: vi.fn(async () => 'main'),
     branchExists: vi.fn(async () => true),
     createIntegrationBranch: vi.fn(async (input: { preferredName: string }) => input.preferredName),
     squashMerge: vi.fn(options.merge ?? (async () => ({ ok: true as const, commit: 'merged', changed: true }))),
     mergeInto: vi.fn(async () => ({ ok: true as const, commit: 'synced', changed: true })),
+    copyPaths: vi.fn(async () => ({ ok: true as const, commit: 'synced', changed: true })),
     commitFiles: vi.fn(async () => [{ path: 'src/a.ts', status: 'ADDED' as const }]),
     pathsDiffer: vi.fn(async () => [] as string[]),
     uncommittedPaths: vi.fn(async () => [] as string[]),
@@ -563,15 +564,15 @@ describe('AgentOrchestrator review: accept and request changes (Stage 1.2)', () 
     return { ...h, execution: h.repository.findExecution(execution.id)! };
   };
 
-  it('creates the feature integration branch once, from the checked-out branch, and starts runs from it', async () => {
+  it('creates the feature integration branch once, from the base branch of the project, and starts runs from it', async () => {
     const { orchestrator, isolation } = await completed();
     expect(isolation.createIntegrationBranch).toHaveBeenCalledWith({
       repositoryRoot: '/repo',
-      preferredName: 'feature/feat-001-gestion-de-tareas',
-      sourceRef: 'HEAD',
+      preferredName: 'graphdev/feature/feat-001-gestion-de-tareas',
+      sourceRef: 'main',
     });
     expect(isolation.prepare).toHaveBeenLastCalledWith(
-      expect.objectContaining({ startPoint: 'feature/feat-001-gestion-de-tareas' }),
+      expect.objectContaining({ startPoint: 'graphdev/feature/feat-001-gestion-de-tareas' }),
     );
     expect(branchSlug('FEAT-002', 'Añadir búsqueda: ¿rápida?')).toBe('feat-002-anadir-busqueda-rapida');
     void orchestrator;

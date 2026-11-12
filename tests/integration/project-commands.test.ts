@@ -36,7 +36,7 @@ async function setup() {
   );
   execFileSync('git', ['add', '.'], { cwd: repo });
   execFileSync('git', ['commit', '--quiet', '-m', 'base'], { cwd: repo });
-  execFileSync('git', ['branch', 'feature/feat-001-x'], { cwd: repo });
+  execFileSync('git', ['branch', 'graphdev/feature/feat-001-x'], { cwd: repo });
   execFileSync('git', ['branch', 'graphdev/task-001-abcd'], { cwd: repo });
   const npm = join(root, 'fake-npm');
   writeFileSync(npm, FAKE_NPM);
@@ -69,9 +69,9 @@ async function setup() {
 describe('project commands from the app', () => {
   it('lists the user branches and the safe script names of a branch', async () => {
     const { h } = await setup();
-    expect(await h('commands:refs')).toEqual({ refs: ['main', 'feature/feat-001-x'], current: 'main' });
-    expect(await h('commands:scripts', 'feature/feat-001-x')).toEqual({
-      ref: 'feature/feat-001-x',
+    expect(await h('commands:refs')).toEqual({ refs: ['main', 'graphdev/feature/feat-001-x'], current: 'main' });
+    expect(await h('commands:scripts', 'graphdev/feature/feat-001-x')).toEqual({
+      ref: 'graphdev/feature/feat-001-x',
       manager: 'npm',
       scripts: { dev: 'vite', test: 'vitest run', broken: 'exit 2' },
     });

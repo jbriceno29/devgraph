@@ -225,7 +225,7 @@ describe('nextStep', () => {
     const depends = { id: 'e', source: 'f2', target: 'f', type: 'DEPENDS_ON' as const, provenance: 'USER' as const };
     const branch = (integratedAt: string | null = null, targetBranch: string | null = 'main') => ({
       ...activity([]),
-      integrations: [{ featureId: 'f', branchName: 'feature/feat-001', targetBranch, integratedAt }],
+      integrations: [{ featureId: 'f', branchName: 'graphdev/feature/feat-001', targetBranch, integratedAt }],
     });
     const nodes = [
       feature,

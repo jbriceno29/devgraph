@@ -41,6 +41,12 @@ export class SqliteRepositoryLocationRepository implements RepositoryLocationRep
       })
       .immediate();
   }
+  /** The project's base branch (plan GIT): features start from it and integrate into it. */
+  setDefaultBranch(projectId: string, branch: string): void {
+    this.db
+      .prepare('UPDATE repositories SET default_branch=? WHERE project_id=? AND is_primary=1')
+      .run(branch, projectId);
+  }
 }
 interface RepositoryRow {
   id: string;

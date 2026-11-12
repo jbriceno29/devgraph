@@ -204,17 +204,15 @@ describe('grouped runs: one execution covers several tasks (Etapa 0, entrega 0.3
       execution: { mergedCommit: string };
     };
     expect(accepted.merged).toBe(true);
-    expect(git('log', '--format=%s', 'main..feature/feat-001-gestion-de-tareas')).toBe(
+    expect(git('log', '--format=%s', 'main..graphdev/feature/feat-001-gestion-de-tareas')).toBe(
       'TASK-001, TASK-002, TASK-003: Crear tareas · Listar tareas · Contar tareas',
     );
-    expect(git('log', '-1', '--format=%b', 'feature/feat-001-gestion-de-tareas')).toContain(
+    expect(git('log', '-1', '--format=%b', 'graphdev/feature/feat-001-gestion-de-tareas')).toContain(
       'Task: TASK-001 Crear tareas\nTask: TASK-002 Listar tareas\nTask: TASK-003 Contar tareas',
     );
-    expect(git('show', '--name-only', '--format=', 'feature/feat-001-gestion-de-tareas').split('\n').sort()).toEqual([
-      'src/count.ts',
-      'src/list.ts',
-      'src/tasks.ts',
-    ]);
+    expect(
+      git('show', '--name-only', '--format=', 'graphdev/feature/feat-001-gestion-de-tareas').split('\n').sort(),
+    ).toEqual(['src/count.ts', 'src/list.ts', 'src/tasks.ts']);
     for (const id of ['t1', 't2', 't3']) expect(await status(id)).toBe('DONE');
     expect(await status('t4')).toBe('READY');
 
@@ -269,13 +267,10 @@ describe('grouped runs: one execution covers several tasks (Etapa 0, entrega 0.3
     expect((await wait(revision.id)).status).toBe('COMPLETED');
     const accepted = (await core.handle({ channel: 'execution:accept', args: [revision.id] })) as { merged: boolean };
     expect(accepted.merged).toBe(true);
-    expect(git('log', '--format=%s', 'main..feature/feat-001-gestion-de-tareas').split('\n')).toHaveLength(1);
-    expect(git('show', '--name-only', '--format=', 'feature/feat-001-gestion-de-tareas').split('\n').sort()).toEqual([
-      'src/count.ts',
-      'src/extra.ts',
-      'src/list.ts',
-      'src/tasks.ts',
-    ]);
+    expect(git('log', '--format=%s', 'main..graphdev/feature/feat-001-gestion-de-tareas').split('\n')).toHaveLength(1);
+    expect(
+      git('show', '--name-only', '--format=', 'graphdev/feature/feat-001-gestion-de-tareas').split('\n').sort(),
+    ).toEqual(['src/count.ts', 'src/extra.ts', 'src/list.ts', 'src/tasks.ts']);
     for (const id of ['t1', 't2', 't3']) expect(await status(id)).toBe('DONE');
   });
 
@@ -303,7 +298,7 @@ describe('grouped runs: one execution covers several tasks (Etapa 0, entrega 0.3
     expect(adapter.prompts[0]).toContain('# WorkItem\nContar tareas');
     expect(adapter.prompts[0]).not.toContain('Tareas de este grupo');
     await core.handle({ channel: 'execution:accept', args: [started.id] });
-    expect(git('log', '--format=%s%n%b', 'main..feature/feat-001-gestion-de-tareas')).toBe(
+    expect(git('log', '--format=%s%n%b', 'main..graphdev/feature/feat-001-gestion-de-tareas')).toBe(
       `TASK-003: Contar tareas\nGraph Workspace execution ${started.id}`,
     );
   });

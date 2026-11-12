@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ExecutionReview } from './ExecutionReview.js';
 import { DependencyApproval } from './DependencyApproval.js';
-import { ProjectSkillsForm } from './ProjectSkillsForm.js';
 import { ProjectCommandsPanel } from './ProjectCommandsPanel.js';
 import { ExecutionPolicyForm } from './ExecutionPolicyForm.js';
 import { FeaturePilotPanel } from './FeaturePilotPanel.js';
-import { EngineAuthForm } from './EngineAuthForm.js';
+import { SettingsSide } from './SettingsSide.js';
 import { useResetOnChange } from '../use-reset-on-change.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
 import type { AgentEventRecordDto, AgentExecutionDto, AgentProfileDto } from '../../../shared/contracts/agent-view.js';
@@ -535,8 +534,7 @@ export function AgentsWorkspace({
           <div className="grid gap-4 xl:grid-cols-2">
             <ExecutionPolicyForm projectId={projectId} />
             <div className="space-y-4">
-              <EngineAuthForm projectId={projectId} nodes={nodes} />
-              <ProjectSkillsForm projectId={projectId} />
+              <SettingsSide projectId={projectId} nodes={nodes} />
               {selectedProfile && (
                 <Capabilities provider={selectedProfile.providerName} capabilities={selectedProfile.capabilities} />
               )}

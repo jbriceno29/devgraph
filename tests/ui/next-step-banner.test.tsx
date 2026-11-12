@@ -21,7 +21,7 @@ describe('Banner «Siguiente paso» (B2)', () => {
       onDone = vi.fn();
     const integrate = vi.fn(async () => ({
       featureId: 'f',
-      branchName: 'feature/feat-001',
+      branchName: 'graphdev/feature/feat-001',
       targetBranch: 'main',
       merged: true,
       commit: 'baa9830a11',

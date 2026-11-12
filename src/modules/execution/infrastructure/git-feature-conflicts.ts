@@ -5,10 +5,19 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { FeatureConflictGitPort } from '../application/ports/feature-conflict-port.js';
 import { git } from './git-isolation-service.js';
+import { readableGitError, withRepositoryLock } from './git-repository-state.js';
 
 const execFileAsync = promisify(execFile);
 const uuid = /^[a-f0-9-]{36}$/i;
 const identity = ['-c', 'user.name=Graph Workspace', '-c', 'user.email=graph-workspace@localhost'];
+type MergeInput = {
+  repositoryRoot: string;
+  workspaceRoot: string;
+  projectId: string;
+  branch: string;
+  sourceRef: string;
+  message: string;
+};
 const markerPattern = '^(<<<<<<<|>>>>>>>)( |$)';
 
 /** Conflicts between two branches without touching any checkout (`git merge-tree`), and the merge an agent resolves. */
@@ -52,16 +61,19 @@ export class GitFeatureConflicts implements FeatureConflictGitPort {
    * of the feature can resolve them like any other change. The branch only moves if nobody moved it meanwhile; it is
    * refused while the branch is checked out somewhere (that checkout would fall out of step).
    */
-  async mergeWithConflicts(input: {
-    repositoryRoot: string;
-    workspaceRoot: string;
-    projectId: string;
-    branch: string;
-    sourceRef: string;
-    message: string;
-  }): Promise<{ commit: string; conflicts: string[] }> {
+  async mergeWithConflicts(input: MergeInput): Promise<{ commit: string; conflicts: string[] }> {
     if (!uuid.test(input.projectId)) throw new Error('Invalid project id for merge.');
     const repositoryRoot = await realpath(input.repositoryRoot);
+    // One app write at a time on this repository (plan GIT, G8), with readable git errors.
+    return withRepositoryLock(repositoryRoot, () =>
+      this.mergeLocked(input, repositoryRoot).catch(error => Promise.reject(readableGitError(error))),
+    );
+  }
+
+  private async mergeLocked(
+    input: MergeInput,
+    repositoryRoot: string,
+  ): Promise<{ commit: string; conflicts: string[] }> {
     const openIn = await checkedOutIn(repositoryRoot, input.branch);
     if (openIn)
       throw new Error(

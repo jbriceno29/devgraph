@@ -36,12 +36,12 @@ export class ProjectCommands {
   private readonly runs = new Map<string, Run>();
   constructor(private readonly options: ProjectCommandsOptions) {}
 
-  /** Branches the user can run commands on: the user's own and the feature branches (never the agents' graphdev/ ones). */
+  /** Branches the user can run commands on: the user's own and the feature branches (never the agents' run branches). */
   async refs(repositoryRoot: string): Promise<{ refs: string[]; current: string | null }> {
     const refs = (await git(repositoryRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']))
       .split('\n')
       .map(line => line.trim())
-      .filter(ref => ref && !ref.startsWith('graphdev/'));
+      .filter(ref => ref && (!ref.startsWith('graphdev/') || ref.startsWith('graphdev/feature/')));
     const current =
       (await git(repositoryRoot, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim() || null;
     return {

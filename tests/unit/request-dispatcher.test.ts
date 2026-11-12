@@ -141,6 +141,7 @@ describe('canales serializados declarados por cada módulo (A1b)', () => {
           'provider:set_auth_mode',
           'repository:configure',
           'repository:initialize',
+          'repository:set_base_branch',
           'settings:set_projects_folder',
           'workitem:set_status',
         ].sort(),

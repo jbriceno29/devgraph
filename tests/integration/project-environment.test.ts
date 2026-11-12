@@ -203,7 +203,7 @@ describe('dependencies managed by the app (plan S2)', () => {
     );
     expect(calls[1]).toMatch(/^install --save-dev --ignore-scripts .* typescript vite /);
     expect(calls[2]).toBe('ci --ignore-scripts --no-audit --no-fund --loglevel=error');
-    const branch = 'feature/feat-001-notas';
+    const branch = 'graphdev/feature/feat-001-notas';
     expect(git('log', '--format=%s', `main..${branch}`).split('\n')).toEqual([
       'TASK-002: TASK-002 work',
       'TASK-001: TASK-001 work',
@@ -305,7 +305,7 @@ describe('dependencies managed by the app (plan S2)', () => {
     expect(adapter.inputs[1]!.prompt).toContain('docs/UI_SPEC.md (en lugar de DESIGN.md)');
     expect(adapter.inputs[1]!.policy!.readonlyPaths).toContain('.claude/skills/impeccable');
     expect(
-      git('ls-tree', '-r', '--name-only', 'feature/feat-001-notas')
+      git('ls-tree', '-r', '--name-only', 'graphdev/feature/feat-001-notas')
         .split('\n')
         .some(file => file.startsWith('.claude/')),
     ).toBe(false);
@@ -335,7 +335,9 @@ describe('dependencies managed by the app (plan S2)', () => {
       expect(done.run!.status, done.run!.reason ?? '').toBe('COMPLETED');
       expect(npmCalls()).toEqual(['ci --ignore-scripts --no-audit --no-fund --loglevel=error']);
       expect(adapter.inputs[0]!.prompt).toContain('las dependencias que declara package.json');
-      expect(JSON.parse(git('show', 'feature/feat-001-notas:package.json')).dependencies).toEqual({ react: '^19.0.0' });
+      expect(JSON.parse(git('show', 'graphdev/feature/feat-001-notas:package.json')).dependencies).toEqual({
+        react: '^19.0.0',
+      });
     });
     it('uses pnpm when the repository has pnpm-lock.yaml', async () => {
       const { pilot, until, npmCalls, adapter } = await setup(

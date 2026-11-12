@@ -4,7 +4,7 @@ import { SqliteContextRepository } from '../../modules/context/infrastructure/sq
 import { AgentOrchestrator } from '../../modules/execution/application/agent-orchestrator.js';
 import { ExecutionEventLog } from '../../modules/execution/infrastructure/execution-event-log.js';
 import { ExecutionValidator } from '../../modules/execution/infrastructure/execution-validator.js';
-import { GitIsolationService } from '../../modules/execution/infrastructure/git-isolation-service.js';
+import { SafeGitIsolation } from '../../modules/execution/infrastructure/safe-git-isolation.js';
 import { SqliteAgentExecutionRepository } from '../../modules/execution/infrastructure/sqlite-agent-execution-repository.js';
 import { SqliteChangeSetRepository } from '../../modules/knowledge/infrastructure/sqlite-change-set-repository.js';
 import type { PlanProposalPort } from '../../modules/planning/application/ports/plan-proposal-port.js';
@@ -94,7 +94,7 @@ function orchestrator(c: Container, projectId: string, contextEngine: ContextEng
     },
     new ExecutionEventLog(c.workspaceRoot),
     c.agentAdapter,
-    new GitIsolationService(),
+    new SafeGitIsolation(() => c.baseBranch(projectId)),
     new ExecutionValidator(
       c.workspaceRoot,
       (executionId, repositoryId, diffs) => repository.recordFileDiffs(executionId, repositoryId, diffs),

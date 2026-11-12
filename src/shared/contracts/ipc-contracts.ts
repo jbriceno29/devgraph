@@ -9,7 +9,7 @@ import type { ContextPackageDto, ContextSnapshotDto, PreviewContextInput } from 
 import type { ActivitySummaryDto } from './activity-view.js';
 import type { AgentAccessProposalDto, RepositoryCorrectionDto, RepositoryScanSummaryDto } from './repository-scan.js';
 import type { EntityInspectorDto } from './inspector-view.js';
-import type { FeatureIntegrationChannels, FeatureIntegrationCommands } from './feature-conflicts.js';
+import type { IpcExtensionChannels, IpcExtensionCommands } from './ipc-extensions.js';
 import type {
   InceptionReferenceDto,
   InceptionReferenceInput,
@@ -130,7 +130,7 @@ export interface ChangeSetDto {
   createdAt: string;
   appliedAt?: string;
 }
-export interface WorkspaceIpcCommands extends FeatureIntegrationChannels {
+export interface WorkspaceIpcCommands extends IpcExtensionChannels {
   'project:create': (input: CreateProjectInput) => Promise<ProjectSummaryDto>;
   'project:open': (projectId: string) => Promise<WorkspaceLoadedStateDto>;
   /** Saves the folder where new projects are created (created if missing; must be writable). */
@@ -272,7 +272,7 @@ export type IpcQueryChannel = keyof WorkspaceIpcQueries;
 export type IpcEventChannel = keyof WorkspaceIpcEvents;
 
 export interface WorkspaceIpcClient {
-  commands: FeatureIntegrationCommands & {
+  commands: IpcExtensionCommands & {
     createProject(input: CreateProjectInput): Promise<ProjectSummaryDto>;
     openProject(projectId: string): Promise<WorkspaceLoadedStateDto>;
     /** Optional so existing fakes stay valid; without it the app asks for a path in each project, as before. */

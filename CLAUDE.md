@@ -89,3 +89,6 @@ Pruebas y documentación:
 - El visor de prototipos necesita las tres capas (sandbox, CSP de `hardenPrototype` y conteo de cargas); jsdom no las
   prueba: cualquier cambio se verifica en un navegador real.
 - No borres ramas ni cambies remotos; Codex está en el repo pero desconectado (Etapa 4).
+- La app solo escribe en sus ramas `graphdev/…` y en la rama base del proyecto; nunca en la rama que el usuario tenga
+  abierta ni con un merge o rebase a medias. Toda escritura nueva en Git pasa por `SafeGitIsolation`
+  (`docs/AUDITORIA_GIT.md`).

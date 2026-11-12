@@ -49,6 +49,8 @@ export const workspaceIpc: WorkspaceIpcClient = {
     integrateFeature: (projectId, featureId) => invokeCore('feature:integrate', [projectId, featureId]),
     checkFeatureConflicts: (projectId, featureId) => invokeCore('feature:check_conflicts', [projectId, featureId]),
     resolveFeatureConflicts: (projectId, featureId) => invokeCore('feature:resolve_conflicts', [projectId, featureId]),
+    getRepositoryGitStatus: projectId => invokeCore('repository:git_status', [projectId]),
+    setBaseBranch: (projectId, branch) => invokeCore('repository:set_base_branch', [projectId, branch]),
   },
   platform: {
     async pickFolder({ title, defaultPath }) {

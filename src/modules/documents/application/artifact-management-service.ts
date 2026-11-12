@@ -138,7 +138,7 @@ export class ArtifactManagementService {
     const relationshipTarget = existingEntities.find(e => e.id === link.targetId) ?? entity;
     topology.validateParent(entity, null, existingEntities);
     topology.validateEdge(relationshipSource, relationshipTarget, link.edgeType, existingEdges);
-    const written = await this.files.writeMarkdownAtomically(location.localPath, relativePath, content);
+    const written = await this.write(location.localPath, relativePath, content);
     try {
       if (input.entityType === 'ARTIFACT') {
         this.documents.createArtifact({
@@ -188,7 +188,7 @@ export class ArtifactManagementService {
       this.emit(document, 'DRIFTED');
       throw new Error('El archivo cambió fuera del editor. Vuelve a cargarlo antes de guardar tus cambios.');
     }
-    const written = await this.files.writeMarkdownAtomically(location.localPath, document.relativePath, content);
+    const written = await this.write(location.localPath, document.relativePath, content);
     const adrFields = document.entityType === 'DECISION_RECORD' ? parseDecisionRecord(content) : undefined;
     this.documents.updateDocumentContent(document.id, written.contentHash, 'SYNCED', content, adrFields ?? undefined);
     const updated = this.requireDocument(documentId);
@@ -211,7 +211,16 @@ export class ArtifactManagementService {
     for (const document of candidates) void this.reconcile(document, location.localPath).catch(() => undefined);
   }
 
+  /** The app writes documents only on the base branch, with no git operation half done (plan GIT, G3). */
+  private async write(root: string, relativePath: string, content: string) {
+    const blocked = await this.committer?.blocker(root);
+    if (blocked) throw new Error(blocked);
+    return this.files.writeMarkdownAtomically(root, relativePath, content);
+  }
+
   private async reconcile(document: ArtifactDocumentRecord, root: string): Promise<void> {
+    // On another branch (or mid-rebase) the files are not the project's documents: nothing drifted (plan GIT, G12).
+    if (await this.committer?.blocker(root).catch(() => 'unknown')) return;
     try {
       const file = await this.files.readMarkdown(root, document.relativePath);
       if (file.contentHash !== document.contentHash) {

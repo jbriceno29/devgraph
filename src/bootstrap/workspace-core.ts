@@ -10,6 +10,7 @@ import { planningHandlers } from '../modules/planning/ipc.js';
 import { projectsHandlers } from '../modules/projects/ipc.js';
 import type { IpcCommandChannel, IpcQueryChannel } from '../shared/contracts/ipc-contracts.js';
 import { createContainer, type CoreDependencies, type WorkspaceEventEmitter } from './container.js';
+import { repositoryGitHandlers } from './handlers/repository-git.js';
 import { workspaceHandlers } from './handlers/workspace.js';
 import { createIpcRouter } from './ipc-router.js';
 
@@ -28,6 +29,7 @@ export function createWorkspaceCore(
   const c = createContainer(workspaceRoot, emit, dependencies);
   const router = createIpcRouter([
     workspaceHandlers(c),
+    repositoryGitHandlers(c),
     projectsHandlers(c),
     knowledgeHandlers(c),
     planningHandlers(c),

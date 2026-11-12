@@ -854,11 +854,11 @@ export class AgentOrchestrator {
       await this.mergeDependencies(projectId, repositoryRoot, existing.branchName, dependencies);
       return existing.branchName;
     }
-    const sourceBranch = await this.isolation.currentBranch(repositoryRoot);
+    const sourceBranch = await this.isolation.baseBranch(repositoryRoot);
     const branchName = await this.isolation.createIntegrationBranch({
       repositoryRoot,
-      preferredName: `feature/${branchSlug(owner.displayKey, owner.title)}`,
-      sourceRef: 'HEAD',
+      preferredName: `graphdev/feature/${branchSlug(owner.displayKey, owner.title)}`,
+      sourceRef: sourceBranch ?? 'HEAD',
     });
     try {
       await this.mergeDependencies(projectId, repositoryRoot, branchName, dependencies);
@@ -1009,10 +1009,7 @@ export class AgentOrchestrator {
     }
   }
 
-  /**
-   * The agent must find the graph's documents in its worktree (D6): they must be committed in the user's branch,
-   * and the integration branch is brought up to date with that branch when its copies are missing or stale.
-   */
+  /** Graph documents (D6) live on the base branch; only stale copies go into the integration branch (plan GIT, G2). */
   private async syncDocuments(projectId: string, repositoryRoot: string, integrationBranch: string): Promise<void> {
     const paths = this.repository.listDocumentPaths(projectId);
     if (!paths.length) return;
@@ -1021,16 +1018,17 @@ export class AgentOrchestrator {
       throw new Error(
         `Hay documentos del grafo sin commitear: ${dirty.join(', ')}. Guárdalos desde la app o commitéalos para que el agente los vea.`,
       );
-    const stale = await this.isolation.pathsDiffer(repositoryRoot, integrationBranch, 'HEAD', paths);
+    const base = (await this.isolation.baseBranch(repositoryRoot)) ?? 'HEAD';
+    const stale = await this.isolation.pathsDiffer(repositoryRoot, integrationBranch, base, paths);
     if (!stale.length) return;
-    const current = (await this.isolation.currentBranch(repositoryRoot)) ?? 'HEAD';
-    const result = await this.isolation.mergeInto({
+    const result = await this.isolation.copyPaths({
       repositoryRoot,
       workspaceRoot: this.workspaceRoot,
       projectId,
       targetBranch: integrationBranch,
-      sourceRef: 'HEAD',
-      message: `Actualiza ${integrationBranch} con los documentos de ${current}`,
+      sourceRef: base,
+      paths: stale,
+      message: `Actualiza ${integrationBranch} con los documentos de ${base}`,
     });
     if (!result.ok)
       throw new Error(

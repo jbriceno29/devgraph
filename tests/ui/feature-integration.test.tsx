@@ -16,7 +16,7 @@ afterEach(() => {
 });
 const nodes = [{ id: 'feat', key: 'FEAT-001', type: 'FEATURE' as const, label: 'Fundación', status: 'DRAFT' }];
 const ready: FeatureIntegrationStateDto = {
-  branchName: 'feature/feat-001-fundacion',
+  branchName: 'graphdev/feature/feat-001-fundacion',
   targetBranch: 'main',
   integratedAt: null,
   taskCount: 2,

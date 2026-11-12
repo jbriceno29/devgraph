@@ -56,7 +56,7 @@ describe('conflictos entre features (plan UX, F0b)', () => {
       args: [projectId, 'fb'],
     })) as ResolveFeatureConflictsResultDto;
     expect(resolved).toMatchObject({ featureId: 'fb', files: ['src/tasks.js'], commit: expect.any(String) });
-    const branch = 'feature/feat-002-prioridad';
+    const branch = 'graphdev/feature/feat-002-prioridad';
     expect(git('show', `${branch}:src/tasks.js`)).toMatch(/<<<<<<< [\s\S]*=======[\s\S]*>>>>>>> /);
     expect(git('merge-base', '--is-ancestor', 'main', branch)).toBe('');
     expect(mergeWorktrees()).toEqual([]);
@@ -100,7 +100,7 @@ describe('conflictos entre features (plan UX, F0b)', () => {
     await runAndAccept('a1');
     await runAndAccept('b1');
     await integrate('fa');
-    const branch = 'feature/feat-002-prioridad';
+    const branch = 'graphdev/feature/feat-002-prioridad';
     const tip = git('rev-parse', branch).trim();
     git('checkout', '--quiet', branch);
     await expect(core.handle({ channel: 'feature:resolve_conflicts', args: [projectId, 'fb'] })).rejects.toThrow(

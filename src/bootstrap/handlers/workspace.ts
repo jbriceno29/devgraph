@@ -10,6 +10,7 @@ import type { CreateProjectInput, WorkspaceLoadedStateDto } from '../../shared/c
 import { serial, text, type IpcHandlers } from '../../shared/ipc-handlers.js';
 import type { Container } from '../container.js';
 import { proposeFromChat } from './propose-from-chat.js';
+import { settleRepository } from './repository-git.js';
 
 /**
  * Flows that span several modules (open a project, the inspector, the context flow of a task…). They are composition,
@@ -18,6 +19,7 @@ import { proposeFromChat } from './propose-from-chat.js';
 export function workspaceHandlers(c: Container): IpcHandlers {
   const connectRepository = async (projectId: string, path: string) => {
     const configured = await c.management(projectId).configureRepository(projectId, path);
+    await settleRepository(c, projectId);
     await c.recoverDocuments(projectId);
     await c.startWatcher(projectId);
     return configured;
@@ -29,6 +31,7 @@ export function workspaceHandlers(c: Container): IpcHandlers {
       const id = text(raw);
       const workspace = c.store.openProject(id);
       const project = workspace.projects.findById(id)!;
+      await settleRepository(c, id);
       await c.recoverDocuments(id);
       await c.startWatcher(id);
       c.execution(id).reconcileInterrupted(id);
@@ -89,6 +92,7 @@ async function createProject(c: Container, raw: CreateProjectInput) {
             ).localPath
           : location.path;
       await c.management(workspace.id).configureRepository(workspace.id, path);
+      await settleRepository(c, workspace.id);
     } catch (error) {
       c.store.discardProject(workspace.id);
       throw error;

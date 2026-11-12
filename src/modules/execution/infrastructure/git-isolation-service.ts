@@ -9,7 +9,7 @@ const execFileAsync = promisify(execFile);
 const uuid = /^[a-f0-9-]{36}$/i;
 
 /** Creates one dedicated Git branch/worktree per execution. */
-export class GitIsolationService implements GitIsolationPort {
+export class GitIsolationService implements Omit<GitIsolationPort, 'copyPaths'> {
   /** `startPoint` is the integration branch (or, for a revision, the commit of the run being adjusted); default HEAD. */
   async prepare(input: {
     projectId: string;
@@ -59,8 +59,8 @@ export class GitIsolationService implements GitIsolationPort {
     return { workingDirectory, branchName, baseCommit, baseBranch };
   }
 
-  /** Name of the branch checked out in the user's repository, or null when HEAD is detached. */
-  async currentBranch(repositoryRoot: string): Promise<string | null> {
+  /** Without a configured base (see SafeGitIsolation): the branch checked out now, or null when HEAD is detached. */
+  async baseBranch(repositoryRoot: string): Promise<string | null> {
     return (
       (
         await git(await realpath(repositoryRoot), ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')
@@ -136,7 +136,7 @@ export class GitIsolationService implements GitIsolationPort {
 
   /** Only `feature/` branches that are not checked out anywhere: a rollback of `createIntegrationBranch`. */
   async deleteIntegrationBranch(repositoryRoot: string, branchName: string): Promise<void> {
-    if (!branchName.startsWith('feature/'))
+    if (!/^(graphdev\/)?feature\//.test(branchName))
       throw new Error('Solo se eliminan ramas de integración creadas por Graph Workspace.');
     const root = await realpath(repositoryRoot);
     if (checkedOutPath(await git(root, ['worktree', 'list', '--porcelain']), branchName)) return;

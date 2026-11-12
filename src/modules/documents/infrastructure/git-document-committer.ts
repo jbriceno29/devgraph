@@ -1,11 +1,23 @@
 import { join } from 'node:path';
 import type { DocumentCommitPort } from '../application/ports/document-commit-port.js';
-import { git } from '../../execution/index.js';
+import { realpath } from 'node:fs/promises';
+import { checkoutState, documentsBlocker, git, resolveBaseBranch, withRepositoryLock } from '../../execution/index.js';
 
 /** Commits app-written documents with pathspec-limited commits: anything else the user has staged is left alone. */
 export class GitDocumentCommitter implements DocumentCommitPort {
+  /** `baseBranchOf` gives the configured base branch of the project that owns a repository (null: detect it). */
+  constructor(private readonly baseBranchOf: (repositoryRoot: string) => string | null = () => null) {}
+
+  async blocker(repositoryRoot: string): Promise<string | null> {
+    const root = await realpath(repositoryRoot);
+    const base = await resolveBaseBranch(root, this.baseBranchOf(repositoryRoot) ?? this.baseBranchOf(root));
+    return documentsBlocker(await checkoutState(root), base);
+  }
+
   async uncommitted(repositoryRoot: string, paths: string[]): Promise<string[]> {
     if (!paths.length) return [];
+    const blocked = await this.blocker(repositoryRoot);
+    if (blocked) throw new Error(blocked);
     const status = await run(repositoryRoot, [
       'status',
       '--porcelain=v1',
@@ -31,6 +43,15 @@ export class GitDocumentCommitter implements DocumentCommitPort {
     message: string,
   ): Promise<{ committed: boolean; commit: string | null; error: string | null }> {
     if (!paths.length) return { committed: false, commit: null, error: null };
+    const root = await realpath(repositoryRoot).catch(() => repositoryRoot);
+    return withRepositoryLock(root, () => this.commitLocked(repositoryRoot, paths, message));
+  }
+
+  private async commitLocked(
+    repositoryRoot: string,
+    paths: string[],
+    message: string,
+  ): Promise<{ committed: boolean; commit: string | null; error: string | null }> {
     try {
       await run(repositoryRoot, ['add', '--', ...paths]);
       const staged = await run(repositoryRoot, ['diff', '--cached', '--quiet', '--', ...paths]).then(

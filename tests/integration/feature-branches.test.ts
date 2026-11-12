@@ -78,7 +78,7 @@ describe('feature integration branches', () => {
     const before = branches();
     await expect(start('b1')).rejects.toThrow(/conflicto.*src\/config\.js/i);
     expect(branches()).toEqual(before);
-    expect(branches().some(name => name.startsWith('feature/feat-002'))).toBe(false);
+    expect(branches().some(name => name.startsWith('graphdev/feature/feat-002'))).toBe(false);
     expect(mergeWorktrees()).toEqual([]);
     expect(git('worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
   });
@@ -122,7 +122,7 @@ describe('feature integration branches', () => {
     // Cheap integration state (no git): branch, base branch and open tasks, in the pilot panel, the inspector and the activity.
     expect(await state()).toEqual({
       pilot: {
-        branchName: 'feature/feat-001-fundacion',
+        branchName: 'graphdev/feature/feat-001-fundacion',
         targetBranch: 'main',
         integratedAt: null,
         taskCount: 2,
@@ -131,7 +131,7 @@ describe('feature integration branches', () => {
         featureId: 'fa',
       },
       inspector: {
-        branchName: 'feature/feat-001-fundacion',
+        branchName: 'graphdev/feature/feat-001-fundacion',
         targetBranch: 'main',
         integratedAt: null,
         taskCount: 2,
@@ -139,7 +139,12 @@ describe('feature integration branches', () => {
         projectId,
         featureId: 'fa',
       },
-      activity: { featureId: 'fa', branchName: 'feature/feat-001-fundacion', targetBranch: 'main', integratedAt: null },
+      activity: {
+        featureId: 'fa',
+        branchName: 'graphdev/feature/feat-001-fundacion',
+        targetBranch: 'main',
+        integratedAt: null,
+      },
     });
     await expect(integrate('fa')).rejects.toThrow('FEAT-001 aún tiene tareas pendientes: TASK-003.');
     await runAndAccept('a2');
@@ -162,7 +167,7 @@ describe('feature integration branches', () => {
     for (let attempt = 0; attempt < 100 && !adapter.seen.some(run => run.title === 'Usar módulo a'); attempt += 1)
       await new Promise(resolve => setTimeout(resolve, 30));
     expect(adapter.seen.find(run => run.title === 'Usar módulo a')!.files).toEqual(['a.js', 'a2.js']);
-    expect(git('log', '--merges', '--format=%s', 'feature/feat-002-listado')).not.toContain('Incorpora');
+    expect(git('log', '--merges', '--format=%s', 'graphdev/feature/feat-002-listado')).not.toContain('Incorpora');
   });
 
   it('(e2) integrates into the base branch when it is not checked out, without touching the checkout', async () => {

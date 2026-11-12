@@ -82,6 +82,41 @@ lo que el usuario tenga abierto**.
 **Tamaño estimado:** 2–3 días. **Orden:** antes de que otra persona use la app; idealmente antes del paso 4, porque
 C6 y C7 añaden más escrituras de la app en el repositorio.
 
+## Estado del paso 3d (2026-11-12): hecho
+
+| Riesgo | Qué se hizo |
+| --- | --- |
+| G1, G10 | Rama base explícita (`repositories.default_branch`). Se detecta al conectar el repositorio y al abrir el proyecto si la guardada ya no existe, y se cambia en Ajustes › Repositorio y ramas. Las features salen de ella y se integran en ella. |
+| G2 | `syncDocuments` copia solo los documentos desfasados desde la rama base (`SafeGitIsolation.copyPaths`), en un commit, sin traer otros commits. |
+| G3, G7, G12 | Los documentos se escriben y commitean solo con el checkout en la rama base y sin operación a medias ni `index.lock`; si no, se rechaza con la salida. Con el usuario en otra rama, el vigilante no marca los documentos como modificados. |
+| G5, G6 | Las ramas nuevas son `graphdev/feature/…` (las `feature/…` existentes se conservan). Ajustes explica que esas ramas son de la app y no hay que abrirlas. El mensaje de rama abierta nombra la carpeta. |
+| G8 | Candado por repositorio para las escrituras de la app (`withRepositoryLock`); errores de `index.lock` y de rama abierta en otra carpeta, traducidos. |
+| G9 | Al abrir el proyecto se borran los worktrees huérfanos de `merges/` (nunca los de ejecuciones, que se conservan para revisión). |
+| G11 | Ajustes avisa si el repositorio no tiene identidad de Git y explica cómo configurarla. |
+
+**Pruebas:** `tests/integration/git-safety.test.ts` cubre:
+
+- usuario en su propia rama;
+- documentos solo en la rama base;
+- `index.lock`;
+- merge a medias;
+- worktrees huérfanos;
+- cambio de rama base.
+
+`tests/ui/repository-git.test.tsx` cubre la sección de Ajustes.
+
+**Corrida real con `haiku`.** El usuario trabajaba en `mi-trabajo` con un commit propio.
+
+1. Guardar un documento se rechazó con el mensaje nuevo.
+2. TASK-001 salió de `main` en `graphdev/feature/feat-001-notas`.
+3. Con el usuario en `main`, el documento se guardó ahí. El usuario hizo además otro commit en `main` y volvió a su rama.
+4. TASK-002 recibió `docs/PRD.md`, pero no el otro commit ni `personal.txt`.
+5. La integración llegó a `main` (14 pruebas en verde). La rama del usuario y su carpeta quedaron intactas.
+
+**Lo que cambia para el usuario:** no puede guardar documentos desde la app mientras tenga abierta otra rama. Es a
+propósito, porque los documentos viven en el checkout. Si molesta en el uso real, el siguiente paso es guardarlos
+desde un worktree de la rama base, con un almacén de documentos que no lea el checkout.
+
 ## 4. Fuera de alcance
 
 - `push`, remotos y pull requests: la app sigue sin tocarlos.

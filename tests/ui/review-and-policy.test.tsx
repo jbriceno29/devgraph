@@ -22,7 +22,7 @@ const execution: AgentExecutionDto = {
   initialCommit: 'aaaaaaaa1',
   finalCommit: 'bbbbbbbb2',
   branchOrWorktree: '/wt',
-  baseBranch: 'feature/feat-001-tareas',
+  baseBranch: 'graphdev/feature/feat-001-tareas',
   executionBranch: 'graphdev/task-001-run',
   revisionOf: null,
   reviewStatus: null,
@@ -103,10 +103,10 @@ describe('ExecutionReview', () => {
     expect(screen.getByText(/Al aceptarla se integrará en/)).toBeTruthy();
     expect(screen.getByText('Acciones denegadas (1)')).toBeTruthy();
     expect(screen.getByText('Log de verificación')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Aceptar e integrar en feature/feat-001-tareas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar e integrar en graphdev/feature/feat-001-tareas' }));
     await waitFor(() => expect(client.commands.acceptExecution).toHaveBeenCalledWith('run-1'));
     expect((await screen.findByRole('status')).textContent).toContain(
-      'Integrada en feature/feat-001-tareas (commit cccccccc)',
+      'Integrada en graphdev/feature/feat-001-tareas (commit cccccccc)',
     );
     expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ reviewStatus: 'ACCEPTED' }));
   });
@@ -119,7 +119,7 @@ describe('ExecutionReview', () => {
           merged: false,
           conflict: {
             reason: 'CONFLICT',
-            detail: 'Conflicto al integrar en feature/feat-001-tareas.',
+            detail: 'Conflicto al integrar en graphdev/feature/feat-001-tareas.',
             files: ['src/base.ts'],
           },
         })),
@@ -197,7 +197,7 @@ describe('ExecutionReview', () => {
     expect(await screen.findByText('Aceptada e integrada')).toBeTruthy();
     // Past tense once it is in (C6): no «se integrará».
     expect(screen.getByText(/^Integrada en/).textContent).toBe(
-      'Integrada en feature/feat-001-tareas · commit cccccccc',
+      'Integrada en graphdev/feature/feat-001-tareas · commit cccccccc',
     );
     expect(document.body.textContent).not.toContain('se integrará');
     expect(screen.queryByRole('button', { name: /Aceptar/ })).toBeNull();

@@ -39,12 +39,20 @@ export function baseServices(
     store,
     settings: new AppSettingsStore(workspaceRoot, dependencies.homeDirectory ?? homedir()),
     files: new AtomicMarkdownFileStore(),
-    documentCommitter: new GitDocumentCommitter(),
+    documentCommitter: new GitDocumentCommitter(root => {
+      const owner = store
+        .listProjects()
+        .map(project => store.openProject(project.id).repositories.findPrimaryForProject(project.id))
+        .find(location => location?.localPath === root);
+      return owner?.defaultBranch ?? null;
+    }),
     agentAdapter,
     // Brownfield mode: reads manifests, structure and styles of a repository that already has code (nothing runs, ≤ 48 KB).
     scanner: dependencies.repositoryScanner ?? new GitRepositoryScanner(),
     connection,
     repositoryPath,
+    baseBranch: projectId =>
+      store.openProject(projectId).repositories.findPrimaryForProject(projectId)?.defaultBranch ?? null,
     currentRevision: projectId => store.openProject(projectId).projects.findById(projectId)!.currentRevision,
     repositoryOf: projectId => {
       const path = repositoryPath(projectId);

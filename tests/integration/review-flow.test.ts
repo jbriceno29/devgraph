@@ -166,7 +166,7 @@ describe('review: request changes and accept through the workspace core (Stage 1
       [['t2', 't1']],
     );
     const first = await run({ workItemId: 't1' });
-    expect(first.baseBranch).toBe('feature/feat-001-gestion-de-tareas');
+    expect(first.baseBranch).toBe('graphdev/feature/feat-001-gestion-de-tareas');
     expect(await status('t1')).toBe('IN_REVIEW');
 
     const detail = (await core.handle({ channel: 'execution:get_detail', args: [first.id] })) as {
@@ -184,7 +184,7 @@ describe('review: request changes and accept through the workspace core (Stage 1
       executionId: first.id,
       feedback: 'WRITE src/validate.ts :: export const validate = true;',
     });
-    expect(second.baseBranch).toBe('feature/feat-001-gestion-de-tareas');
+    expect(second.baseBranch).toBe('graphdev/feature/feat-001-gestion-de-tareas');
     expect(existsSync(first.branchOrWorktree)).toBe(false);
     expect(git('cat-file', '-t', first.finalCommit)).toBe('commit');
 
@@ -193,19 +193,23 @@ describe('review: request changes and accept through the workspace core (Stage 1
       execution: { reviewStatus: string; mergedCommit: string; branchOrWorktree: string | null };
     };
     expect(accepted).toMatchObject({ merged: true, execution: { reviewStatus: 'ACCEPTED', branchOrWorktree: null } });
-    expect(git('log', '--format=%s', 'main..feature/feat-001-gestion-de-tareas').split('\n')).toEqual([
+    expect(git('log', '--format=%s', 'main..graphdev/feature/feat-001-gestion-de-tareas').split('\n')).toEqual([
       'TASK-001: Crear tareas',
     ]);
-    expect(git('show', '--name-only', '--format=', 'feature/feat-001-gestion-de-tareas').split('\n').sort()).toEqual([
-      'src/tasks.ts',
-      'src/validate.ts',
-    ]);
-    expect(git('rev-parse', 'feature/feat-001-gestion-de-tareas')).toBe(accepted.execution.mergedCommit);
+    expect(
+      git('show', '--name-only', '--format=', 'graphdev/feature/feat-001-gestion-de-tareas').split('\n').sort(),
+    ).toEqual(['src/tasks.ts', 'src/validate.ts']);
+    expect(git('rev-parse', 'graphdev/feature/feat-001-gestion-de-tareas')).toBe(accepted.execution.mergedCommit);
     expect(await status('t1')).toBe('DONE');
     expect(await status('t2')).toBe('READY');
     expect(git('branch', '--show-current')).toBe('main');
     expect(git('status', '--porcelain')).toBe('');
-    expect(git('branch', '--list', 'graphdev/*')).toBe('');
+    // Run branches are removed; only the feature branch (graphdev/feature/…) stays.
+    expect(
+      git('branch', '--list', 'graphdev/*')
+        .replace(/^[ *]*graphdev\/feature\/.*$/gm, '')
+        .trim(),
+    ).toBe('');
     expect(git('worktree', 'list').split('\n')).toHaveLength(1);
 
     const next = await run({ workItemId: 't2' });
@@ -250,7 +254,7 @@ describe('review: request changes and accept through the workspace core (Stage 1
       execution: { reviewStatus: 'MERGE_CONFLICT' },
     });
     expect(await status('t2')).toBe('IN_REVIEW');
-    expect(git('show', 'feature/feat-001-gestion-de-tareas:src/base.ts')).toBe('export const base = "uno";');
+    expect(git('show', 'graphdev/feature/feat-001-gestion-de-tareas:src/base.ts')).toBe('export const base = "uno";');
     expect(git('worktree', 'list').split('\n')).toHaveLength(2);
   });
 
@@ -265,7 +269,7 @@ describe('review: request changes and accept through the workspace core (Stage 1
       },
     ]);
     const one = await run({ workItemId: 't1' });
-    git('checkout', '--quiet', 'feature/feat-001-gestion-de-tareas');
+    git('checkout', '--quiet', 'graphdev/feature/feat-001-gestion-de-tareas');
     const refused = (await core.handle({ channel: 'execution:accept', args: [one.id] })) as {
       merged: boolean;
       conflict: { reason: string; detail: string };

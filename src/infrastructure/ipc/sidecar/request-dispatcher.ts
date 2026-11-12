@@ -7,6 +7,7 @@ import type { WorkspaceRequest } from './workspace-core.js';
  */
 export const SERIALIZED_CHANNELS: ReadonlySet<string> = new Set([
   'project:create',
+  'settings:set_projects_folder',
   'project:open',
   'repository:configure',
   'repository:initialize',

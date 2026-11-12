@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import ReactMarkdown from 'react-markdown';
 import type { ArtifactDocumentDto, CreateArtifactDocumentInput } from '../../../shared/contracts/artifact-view.js';
 import type { GraphNodeView } from '../../../shared/contracts/graph-view.js';
+import { FolderField, canPickFolder } from '../FolderField.js';
 import { ErrorNotice } from '../errors.js';
 import { control, focusRing, primary } from '../ui.js';
 
@@ -177,46 +178,30 @@ export function DocumentsPanel({ projectId, nodes }: { projectId: string; nodes:
               <code className="rounded bg-surface-raised px-1">docs/</code>.
             </p>
           </div>
-          <div>
-            <label htmlFor="repository-path" className="mb-1 block text-xs text-fg-muted">
-              Ruta local del repositorio
-            </label>
-            <input
-              id="repository-path"
-              name="repositoryPath"
-              required
-              value={pathInput}
-              onChange={event => {
-                setPathInput(event.target.value);
-                setPathError(null);
-              }}
-              aria-invalid={pathError ? true : undefined}
-              aria-describedby={`repository-path-help${pathError ? ' repository-path-error' : ''}`}
-              autoCapitalize="none"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="/home/ana/proyectos/mi-repo"
-              className={`${control} min-h-10 font-mono ${pathError ? 'border-danger' : ''}`}
-            />
-            <div id="repository-path-help" className="mt-1.5 space-y-0.5 text-[11px] text-fg-muted">
-              <p>Ruta absoluta, por ejemplo:</p>
-              <ul className="font-mono text-fg-subtle">
-                <li>Linux: /home/ana/proyectos/tienda</li>
-                <li>macOS: /Users/ana/proyectos/tienda</li>
-                <li>Windows: C:\Users\ana\proyectos\tienda</li>
-              </ul>
-              <p>
-                Para obtenerla, abre una terminal en la carpeta y escribe{' '}
-                <code className="rounded bg-surface-raised px-1">pwd</code> (o{' '}
-                <code className="rounded bg-surface-raised px-1">cd</code> en Windows).
-              </p>
-            </div>
-            {pathError && (
-              <p id="repository-path-error" role="alert" className="mt-1.5 text-xs text-danger">
-                {pathError}
-              </p>
-            )}
-          </div>
+          <FolderField
+            id="repository-path"
+            label="Ruta local del repositorio"
+            value={pathInput}
+            onChange={next => {
+              setPathInput(next);
+              setPathError(null);
+            }}
+            pickerTitle="Carpeta del repositorio del proyecto"
+            error={pathError}
+            placeholder="/home/ana/proyectos/mi-repo"
+            help={
+              <div className="space-y-0.5">
+                <p>
+                  {canPickFolder() ? 'Elígela con «Elegir…» o escribe la ruta absoluta' : 'Ruta absoluta'}, por ejemplo:
+                </p>
+                <ul className="font-mono text-fg-subtle">
+                  <li>Linux: /home/ana/proyectos/tienda</li>
+                  <li>macOS: /Users/ana/proyectos/tienda</li>
+                  <li>Windows: C:\Users\ana\proyectos\tienda</li>
+                </ul>
+              </div>
+            }
+          />
           <button type="submit" disabled={busy} className={`min-h-9 text-xs ${primary}`}>
             Conectar repositorio
           </button>

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 import type { WorkspaceIpcClient, WorkspaceIpcEvents } from '../../shared/contracts/ipc-contracts.js';
 const invokeCore = <T>(channel: string, args: unknown[] = []): Promise<T> =>
   invoke<T>('workspace_request', { request: { channel, args } });
@@ -7,6 +8,7 @@ export const workspaceIpc: WorkspaceIpcClient = {
   commands: {
     createProject: input => invokeCore('project:create', [input]),
     openProject: projectId => invokeCore('project:open', [projectId]),
+    setProjectsFolder: path => invokeCore('settings:set_projects_folder', [path]),
     configureRepository: (projectId, localPath) => invokeCore('repository:configure', [projectId, localPath]),
     createArtifact: input => invokeCore('artifact:create', [input]),
     saveArtifact: (documentId, expectedContentHash, content) =>
@@ -46,8 +48,16 @@ export const workspaceIpc: WorkspaceIpcClient = {
     exportFeatureReport: (projectId, featureId) => invokeCore('metrics:export_report', [projectId, featureId]),
     integrateFeature: (projectId, featureId) => invokeCore('feature:integrate', [projectId, featureId]),
   },
+  platform: {
+    async pickFolder({ title, defaultPath }) {
+      const picked = await open({ directory: true, multiple: false, title, ...(defaultPath ? { defaultPath } : {}) });
+      return typeof picked === 'string' ? picked : null;
+    },
+  },
   queries: {
     listProjects: () => invokeCore('project:list'),
+    getAppSettings: () => invokeCore('settings:get'),
+    inspectFolder: path => invokeCore('folder:inspect', [path]),
     getGraphView: (projectId, filter) => invokeCore('graph:get_view', [projectId, filter]),
     getEntityInspectorDetails: entityId => invokeCore('entity:get_inspector_details', [entityId]),
     getRepositoryPath: projectId => invokeCore('repository:get_path', [projectId]),

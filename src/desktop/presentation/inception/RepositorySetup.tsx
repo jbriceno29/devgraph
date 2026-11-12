@@ -2,7 +2,8 @@ import { useId, useState, type FormEvent } from 'react';
 import type { InceptionIpcClient, InitializeRepositoryResultDto } from '../../../shared/contracts/inception-view.js';
 import { normalizeRepositoryPath, validateRepositoryPath } from '../documents/DocumentsPanel.js';
 import { ErrorNotice } from '../errors.js';
-import { control, focusRing, secondary } from '../ui.js';
+import { FolderField } from '../FolderField.js';
+import { focusRing, secondary } from '../ui.js';
 
 /** null si la ruta sirve para una carpeta nueva; si no, el motivo (mismas reglas que Documentos). */
 export function validateNewRepositoryPath(path: string): string | null {
@@ -62,39 +63,28 @@ export function RepositorySetup({
         <code className="rounded bg-surface-sunken px-1">.gitignore</code> y{' '}
         <code className="rounded bg-surface-sunken px-1">docs/</code>. No añade remotos ni instala nada.
       </p>
-      <div>
-        <label htmlFor={`${id}-path`} className="mb-1 block text-xs text-fg-muted">
-          Ruta de la carpeta nueva o vacía
-        </label>
-        <input
-          id={`${id}-path`}
-          value={path}
-          onChange={event => {
-            setPath(event.target.value);
-            setPathError(null);
-          }}
-          aria-invalid={pathError ? true : undefined}
-          aria-describedby={`${id}-help${pathError ? ` ${id}-error` : ''}`}
-          autoCapitalize="none"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="/home/ana/proyectos/mi-app"
-          className={`${control} min-h-10 font-mono ${pathError ? 'border-danger' : ''}`}
-        />
-        <div id={`${id}-help`} className="mt-1.5 space-y-0.5 text-[11px] text-fg-muted">
-          <p>Ruta absoluta; si la carpeta existe, debe estar vacía. Por ejemplo:</p>
-          <ul className="font-mono text-fg-subtle">
-            <li>Linux: /home/ana/proyectos/mi-app</li>
-            <li>macOS: /Users/ana/proyectos/mi-app</li>
-            <li>Windows: C:\Users\ana\proyectos\mi-app</li>
-          </ul>
-        </div>
-        {pathError && (
-          <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs text-danger">
-            {pathError}
-          </p>
-        )}
-      </div>
+      <FolderField
+        id={`${id}-path`}
+        label="Ruta de la carpeta nueva o vacía"
+        value={path}
+        onChange={next => {
+          setPath(next);
+          setPathError(null);
+        }}
+        pickerTitle="Carpeta para el repositorio nuevo"
+        error={pathError}
+        placeholder="/home/ana/proyectos/mi-app"
+        help={
+          <div className="space-y-0.5">
+            <p>Ruta absoluta; si la carpeta existe, debe estar vacía. Por ejemplo:</p>
+            <ul className="font-mono text-fg-subtle">
+              <li>Linux: /home/ana/proyectos/mi-app</li>
+              <li>macOS: /Users/ana/proyectos/mi-app</li>
+              <li>Windows: C:\Users\ana\proyectos\mi-app</li>
+            </ul>
+          </div>
+        }
+      />
       <ErrorNotice error={error} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <button type="submit" disabled={busy} className={`min-h-9 text-xs ${secondary}`}>

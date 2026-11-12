@@ -45,26 +45,7 @@ export class GovernanceInterceptor {
       requestedAt: event.timestamp,
       resolvedAt: null,
     });
-    if (policy.autoApproveScopes.includes(event.actionType)) {
-      const decision: ApprovalDecision = { approved: true, scope: 'ONCE', note: 'Autorizado por AutonomyPolicy.' };
-      try {
-        await this.adapter.respondToApproval(execution.id, event.requestId, decision);
-      } catch (error) {
-        this.repository.resolveApprovalRequest(event.requestId, {
-          approved: false,
-          resolvedBy: 'SYSTEM',
-          note: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-      this.repository.resolveApprovalRequest(event.requestId, {
-        approved: true,
-        resolvedBy: 'POLICY',
-        note: decision.note!,
-      });
-      await this.persistEvent(execution, event);
-      return true;
-    }
+    if (policy.autoApproveScopes.includes(event.actionType)) return this.autoApprove(execution, event);
     const awaiting = transitionExecution(current, 'AWAITING_APPROVAL');
     this.repository.updateExecution(awaiting);
     this.publishStatus(awaiting);
@@ -89,6 +70,31 @@ export class GovernanceInterceptor {
     const running = transitionExecution(resumed, 'RUNNING');
     this.repository.updateExecution(running);
     this.publishStatus(running);
+    return true;
+  }
+
+  /** An action the policy authorizes on its own: answered at once and recorded as approved by the policy. */
+  private async autoApprove(
+    execution: AgentExecution,
+    event: Extract<AgentEvent, { type: 'APPROVAL_REQUIRED' }>,
+  ): Promise<boolean> {
+    const decision: ApprovalDecision = { approved: true, scope: 'ONCE', note: 'Autorizado por AutonomyPolicy.' };
+    try {
+      await this.adapter.respondToApproval(execution.id, event.requestId, decision);
+    } catch (error) {
+      this.repository.resolveApprovalRequest(event.requestId, {
+        approved: false,
+        resolvedBy: 'SYSTEM',
+        note: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    this.repository.resolveApprovalRequest(event.requestId, {
+      approved: true,
+      resolvedBy: 'POLICY',
+      note: decision.note!,
+    });
+    await this.persistEvent(execution, event);
     return true;
   }
 

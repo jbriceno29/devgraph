@@ -77,6 +77,42 @@ cubierto por las pruebas de UI (`tests/ui/activity-inbox.test.tsx` y `tests/ui/a
 - [ ] Una feature ya integrada muestra «FEAT-00X está integrada en main» y el botón «Volver a integrar en main» como
       **secundario**, en el panel del piloto y en el inspector de la feature.
 
+## Resultados de la validación
+
+**Estado: con errores encontrados (2026-11-12).** F0 vuelve a abrirse en [HOJA_DE_RUTA.md](HOJA_DE_RUTA.md).
+Proyecto usado: `todo-app`.
+
+| Punto | Resultado |
+| --- | --- |
+| B1 | Pasa. |
+| B2 | Bloqueado: no se pudo integrar FEAT-002 por un conflicto real (abajo). El botón y la confirmación se comportaron bien, pero falta la integración con éxito. |
+| B4, B5, B6, C1, C6 | Sin validar todavía. |
+
+### B2 · Conflicto al integrar FEAT-002
+
+Mensaje: «No se pudo integrar FEAT-002 en main: Conflicto al integrar en main. (src/tasks.js, tests/tasks.test.js)».
+
+- El conflicto es real: `git merge-tree main feature/feat-002-prioridad-de-tareas` da `CONFLICT (add/add)` en los
+  dos archivos.
+- FEAT-001 y FEAT-002 salieron las dos de `chore: scaffold` (4bd3eb8), donde `src/tasks.js` no existía, y se
+  ejecutaron en paralelo porque en el grafo no hay dependencia entre ellas.
+- Cada una creó el módulo con un diseño distinto: FEAT-001 hizo `createTaskList()` con `add`, `complete` y `list`,
+  ids numéricos y `title`; FEAT-002 hizo `crearTarea(lista, {titulo, prioridad})`, ids `randomUUID` y `titulo`.
+  FEAT-001 ya está en `main` (ead3b34).
+- La app actuó bien ante el conflicto: `main` sigue intacto, no quedan worktrees de merge y el checkout está limpio.
+
+Para cerrar B2 hace falta una feature cuya rama se pueda integrar sin conflicto, por ejemplo una nueva creada
+después de integrar FEAT-001.
+
+### Errores encontrados
+
+1. **Features en paralelo que escriben el mismo archivo.** El planificador creó FEAT-001 y FEAT-002 sin
+   `DEPENDS_ON`, aunque las dos crean `src/tasks.js`. Corrieron sobre la misma base y la segunda ya no se puede
+   integrar. Falta avisar o poner una dependencia cuando dos features escriben en las mismas rutas. Otra opción es
+   que una feature sin empezar parta de la base ya integrada.
+2. **El conflicto no tiene salida en la interfaz.** Solo se ve el error. Faltan acciones como «Rehacer FEAT-002
+   sobre main» o ver los archivos en conflicto, y el mensaje no le dice al usuario qué hacer.
+
 ## Si algo falla
 
 Anota la casilla, qué hiciste y qué viste (una captura ayuda). El registro del núcleo está en

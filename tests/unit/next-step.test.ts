@@ -16,6 +16,8 @@ describe('nextStep',()=>{
   expect(nextStep(graph(),activity([],[],inception({stage:'ASK_GOALS',detail:'3 preguntas'})))).toMatchObject({id:'inception-answer',title:'Responde las preguntas del asistente de inicio',detail:'3 preguntas',target:{view:'inception'},tone:'attention'});
   const proposal=item({kind:'PLAN_PROPOSAL',changeSetId:'cs-inception',target:'planning'});
   expect(nextStep(graph(),activity([proposal],[],inception({stage:'PROPOSAL',changeSetId:'cs-inception'})))).toMatchObject({id:'inception-approve',title:'Revisa y aprueba la propuesta',target:{view:'inception'}});
+  expect(nextStep(graph(),activity([],[],inception({stage:'EXPLORE_UI',detail:'3 propuestas de diseño con prototipo.'})))).toMatchObject({id:'inception-design',title:'Elige una dirección visual',detail:'3 propuestas de diseño con prototipo.',actionLabel:'Ver las propuestas',target:{view:'inception'},tone:'attention'});
+  expect(nextStep(graph(),activity([],[],inception({stage:'EXPLORE_UI',status:'WORKING',needsAttention:false})))).toMatchObject({id:'inception-working',target:{view:'inception'}});
   expect(nextStep(graph(),activity([],[],inception({status:'FAILED',detail:'sin red'})))).toMatchObject({id:'inception-failed',detail:'sin red',target:{view:'inception'}});
   expect(nextStep(graph(),activity([],[],inception({status:'WORKING',needsAttention:false})))).toMatchObject({id:'inception-working',target:{view:'inception'},tone:'neutral'});
   // Una propuesta de Planificar (no la del inicio) sigue yendo a Planificar.

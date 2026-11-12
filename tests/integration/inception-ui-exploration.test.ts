@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWorkspaceCore } from '@infrastructure/ipc/sidecar/workspace-core.js';
-import type { InceptionEnginePort, InceptionProjectInput, UiOptionDraft } from '../../src/application/ports/inception-port.js';
+import { openDatabase, closeDatabase } from '../../src/infrastructure/persistence/sqlite/database.js';
+import type { InceptionEnginePort, InceptionProjectInput, ReferenceTranslatorPort, UiOptionDraft } from '../../src/application/ports/inception-port.js';
 import type { ActivitySummaryDto } from '../../src/shared/contracts/activity-view.js';
 import { MAX_PROTOTYPE_CHARS, type InceptionViewDto } from '../../src/shared/contracts/inception-view.js';
 import { proposal, usage } from './inception-fixtures.js';
@@ -15,11 +16,11 @@ const page = (title: string, extra = '') => `<!doctype html><html><head><title>$
 const draft = (title: string, html = page(title)): UiOptionDraft => ({ title, summary: `${title}: resumen.`, navigation: 'Barra lateral.', screens: ['Inicio', 'Tareas'], designSystemNotes: ['Azul #2255ff'], prototypeHtml: html });
 
 class FakeEngine implements InceptionEnginePort {
-  explored: Array<{ models: string | undefined; revise: boolean; project: InceptionProjectInput; notes?: string[] }> = []; proposed: InceptionProjectInput[] = [];
+  explored: Array<{ models: string | undefined; revise: boolean; project: InceptionProjectInput; notes?: string[]; option?: UiOptionDraft }> = []; proposed: InceptionProjectInput[] = [];
   failExplore = false; failPropose = false; hang = false; reviseTitle = 'Panel ajustado';
   async askGoals() { return { questions: [{ id: 'q1', text: '¿Quién la usa?', options: ['Solo yo'], default: 'Solo yo', why: 'Alcance.' }], assumptions: [], usage }; }
   async exploreUi(input: Parameters<InceptionEnginePort['exploreUi']>[0]) {
-    this.explored.push({ models: input.model, revise: Boolean(input.revise), project: input.project, ...(input.revise ? { notes: input.revise.notes } : {}) });
+    this.explored.push({ models: input.model, revise: Boolean(input.revise), project: input.project, ...(input.revise ? { notes: input.revise.notes, option: input.revise.option } : {}) });
     if (this.hang) await new Promise((_resolve, reject) => input.signal?.addEventListener('abort', () => reject(new Error('cancelada')), { once: true }));
     if (this.failExplore) throw new Error('motor de diseño caído');
     if (input.revise) return { options: [draft(this.reviseTitle, page(this.reviseTitle, `<!-- notas: ${input.revise.notes.join('|')} -->`))], assumptions: [], usage };
@@ -32,9 +33,21 @@ class FakeEngine implements InceptionEnginePort {
   }
 }
 
-async function setup(root = mkdtempSync(join(tmpdir(), 'graphdev2-ui-explore-')), engine = new FakeEngine(), existing?: string) {
+/** Describes any image as a blue two-column panel, or fails when asked to; records what it was given. */
+class FakeTranslator implements ReferenceTranslatorPort {
+  calls: Array<Array<{ id: string; kind: string; mimeType: string; exists: boolean }>> = []; fail = false;
+  async translate(input: Parameters<ReferenceTranslatorPort['translate']>[0]) {
+    this.calls.push(input.files.map(file => ({ id: file.id, kind: file.kind, mimeType: file.mimeType, exists: existsSync(file.path) })));
+    if (this.fail) return { results: input.files.map(file => ({ id: file.id, translation: null, error: 'No se ve nada.' })), usage };
+    return { results: input.files.map(file => ({ id: file.id, error: null, translation: { summary: 'Panel azul con barra lateral.', palette: ['Azul #2255ff'], typography: 'Inter', layout: 'Dos columnas', screens: ['Inicio', 'Ajustes'], actions: ['Crear'], flows: ['Crear → listar'], states: ['vacío'], ideas: [], openQuestions: [] } })), usage };
+  }
+}
+const PNG_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]).toString('base64');
+const REACT_SOURCE = "import { useState } from 'react';\nexport default function App() { const [n, setN] = useState(0); return <button onClick={() => setN(n + 1)}>Tareas: {n}</button>; }";
+
+async function setup(root = mkdtempSync(join(tmpdir(), 'graphdev2-ui-explore-')), engine = new FakeEngine(), existing?: string, translator = new FakeTranslator()) {
   if (!existing) roots.push(root);
-  const core = createWorkspaceCore(join(root, 'workspace'), () => undefined, { inceptionEngine: engine }); cores.push(core);
+  const core = createWorkspaceCore(join(root, 'workspace'), () => undefined, { inceptionEngine: engine, referenceTranslator: translator }); cores.push(core);
   const projectId = existing ?? (await core.handle({ channel: 'project:create', args: [{ name: 'Tareas', slug: 'tareas' }] }) as { id: string }).id;
   await core.handle({ channel: 'project:open', args: [projectId] });
   const call = async <T,>(channel: string, ...args: unknown[]) => await core.handle({ channel: channel as never, args }) as T;
@@ -45,7 +58,7 @@ async function setup(root = mkdtempSync(join(tmpdir(), 'graphdev2-ui-explore-'))
     await call('inception:answer', projectId, [{ questionId: 'q1', answer: 'Solo yo' }], undefined, { exploreUi: true });
     return settled();
   };
-  return { root, core, engine, projectId, call, settled, toExploring };
+  return { root, core, engine, translator, projectId, call, settled, toExploring };
 }
 
 describe('visual exploration before the proposal (V2)', () => {
@@ -193,6 +206,181 @@ describe('visual exploration before the proposal (V2)', () => {
     const { projectId, call, toExploring } = await setup();
     await toExploring();
     expect(await call<InceptionViewDto>('inception:restart', projectId)).toMatchObject({ stage: 'NOT_STARTED', ui: { wanted: false, options: [], selectedOptionId: null } });
+  });
+});
+
+describe('the whole path with a design, from the brief to the applied plan (V2 acceptance)', () => {
+  it('questions → design → import, adjust, approve → proposal → repository → approve: the plan is created and the choice survives', async () => {
+    const { root, engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:import_prototype', projectId, { name: 'mio.html', html: page('Mío') });
+    await call('inception:revise_ui', projectId, 'ui-3', 'Más aire entre filas'); await settled();
+    await call('inception:choose_ui', projectId, 'ui-3');
+    const proposed = await settled();
+    expect(proposed).toMatchObject({ stage: 'PROPOSAL', status: 'WAITING_USER', nextAction: 'SET_UP_REPOSITORY', ui: { wanted: true, selectedOptionId: 'ui-3' } });
+    expect(engine.proposed[0]!.direction).toMatchObject({ title: 'Panel ajustado', source: 'IMPORTED' });
+    const repo = join(root, 'nuevo-repo');
+    await call('repository:initialize', projectId, repo);
+    const applied = await call<InceptionViewDto>('inception:approve', projectId);
+    expect(applied).toMatchObject({ stage: 'APPLIED', status: 'DONE', nextAction: 'DONE', error: null });
+    // The plan exists, the documents are in the repository, and the approved direction is still on record.
+    expect(existsSync(join(repo, 'docs', 'VISION.md'))).toBe(true);
+    expect(readFileSync(join(repo, 'docs', 'VISION.md'), 'utf8')).toContain('Visión');
+    const db = openDatabase({ filename: join(root, 'workspace', 'projects', projectId, 'workspace.sqlite'), initialize: false });
+    try { expect((db.prepare("SELECT COUNT(*) AS n FROM knowledge_entities WHERE entity_type='WORK_ITEM'").get() as { n: number }).n).toBe(4); } finally { closeDatabase(db); }
+    expect(applied.ui).toMatchObject({ wanted: true, selectedOptionId: 'ui-3' });
+    expect(applied.ui.options).toHaveLength(3);
+    // Once applied there is no way back: the design can no longer be reopened or changed from the assistant.
+    await expect(call('inception:reopen_design', projectId)).rejects.toThrow('mientras revisas la propuesta');
+    await expect(call('inception:choose_ui', projectId, 'ui-1')).rejects.toThrow('No estás eligiendo');
+    expect((await call<ActivitySummaryDto>('activity:list', projectId)).inception).toBeUndefined();
+  });
+
+  it('skipping the design reaches the same applied plan without a direction', async () => {
+    const { root, engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:choose_ui', projectId, null); await settled();
+    await call('repository:initialize', projectId, join(root, 'repo'));
+    expect(await call<InceptionViewDto>('inception:approve', projectId)).toMatchObject({ stage: 'APPLIED', ui: { selectedOptionId: null } });
+    expect(engine.proposed[0]).not.toHaveProperty('direction');
+  });
+});
+
+describe('importing a finished design: an image or React code (V2 fix)', () => {
+  it('an image is described in text by the translator and becomes a direction with no prototype; its page is built on request', async () => {
+    const { translator, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    const working = await call<InceptionViewDto>('inception:import_design', projectId, { name: 'C:\\fotos\\mi-diseño.png', kind: 'IMAGE', content: PNG_B64 });
+    expect(working.status).toBe('WORKING');
+    const view = await settled();
+    expect(view).toMatchObject({ stage: 'EXPLORE_UI', status: 'WAITING_USER', error: null });
+    expect(view.ui.options.at(-1)).toEqual({ id: 'ui-3', title: 'mi-diseño', summary: 'Panel azul con barra lateral.', navigation: 'Crear → listar', screens: ['Inicio', 'Ajustes'], designSystemNotes: ['Paleta: Azul #2255ff', 'Tipografía: Inter', 'Composición: Dos columnas', 'Estado: vacío'], source: 'IMAGE', htmlBytes: 12, externalReferences: [] });
+    expect(JSON.stringify(view)).not.toMatch(/imageFile|design-3|iVBOR/);
+    // The translator got the stored copy as a DESIGN (looks and behaviour), not as one of the three reference kinds.
+    expect(translator.calls).toEqual([[{ id: 'design-3', kind: 'DESIGN', mimeType: 'image/png', exists: true }]]);
+    const page = await call<string>('inception:get_ui_prototype', projectId, 'ui-3');
+    expect(page).toContain(`<img alt="Imagen del diseño importado" src="data:image/png;base64,${PNG_B64}">`);
+    expect(page).not.toMatch(/<script/i);
+  });
+
+  it('a picture the translator cannot read leaves the directions as they were, with the reason', async () => {
+    const { translator, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    translator.fail = true;
+    await call('inception:import_design', projectId, { name: 'vacia.png', kind: 'IMAGE', content: PNG_B64 });
+    const failed = await settled();
+    expect(failed).toMatchObject({ stage: 'EXPLORE_UI', status: 'WAITING_USER', nextAction: 'CHOOSE_UI', error: 'No se pudo analizar «vacia.png»: No se ve nada.' });
+    expect(failed.ui.options).toHaveLength(2);
+  });
+
+  it('approving an image direction builds the proposal on its written description, never on the picture', async () => {
+    const { engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:import_design', projectId, { name: 'diseno.png', kind: 'IMAGE', content: PNG_B64 }); await settled();
+    await call('inception:choose_ui', projectId, 'ui-3'); await settled();
+    const direction = engine.proposed[0]!.direction!;
+    expect(direction).toMatchObject({ title: 'diseno', summary: 'Panel azul con barra lateral.', screens: ['Inicio', 'Ajustes'], source: 'GENERATED' });
+    expect(direction).not.toHaveProperty('prototypeHtml');
+    expect(JSON.stringify(engine.proposed[0])).not.toContain('iVBOR');
+  });
+
+  it('adjusting an image direction asks the engine to build the prototype from its description, and it stops being an image', async () => {
+    const { engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:import_design', projectId, { name: 'diseno.png', kind: 'IMAGE', content: PNG_B64 }); await settled();
+    await call('inception:revise_ui', projectId, 'ui-3', 'Conviértelo en un prototipo interactivo fiel a este diseño.');
+    const view = await settled();
+    const call3 = engine.explored.at(-1)!;
+    expect(call3.option).toMatchObject({ title: 'diseno', prototypeHtml: '', screens: ['Inicio', 'Ajustes'] });
+    expect(call3.notes![0]).toMatch(/^Esta dirección viene de la imagen de un diseño ya hecho y todavía no tiene prototipo/);
+    expect(call3.notes![0]).toContain('Conviértelo en un prototipo interactivo');
+    expect(view.ui.options.at(-1)).toMatchObject({ id: 'ui-3', title: 'Panel ajustado', source: 'GENERATED' });
+    expect(await call<string>('inception:get_ui_prototype', projectId, 'ui-3')).toContain('Panel ajustado');
+  });
+
+  it('React code is converted by the engine into a self-contained HTML prototype and added as an imported direction', async () => {
+    const { engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:import_design', projectId, { name: 'App.jsx', kind: 'REACT', content: REACT_SOURCE });
+    const view = await settled();
+    expect(view).toMatchObject({ stage: 'EXPLORE_UI', status: 'WAITING_USER', error: null });
+    expect(view.ui.options.at(-1)).toMatchObject({ id: 'ui-3', title: 'Panel ajustado', source: 'IMPORTED' });
+    const conversion = engine.explored.at(-1)!;
+    expect(conversion.option).toMatchObject({ title: 'App', prototypeHtml: REACT_SOURCE });
+    expect(conversion.notes![0]).toMatch(/NO es HTML: es el código de un componente React/);
+    expect(conversion.notes![0]).toMatch(/sin React ni ninguna dependencia/);
+    // The result is a normal prototype, served as such.
+    expect(await call<string>('inception:get_ui_prototype', projectId, 'ui-3')).toContain('<!doctype html>');
+  });
+
+  it('refuses what is not an image or React code, before running any model', async () => {
+    const { engine, translator, projectId, call, toExploring } = await setup();
+    await toExploring();
+    const before = engine.explored.length;
+    await expect(call('inception:import_design', projectId, { name: 'a.pdf', kind: 'IMAGE', content: Buffer.from('%PDF-1.4 x').toString('base64') })).rejects.toThrow(/importa una imagen \(png, jpg, jpeg, webp, gif\)/);
+    await expect(call('inception:import_design', projectId, { name: 'a.png', kind: 'IMAGE', content: Buffer.from('esto no es un png').toString('base64') })).rejects.toThrow('no es un archivo .png válido');
+    await expect(call('inception:import_design', projectId, { name: 'a.exe', kind: 'IMAGE', content: PNG_B64 })).rejects.toThrow('tipo de archivo no admitido');
+    await expect(call('inception:import_design', projectId, { name: 'App.jsx', kind: 'REACT', content: '   ' })).rejects.toThrow('El código está vacío');
+    await expect(call('inception:import_design', projectId, { name: 'App.jsx', kind: 'REACT', content: '<!doctype html><html><body>hola</body></html>' })).rejects.toThrow('impórtalo como HTML');
+    await expect(call('inception:import_design', projectId, { name: 'App.jsx', kind: 'REACT', content: 'solo texto, sin código ni etiquetas' })).rejects.toThrow('no parece código React');
+    await expect(call('inception:import_design', projectId, { name: 'App.jsx', kind: 'REACT', content: `export default function A(){return <p>${'x'.repeat(MAX_PROTOTYPE_CHARS)}</p>}` })).rejects.toThrow('supera');
+    await expect(call('inception:import_design', projectId, { name: 'a', kind: 'OTRO', content: 'x' })).rejects.toThrow('Importa una imagen o código React');
+    expect(translator.calls).toHaveLength(0);
+    expect(engine.explored).toHaveLength(before);
+  });
+
+  it('counts towards the limit of five directions and only works while choosing', async () => {
+    const { projectId, call, settled, toExploring } = await setup();
+    await expect(call('inception:import_design', projectId, { name: 'a.png', kind: 'IMAGE', content: PNG_B64 })).rejects.toThrow('No estás eligiendo una dirección visual');
+    await toExploring();
+    for (const index of [3, 4, 5]) { await call('inception:import_design', projectId, { name: `d${index}.png`, kind: 'IMAGE', content: PNG_B64 }); await settled(); }
+    await expect(call('inception:import_design', projectId, { name: 'd6.png', kind: 'IMAGE', content: PNG_B64 })).rejects.toThrow('como mucho 5 direcciones');
+    expect((await call<InceptionViewDto>('inception:get', projectId)).ui.options.map(option => option.id)).toEqual(['ui-1', 'ui-2', 'ui-3', 'ui-4', 'ui-5']);
+  });
+});
+
+describe('going back to the design from the proposal', () => {
+  it('returns to the directions already generated, with the choice kept and the pending proposal rejected', async () => {
+    const { engine, projectId, call, settled, toExploring } = await setup();
+    await toExploring();
+    await call('inception:choose_ui', projectId, 'ui-2');
+    const proposed = await settled();
+    const changeSetId = proposed.proposal!.changeSetId;
+    const back = await call<InceptionViewDto>('inception:reopen_design', projectId);
+    expect(back).toMatchObject({ stage: 'EXPLORE_UI', status: 'WAITING_USER', nextAction: 'CHOOSE_UI', error: null, proposal: null, ui: { selectedOptionId: 'ui-2' } });
+    expect(back.ui.options.map(option => option.title)).toEqual(['Panel claro', 'Lista minimalista']);
+    expect(engine.explored).toHaveLength(1);                       // nothing was generated again
+    const changeSets = await call<Array<{ id: string; status: string }>>('changeset:list', projectId);
+    expect(changeSets.find(item => item.id === changeSetId)?.status).toBe('REJECTED');
+    // Choosing another direction prepares a new proposal built on it.
+    await call('inception:choose_ui', projectId, 'ui-1');
+    expect(await settled()).toMatchObject({ stage: 'PROPOSAL', ui: { selectedOptionId: 'ui-1' } });
+    expect(engine.proposed.at(-1)!.direction).toMatchObject({ title: 'Panel claro' });
+  });
+
+  it('when the design was never asked for it generates the directions now from the same answers, and a failure offers the retry', async () => {
+    const { engine, projectId, call, settled } = await setup();
+    await call('inception:start', projectId, { brief: 'Un panel' }); await settled();
+    await call('inception:answer', projectId, [{ questionId: 'q1', answer: 'Solo yo' }]);
+    const proposed = await settled();
+    expect(proposed).toMatchObject({ stage: 'PROPOSAL', ui: { wanted: false, options: [] } });
+    engine.failExplore = true;
+    const working = await call<InceptionViewDto>('inception:reopen_design', projectId);
+    expect(working).toMatchObject({ stage: 'ASK_GOALS', status: 'WORKING', proposal: null, ui: { wanted: true } });
+    expect(await settled()).toMatchObject({ stage: 'ASK_GOALS', status: 'FAILED', nextAction: 'RETRY_UI', error: 'motor de diseño caído' });
+    engine.failExplore = false;
+    await call('inception:answer', projectId, proposed.answers, undefined, { exploreUi: true });
+    const view = await settled();
+    expect(view).toMatchObject({ stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { wanted: true } });
+    expect(view.ui.options).toHaveLength(2);
+    expect(engine.explored.at(-1)!.project.brief).toBe('Un panel');
+  });
+
+  it('is refused anywhere but while reviewing the proposal', async () => {
+    const { projectId, call, settled, toExploring } = await setup();
+    await expect(call('inception:reopen_design', projectId)).rejects.toThrow('mientras revisas la propuesta');
+    await toExploring();
+    expect((await call<InceptionViewDto>('inception:get', projectId)).stage).toBe('EXPLORE_UI');
   });
 });
 

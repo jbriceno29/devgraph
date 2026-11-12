@@ -18,7 +18,11 @@ export interface UiOptionDraft { title: string; summary: string; navigation: str
 export interface InceptionReference extends InceptionReferenceDto { file: string }
 
 /** A stored visual direction: what the view shows plus the prototype's HTML. */
-export interface InceptionUiOption extends InceptionUiOptionDto { prototypeHtml: string }
+export interface InceptionUiOption extends InceptionUiOptionDto {
+  prototypeHtml: string;
+  /** For an IMAGE direction: the stored picture (in the references folder) and its media type; its page is built on request, so the record stays small. */
+  imageFile?: string; imageMime?: string;
+}
 export interface InceptionUiState { wanted: boolean; options: InceptionUiOption[]; selectedOptionId: string | null }
 export const EMPTY_UI_STATE: InceptionUiState = { wanted: false, options: [], selectedOptionId: null };
 
@@ -27,13 +31,14 @@ export const EMPTY_UI_STATE: InceptionUiState = { wanted: false, options: [], se
  * It reads only the files it is given. Results are per reference: one that could not be read comes back with `error` and no translation.
  */
 export interface ReferenceTranslatorPort {
-  translate(input: { files: Array<{ id: string; kind: ReferenceKind; note: string; mimeType: string; /** Absolute path of the stored copy. */ path: string }>; model?: string; signal?: AbortSignal }): Promise<{ results: Array<{ id: string; translation: InceptionReferenceTranslationDto | null; error: string | null }>; usage: InceptionEngineUsage | null }>;
+  translate(input: { files: Array<{ id: string; kind: ReferenceKind | 'DESIGN'; note: string; mimeType: string; /** Absolute path of the stored copy. */ path: string }>; model?: string; signal?: AbortSignal }): Promise<{ results: Array<{ id: string; translation: InceptionReferenceTranslationDto | null; error: string | null }>; usage: InceptionEngineUsage | null }>;
 }
 
 /** Where the attached files live (inside the project's workspace folder). `file` is always `ref-<n>.<extension>`. */
 export interface InceptionReferenceFilesPort {
   save(projectId: string, file: string, content: Buffer): void;
   pathOf(projectId: string, file: string): string;
+  read(projectId: string, file: string): Buffer;
   /** Removes every stored reference of the project (restart, or replacing them). */
   deleteAll(projectId: string): void;
 }

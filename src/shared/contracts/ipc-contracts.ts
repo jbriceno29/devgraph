@@ -46,8 +46,12 @@ export interface WorkspaceIpcCommands {
   'inception:answer': (projectId:string,answers:InceptionAnswerDto[],notes?:string,options?:{exploreUi?:boolean})=>Promise<InceptionViewDto>;
   /** Adds a prototype (HTML) the user made elsewhere as one more design direction; only while choosing a direction. Answers at once. */
   'inception:import_prototype': (projectId:string,input:{name:string;html:string})=>Promise<InceptionViewDto>;
+  /** Adds a finished design made elsewhere: an image (base64; a model describes it) or React code (converted to an HTML prototype). Returns at once with status WORKING. */
+  'inception:import_design': (projectId:string,input:{name:string;kind:'IMAGE'|'REACT';content:string})=>Promise<InceptionViewDto>;
   /** Regenerates one design direction with the user's change requests; returns at once with status WORKING. */
   'inception:revise_ui': (projectId:string,optionId:string,notes:string)=>Promise<InceptionViewDto>;
+  /** From the proposal, back to the design directions (generated now when the design was never asked for); the pending proposal is rejected. */
+  'inception:reopen_design': (projectId:string)=>Promise<InceptionViewDto>;
   /** Approves a design direction and asks for the proposal built on it (`null` skips the design). Returns at once with status WORKING. */
   'inception:choose_ui': (projectId:string,optionId:string|null)=>Promise<InceptionViewDto>;
   /** Applies the proposal's ChangeSet (needs a primary repository). */

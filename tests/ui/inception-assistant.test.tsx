@@ -370,7 +370,7 @@ describe('Asistente de inicio: exploración visual',()=>{
   expect(screen.getByText(/Paso 2 de 4/)).toBeTruthy();
   cleanup();
   setup({stage:'EXPLORE_UI',status:'WORKING',nextAction:'WAIT',brief:'Un panel',questions,ui:{wanted:true,options:uiOptions,selectedOptionId:null},updatedAt:new Date().toISOString()});
-  expect(await screen.findByRole('heading',{name:/Ajustando el prototipo/})).toBeTruthy();
+  expect(await screen.findByRole('heading',{name:/Trabajando en tu diseño/})).toBeTruthy();
  });
 
  it('shows each direction with its prototype in an isolated frame: scripts yes, same origin no, and a policy with no network',async()=>{
@@ -427,18 +427,67 @@ describe('Asistente de inicio: exploración visual',()=>{
  it('imports a pasted prototype or an HTML file, refuses other files, and selects the new direction',async()=>{
   const {client}=exploring();
   await screen.findByTitle('Vista previa del prototipo');
-  fireEvent.click(screen.getByText(/Importar un prototipo hecho en otra herramienta/));
-  fireEvent.change(screen.getByLabelText('O pegar el HTML'),{target:{value:'<main>mi diseño</main>'}});
+  fireEvent.click(screen.getByText(/Importar un diseño hecho en otra herramienta/));
+  fireEvent.change(screen.getByLabelText('O pegar el código'),{target:{value:'<main>mi diseño</main>'}});
   fireEvent.change(screen.getByLabelText('Nombre'),{target:{value:'Mi diseño'}});
   fireEvent.click(screen.getByRole('button',{name:'Importar el HTML pegado'}));
   await waitFor(()=>expect(client.importPrototype).toHaveBeenCalledWith('p',{name:'Mi diseño',html:'<main>mi diseño</main>'}));
   await waitFor(()=>expect((screen.getAllByRole('radio').at(-1) as HTMLInputElement).checked).toBe(true));
   expect(screen.getAllByRole('radio')).toHaveLength(3);
-  const input=screen.getByLabelText('Subir un archivo .html') as HTMLInputElement;
-  await act(async()=>{fireEvent.change(input,{target:{files:[new File(['x'],'foto.png',{type:'image/png'})]}});});
-  expect((await screen.findByRole('alert')).textContent).toMatch(/Sube el archivo .html/);
+  const input=screen.getByLabelText('Subir un archivo (.html, imagen o .jsx/.tsx)') as HTMLInputElement;
+  await act(async()=>{fireEvent.change(input,{target:{files:[new File(['x'],'notas.txt',{type:'text/plain'})]}});});
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Sube un archivo .html, una imagen/);
   await act(async()=>{fireEvent.change(input,{target:{files:[new File(['<div>desde archivo</div>'],'proto.html',{type:'text/html'})]}});});
   await waitFor(()=>expect(client.importPrototype).toHaveBeenCalledWith('p',{name:'proto.html',html:'<div>desde archivo</div>'}));
+ });
+
+ it('imports a design image or React code: reads the file as base64 or text, sends the right kind, and refuses a picture that is too big',async()=>{
+  const open=async()=>{const rendered=exploring();await screen.findByTitle('Vista previa del prototipo');fireEvent.click(screen.getByText(/Importar un diseño hecho en otra herramienta/));return {client:rendered.client,input:screen.getByLabelText('Subir un archivo (.html, imagen o .jsx/.tsx)') as HTMLInputElement};};
+  const choose=(input:HTMLInputElement,file:File)=>act(async()=>{fireEvent.change(input,{target:{files:[file]}});});
+  // The assistant moves on to «Trabajando…» after each import, so every case starts from a fresh screen.
+  const png=new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1,2,3]);
+  let {client,input}=await open();
+  expect(input.getAttribute('accept')).toMatch(/\.png.*\.jsx.*\.tsx/);
+  await choose(input,new File([png],'diseño.png',{type:'image/png'}));
+  await waitFor(()=>expect(client.importDesign).toHaveBeenCalledTimes(1));
+  const sent=(client.importDesign as ReturnType<typeof vi.fn>).mock.calls[0]![1] as {name:string;kind:string;content:string};
+  expect([sent.name,sent.kind]).toEqual(['diseño.png','IMAGE']);
+  expect([...Buffer.from(sent.content,'base64')]).toEqual([...png]);
+  expect(await screen.findByRole('heading',{name:/Trabajando en tu diseño/})).toBeTruthy();
+  cleanup();
+
+  ({client,input}=await open());
+  await choose(input,new File(['export default function App(){ return <p>hola</p>; }'],'App.tsx',{type:'text/plain'}));
+  await waitFor(()=>expect(client.importDesign).toHaveBeenCalledWith('p',{name:'App.tsx',kind:'REACT',content:'export default function App(){ return <p>hola</p>; }'}));
+  expect(client.importPrototype).not.toHaveBeenCalled();
+  cleanup();
+
+  ({client,input}=await open());
+  await choose(input,new File([new Uint8Array(3*1024*1024+1)],'enorme.jpg',{type:'image/jpeg'}));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/«enorme.jpg» pesa más de 3 MB/);
+  expect(client.importDesign).not.toHaveBeenCalled();
+  // Pasted code: the format selector decides what it is.
+  fireEvent.change(screen.getByLabelText('Lo que pegas'),{target:{value:'REACT'}});
+  fireEvent.change(screen.getByLabelText('O pegar el código'),{target:{value:'const A = () => <b>x</b>; export default A;'}});
+  fireEvent.change(screen.getByLabelText('Nombre'),{target:{value:'Mi componente'}});
+  fireEvent.click(screen.getByRole('button',{name:'Importar y convertir el código pegado'}));
+  await waitFor(()=>expect(client.importDesign).toHaveBeenCalledWith('p',{name:'Mi componente',kind:'REACT',content:'const A = () => <b>x</b>; export default A;'}));
+  expect(client.importPrototype).not.toHaveBeenCalled();
+ });
+
+ it('an image direction shows its badge and a hint, and offers to turn it into an interactive prototype',async()=>{
+  const image={id:'ui-3',title:'diseño',summary:'Panel azul.',navigation:'',screens:['Inicio'],designSystemNotes:['Paleta: Azul'],source:'IMAGE' as const,htmlBytes:11,externalReferences:[]};
+  const {client}=exploring({ui:{wanted:true,options:[...uiOptions,image],selectedOptionId:null}});
+  await screen.findByTitle('Vista previa del prototipo');
+  fireEvent.click(screen.getAllByRole('radio')[2]!);
+  expect(screen.getByText('Imagen')).toBeTruthy();
+  expect(await screen.findByText(/viene de una imagen: un modelo la describió en texto, pero aún no tiene prototipo/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'Convertir en prototipo'}));
+  await waitFor(()=>expect(client.reviseUiOption).toHaveBeenCalledWith('p','ui-3','Conviértelo en un prototipo interactivo fiel a este diseño.'));
+  cleanup();
+  exploring();
+  await screen.findByTitle('Vista previa del prototipo');
+  expect(screen.queryByRole('button',{name:'Convertir en prototipo'})).toBeNull();
  });
 
  it('shows why an action failed without leaving the choice, and the approved direction in the proposal',async()=>{
@@ -448,6 +497,19 @@ describe('Asistente de inicio: exploración visual',()=>{
   cleanup();
   setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal,repositoryPath:'/home/ana/app',ui:{wanted:true,options:uiOptions,selectedOptionId:'ui-1'},updatedAt:new Date().toISOString()});
   expect((await screen.findByText(/Dirección visual aprobada:/)).closest('p')!.textContent).toMatch(/Panel claro\. La propuesta se apoya en ella/);
+ });
+
+ it('lets the user go back to the design from the proposal: the existing directions, or asking for them if the design was never requested',async()=>{
+  const withOptions=setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal,repositoryPath:'/home/ana/app',ui:{wanted:true,options:uiOptions,selectedOptionId:'ui-1'},updatedAt:new Date().toISOString()});
+  fireEvent.click(await screen.findByRole('button',{name:'Volver a las direcciones de diseño'}));
+  await waitFor(()=>expect(withOptions.client.reopenDesign).toHaveBeenCalledWith('p'));
+  expect(await screen.findByRole('heading',{name:'Elige una dirección visual'})).toBeTruthy();
+  cleanup();
+  const without=setup({stage:'PROPOSAL',status:'WAITING_USER',nextAction:'APPROVE',brief:'Un panel',questions,proposal,repositoryPath:'/home/ana/app',updatedAt:new Date().toISOString()});
+  expect(screen.queryByRole('button',{name:'Volver a las direcciones de diseño'})).toBeNull();
+  fireEvent.click(await screen.findByRole('button',{name:'Ver propuestas de diseño'}));
+  await waitFor(()=>expect(without.client.reopenDesign).toHaveBeenCalledWith('p'));
+  expect(await screen.findByRole('heading',{name:/Diseñando direcciones visuales/})).toBeTruthy();
  });
 
  it('offers to retry the design when generating it failed',async()=>{

@@ -6,7 +6,7 @@ import type { ChangeSetDraft } from '../ports/change-set-planning-port.js';
 import { EMPTY_UI_STATE, type InceptionEnginePort, type InceptionEngineUsage, type InceptionRecord, type InceptionReference, type InceptionReferenceFilesPort, type InceptionRepositoryPort, type InceptionUiOption, type ReferenceTranslatorPort, type UiOptionDraft } from '../ports/inception-port.js';
 import { findExternalReferences } from '../../shared/prototype-safety.js';
 import { prepareReferences } from './reference-files.js';
-import { MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_UI_OPTIONS, type InceptionActivityDto, type InceptionAnswerDto, type InceptionNextAction, type InceptionProposalDto, type InceptionStage, type InceptionStatus, type InceptionViewDto, type StartInceptionInput } from '../../shared/contracts/inception-view.js';
+import { DESIGN_IMAGE_EXTENSIONS, MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_UI_OPTIONS, type InceptionActivityDto, type InceptionAnswerDto, type InceptionNextAction, type InceptionProposalDto, type InceptionStage, type InceptionStatus, type InceptionViewDto, type StartInceptionInput } from '../../shared/contracts/inception-view.js';
 import { buildFoundationPlan, scaffoldTempId, summarizeFoundationPlan } from './foundation-plan.js';
 
 /** The ChangeSet flow the inception reuses (validation, review and application are the same as any other proposal). */
@@ -31,6 +31,12 @@ export interface ProjectInceptionDependencies {
 const MAX_QUESTIONS = 5, MAX_BRIEF = 4000, MAX_ANSWER = 1000, MAX_NOTES = 5;
 const INTERRUPTED = 'La llamada se interrumpió (la app se cerró). Vuelve a intentarlo.';
 const HTML_START = /<\s*(?:!doctype|html|body|head|div|main|section|header)\b/i;
+/** What the engine is told when the imported thing is React code: convert it, do not redesign it. */
+const CONVERT_REACT_NOTE = 'Lo que hay en "prototypeHtml" NO es HTML: es el código de un componente React (JSX). Conviértelo en UN documento HTML autocontenido, sin React ni ninguna dependencia, con el mismo diseño y el mismo comportamiento: reescribe la interactividad con JavaScript sencillo y mantén el estado en memoria. Si no tienes un título mejor, usa el nombre del componente.';
+/** What the engine is told when a direction comes from a picture and has no prototype yet. */
+const IMAGE_TO_PROTOTYPE_NOTE = 'Esta dirección viene de la imagen de un diseño ya hecho y todavía no tiene prototipo (no hay HTML). Crea un prototipo HTML interactivo que la reproduzca con fidelidad a partir de su descripción (paleta, tipografía, composición, pantallas y estados), y aplica además estos cambios:';
+const imagePage = (mime: string, bytes: Buffer) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>html,body{margin:0;background:#f4f4f5}img{display:block;max-width:100%;height:auto;margin:0 auto}</style></head><body><img alt="Imagen del diseño importado" src="data:${mime};base64,${bytes.toString('base64')}"></body></html>`;
+const displayName = (value: unknown) => String(value ?? '').replace(/\\/g, '/').split('/').pop()!.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
 
 /**
  * Project inception (MVP with two gates, plus an optional visual exploration): ASK_GOALS → [EXPLORE_UI] → PROPOSAL (waiting for approval) → APPLIED. Engine calls run in
@@ -102,12 +108,8 @@ export class ProjectInceptionService {
     const exploring = current.stage === 'ASK_GOALS' && (options?.exploreUi ?? current.ui.wanted);
     const record: InceptionRecord = { ...current, status: 'WORKING', answers: normalized, notes: allNotes, changeSetId: null, error: null, ui: current.stage === 'ASK_GOALS' ? { ...current.ui, wanted: exploring, options: exploring ? [] : current.ui.options } : current.ui, updatedAt: new Date().toISOString() };
     this.deps.store.save(record);
-    if (exploring) {
-      this.launch(record, async signal => {
-        const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: normalized, ...this.uiModel(record), signal });
-        return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: result.options.map((draft, index) => this.toUiOption(draft, 'GENERATED', `ui-${index + 1}`)), selectedOptionId: null }, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage };
-      }, current.stage);
-    } else this.launch(record, signal => this.proposalWork(record, project.props, signal), current.stage);
+    if (exploring) this.launch(record, signal => this.exploreWork(record, project.props, signal), current.stage);
+    else this.launch(record, signal => this.proposalWork(record, project.props, signal), current.stage);
     return this.get(projectId);
   }
 
@@ -115,7 +117,7 @@ export class ProjectInceptionService {
   importPrototype(projectId: string, input: { name: string; html: string }): InceptionViewDto {
     const current = this.requireExploring(projectId);
     if (current.ui.options.length >= MAX_UI_OPTIONS) throw new Error(`Puedes tener como mucho ${MAX_UI_OPTIONS} direcciones; ajusta una de las existentes.`);
-    const name = String(input?.name ?? '').replace(/\\/g, '/').split('/').pop()!.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
+    const name = displayName(input?.name);
     const html = typeof input?.html === 'string' ? input.html.trim() : '';
     if (!html) throw new Error('El prototipo está vacío.');
     if (html.length > MAX_PROTOTYPE_CHARS) throw new Error(`El prototipo supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres; pega uno más pequeño.`);
@@ -124,6 +126,55 @@ export class ProjectInceptionService {
     const option = this.toUiOption({ title, summary: 'Prototipo importado por ti. Míralo y pide ajustes si quieres que el asistente lo adapte.', navigation: '', screens: [], designSystemNotes: [], prototypeHtml: html }, 'IMPORTED', this.nextUiId(current.ui.options));
     this.deps.store.save({ ...current, error: null, ui: { ...current.ui, options: [...current.ui.options, option] }, updatedAt: new Date().toISOString() });
     return this.get(projectId);
+  }
+
+  /**
+   * Adds a finished design made elsewhere. A picture (`IMAGE`) is described in text by the translator and becomes a direction with no prototype yet;
+   * React code (`REACT`) is converted by the engine into a self-contained HTML prototype. Either way the user waits for a model; a failure leaves the
+   * directions as they were, with the reason.
+   */
+  importDesign(projectId: string, input: { name: string; kind: 'IMAGE' | 'REACT'; content: string }): InceptionViewDto {
+    const current = this.requireExploring(projectId), project = this.requireProject(projectId);
+    if (current.ui.options.length >= MAX_UI_OPTIONS) throw new Error(`Puedes tener como mucho ${MAX_UI_OPTIONS} direcciones; ajusta una de las existentes.`);
+    const name = displayName(input?.name), id = this.nextUiId(current.ui.options);
+    if (input?.kind === 'IMAGE') {
+      const { translator, referenceFiles } = this.deps;
+      if (!translator || !referenceFiles) throw new Error('Esta versión de la app no puede analizar imágenes.');
+      const [prepared] = prepareReferences([{ name, kind: 'VISUAL', note: '', dataBase64: String(input.content ?? '') }]);
+      const extension = prepared!.file.slice(prepared!.file.lastIndexOf('.') + 1);
+      if (!DESIGN_IMAGE_EXTENSIONS.includes(extension)) throw new Error(`«${name}»: importa una imagen (${DESIGN_IMAGE_EXTENSIONS.join(', ')}).`);
+      const file = `design-${id.replace(/\D/g, '')}.${extension}`;
+      referenceFiles.save(projectId, file, prepared!.content);
+      const record: InceptionRecord = { ...current, status: 'WORKING', error: null, updatedAt: new Date().toISOString() };
+      this.deps.store.save(record);
+      this.launch(record, async signal => {
+        const out = await translator.translate({ files: [{ id: `design-${id.replace(/\D/g, '')}`, kind: 'DESIGN', note: '', mimeType: prepared!.mimeType, path: referenceFiles.pathOf(projectId, file) }], ...this.translationModel(projectId), signal });
+        const understood = out.results[0]?.translation;
+        if (!understood) throw new Error(`No se pudo analizar «${name}»: ${(out.results[0]?.error ?? 'el traductor no devolvió nada').replace(/\.+$/, '')}.`);
+        const notes = [...understood.palette.map(color => `Paleta: ${color}`), ...(understood.typography ? [`Tipografía: ${understood.typography}`] : []), ...(understood.layout ? [`Composición: ${understood.layout}`] : []), ...understood.states.map(state => `Estado: ${state}`)];
+        const option: InceptionUiOption = { id, title: name.replace(/\.[a-z0-9]+$/i, '').slice(0, 80) || 'Diseño importado', summary: understood.summary, navigation: (understood.flows.length ? understood.flows : understood.actions).slice(0, 3).join(' · '), screens: understood.screens, designSystemNotes: notes.slice(0, 10), source: 'IMAGE', htmlBytes: prepared!.bytes, externalReferences: [], prototypeHtml: '', imageFile: file, imageMime: prepared!.mimeType };
+        return { stage: 'EXPLORE_UI' as const, status: 'WAITING_USER' as const, ui: { ...record.ui, options: [...record.ui.options, option] }, usage: out.usage };
+      }, 'EXPLORE_UI', 'WAITING_USER');
+      return this.get(projectId);
+    }
+    if (input?.kind === 'REACT') {
+      const source = typeof input.content === 'string' ? input.content.trim() : '';
+      if (!source) throw new Error('El código está vacío.');
+      if (source.length > MAX_PROTOTYPE_CHARS) throw new Error(`El código supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres; pega un componente más pequeño.`);
+      if (source.includes('\u0000')) throw new Error('Eso no parece código React (JSX).');
+      if (/^\s*<!doctype html|<html[\s>]/i.test(source)) throw new Error('Eso parece un documento HTML completo: impórtalo como HTML.');
+      if (!source.includes('<') || !/\b(?:function|import|export|return)\b|=>/.test(source)) throw new Error('Eso no parece código React (JSX). Pega o sube el archivo .jsx o .tsx del componente.');
+      const record: InceptionRecord = { ...current, status: 'WORKING', error: null, updatedAt: new Date().toISOString() };
+      this.deps.store.save(record);
+      this.launch(record, async signal => {
+        const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title: name.replace(/\.[a-z0-9]+$/i, '') || 'Componente React', summary: '', navigation: '', screens: [], designSystemNotes: [], prototypeHtml: source }, notes: [CONVERT_REACT_NOTE] }, signal });
+        const draft = result.options[0];
+        if (!draft) throw new Error('El asistente no devolvió el prototipo convertido.');
+        return { stage: 'EXPLORE_UI' as const, status: 'WAITING_USER' as const, ui: { ...record.ui, options: [...record.ui.options, this.toUiOption(draft, 'IMPORTED', id)] }, usage: result.usage };
+      }, 'EXPLORE_UI', 'WAITING_USER');
+      return this.get(projectId);
+    }
+    throw new Error('Importa una imagen o código React.');
   }
 
   /** Regenerates one direction with the user's change requests; the others stay. A failure leaves everything as it was, with the reason. */
@@ -138,10 +189,12 @@ export class ProjectInceptionService {
     this.deps.store.save(record);
     this.launch(record, async signal => {
       const { prototypeHtml, title, summary, navigation, screens, designSystemNotes } = option;
-      const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title, summary, navigation, screens, designSystemNotes, prototypeHtml }, notes: [note] }, signal });
+      // A direction that comes from a picture has no HTML: adjusting it asks the engine to build the prototype from its description.
+      const notes = option.source === 'IMAGE' ? [`${IMAGE_TO_PROTOTYPE_NOTE} ${note}`] : [note];
+      const result = await this.deps.engine.exploreUi({ project: this.projectInput(projectId, record.brief, project.props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), revise: { option: { title, summary, navigation, screens, designSystemNotes, prototypeHtml }, notes }, signal });
       const draft = result.options[0];
       if (!draft) throw new Error('El asistente no devolvió el prototipo ajustado.');
-      return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: record.ui.options.map(item => (item.id === optionId ? this.toUiOption(draft, item.source, item.id) : item)) }, usage: result.usage };
+      return { stage: 'EXPLORE_UI', status: 'WAITING_USER', ui: { ...record.ui, options: record.ui.options.map(item => (item.id === optionId ? this.toUiOption(draft, item.source === 'IMAGE' ? 'GENERATED' : item.source, item.id) : item)) }, usage: result.usage };
     }, 'EXPLORE_UI', 'WAITING_USER');
     return this.get(projectId);
   }
@@ -157,11 +210,35 @@ export class ProjectInceptionService {
     return this.get(projectId);
   }
 
+  /**
+   * Back from the proposal to the design step: the directions already generated (with the choice kept), or — when the design was never asked for —
+   * generated now from the same answers. The pending proposal is rejected; a new one is prepared when a direction is approved or the design skipped.
+   */
+  reopenDesign(projectId: string): InceptionViewDto {
+    const current = this.record(projectId), project = this.requireProject(projectId);
+    if (!current || current.stage !== 'PROPOSAL' || current.status !== 'WAITING_USER') throw new Error('Solo puedes volver al diseño mientras revisas la propuesta.');
+    if (current.changeSetId) { const pending = this.deps.planning.find(current.changeSetId); if (pending && !['APPLIED', 'REJECTED'].includes(pending.status)) this.deps.planning.reject(pending.id); }
+    const now = new Date().toISOString();
+    if (current.ui.options.length) {
+      this.deps.store.save({ ...current, stage: 'EXPLORE_UI', status: 'WAITING_USER', changeSetId: null, error: null, ui: { ...current.ui, wanted: true }, updatedAt: now });
+      return this.get(projectId);
+    }
+    // Never explored: it behaves like asking for it with the questions (the first gate again), so a failure offers «Reintentar las direcciones visuales».
+    const record: InceptionRecord = { ...current, stage: 'ASK_GOALS', status: 'WORKING', changeSetId: null, error: null, ui: { ...current.ui, wanted: true, options: [], selectedOptionId: null }, updatedAt: now };
+    this.deps.store.save(record);
+    this.launch(record, signal => this.exploreWork(record, project.props, signal), 'ASK_GOALS');
+    return this.get(projectId);
+  }
+
   /** The HTML of a direction's prototype (the view does not carry it: it is polled while the engine works). */
   getUiPrototype(projectId: string, optionId: string): string {
     this.requireProject(projectId);
     const option = this.record(projectId)?.ui.options.find(item => item.id === optionId);
     if (!option) throw new Error('Esa dirección visual ya no existe.');
+    if (option.imageFile) {
+      if (!this.deps.referenceFiles) throw new Error('No se puede leer la imagen de esta dirección.');
+      return imagePage(option.imageMime ?? 'image/png', this.deps.referenceFiles.read(projectId, option.imageFile));
+    }
     return option.prototypeHtml;
   }
 
@@ -257,7 +334,7 @@ export class ProjectInceptionService {
       : stage === 'ASK_GOALS' ? 'ANSWER'
       : stage === 'EXPLORE_UI' ? 'CHOOSE_UI'
       : !proposal || proposal.status !== 'VALIDATED' || record.error ? 'REVISE_PROPOSAL' : !repositoryPath ? 'SET_UP_REPOSITORY' : 'APPROVE';
-    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), ui: { wanted: record.ui.wanted, selectedOptionId: record.ui.selectedOptionId, options: record.ui.options.map(({ prototypeHtml: _html, ...visible }) => visible) }, updatedAt: record.updatedAt };
+    return { projectId, stage, status, nextAction, brief: record.brief, questions: record.questions, answers: record.answers, assumptions: record.assumptions, proposal, error: record.error, model: record.model, repositoryPath, usage, notes: record.notes ?? [], scaffoldTaskId: record.scaffoldTaskId ?? null, references: (record.references ?? []).map(({ file: _file, ...visible }) => visible), ui: { wanted: record.ui.wanted, selectedOptionId: record.ui.selectedOptionId, options: record.ui.options.map(({ prototypeHtml: _html, imageFile: _file, imageMime: _mime, ...visible }) => visible) }, updatedAt: record.updatedAt };
   }
 
   private proposal(changeSetId: string): InceptionProposalDto | null {
@@ -286,9 +363,7 @@ export class ProjectInceptionService {
     if (!pending.length) return record.references;
     const { translator, referenceFiles } = this.deps;
     if (!translator || !referenceFiles) throw new Error('Esta versión de la app no puede analizar referencias.');
-    const models = this.deps.models(record.projectId);
-    const model = ['sonnet', 'haiku'].find(alias => models.available.includes(alias)) ?? models.planning ?? undefined;
-    const out = await translator.translate({ files: pending.map(item => ({ id: item.id, kind: item.kind, note: item.note, mimeType: item.mimeType, path: referenceFiles.pathOf(record.projectId, item.file) })), ...(model ? { model } : {}), signal });
+    const out = await translator.translate({ files: pending.map(item => ({ id: item.id, kind: item.kind, note: item.note, mimeType: item.mimeType, path: referenceFiles.pathOf(record.projectId, item.file) })), ...this.translationModel(record.projectId), signal });
     const byId = new Map(out.results.map(result => [result.id, result]));
     const references = record.references.map((item): InceptionReference => {
       const result = byId.get(item.id);
@@ -313,6 +388,12 @@ export class ProjectInceptionService {
     if (stored && stored.status === 'WORKING' && !this.running.has(projectId)) return { ...stored, status: stored.stage === 'EXPLORE_UI' ? 'WAITING_USER' : 'FAILED', error: INTERRUPTED };
     return stored;
   }
+  /** The model that translates files into text: a capable-but-cheap one (sonnet, else haiku), not the planning model. */
+  private translationModel(projectId: string): { model?: string } {
+    const models = this.deps.models(projectId);
+    const model = ['sonnet', 'haiku'].find(alias => models.available.includes(alias)) ?? models.planning;
+    return model ? { model } : {};
+  }
   private requireExploring(projectId: string): InceptionRecord {
     this.requireProject(projectId);
     const current = this.record(projectId);
@@ -329,6 +410,11 @@ export class ProjectInceptionService {
   private toUiOption(draft: UiOptionDraft, source: InceptionUiOption['source'], id: string): InceptionUiOption {
     return { id, title: draft.title, summary: draft.summary, navigation: draft.navigation, screens: draft.screens, designSystemNotes: draft.designSystemNotes, source, htmlBytes: Buffer.byteLength(draft.prototypeHtml), externalReferences: findExternalReferences(draft.prototypeHtml), prototypeHtml: draft.prototypeHtml };
   }
+  /** The design gate: 2–3 directions with their prototypes, replacing whatever was there. */
+  private async exploreWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
+    const result = await this.deps.engine.exploreUi({ project: this.projectInput(record.projectId, record.brief, props, record.references ?? []), questions: record.questions, answers: record.answers, ...this.uiModel(record), signal });
+    return { stage: 'EXPLORE_UI' as const, status: 'WAITING_USER' as const, ui: { ...record.ui, options: result.options.map((draft, index) => this.toUiOption(draft, 'GENERATED', `ui-${index + 1}`)), selectedOptionId: null }, assumptions: [...new Set([...record.assumptions, ...result.assumptions])], usage: result.usage };
+  }
   /** The proposal gate: one engine call, validated and stored as a ChangeSet awaiting the user's approval. */
   private async proposalWork(record: InceptionRecord, props: { name: string; description?: string | null }, signal: AbortSignal) {
     const projectId = record.projectId, rootId = this.rootId(projectId);
@@ -339,7 +425,7 @@ export class ProjectInceptionService {
   }
   private approvedDirection(record: InceptionRecord) {
     const option = record.ui.options.find(item => item.id === record.ui.selectedOptionId);
-    return option ? { title: option.title, summary: option.summary, navigation: option.navigation, screens: option.screens, designSystemNotes: option.designSystemNotes, source: option.source, ...(option.source === 'IMPORTED' ? { prototypeHtml: option.prototypeHtml } : {}) } : undefined;
+    return option ? { title: option.title, summary: option.summary, navigation: option.navigation, screens: option.screens, designSystemNotes: option.designSystemNotes, source: option.source === 'IMPORTED' ? 'IMPORTED' as const : 'GENERATED' as const, ...(option.source === 'IMPORTED' ? { prototypeHtml: option.prototypeHtml } : {}) } : undefined;
   }
   private requireProject(projectId: string) { const project = this.deps.projects.findById(projectId); if (!project) throw new Error('Proyecto no encontrado.'); return project; }
   private notify(record: InceptionRecord): void { this.deps.emit?.('inception:updated', { projectId: record.projectId, stage: record.stage, status: record.status }); }

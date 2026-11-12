@@ -50,8 +50,10 @@ Si tu proyecto tiene una interfaz gráfica, al responder las preguntas marca «M
 
 - **Aprobar esta dirección visual y preparar el plan:** la propuesta se apoya en ella (estilo, pantallas y reglas visuales). Aprobar fija el estilo, no el plan: el plan lo apruebas en el paso siguiente.
 - **Pedir ajustes a este prototipo:** cuéntale qué cambiar; solo se regenera ese.
-- **Importar un prototipo** hecho en otra herramienta (por ejemplo, el HTML exportado de Claude Artifacts o Claude Design): súbelo o pégalo y se suma a las demás direcciones (hasta 5).
+- **Importar un diseño** hecho en otra herramienta (por ejemplo, de Claude Artifacts o Claude Design) y sumarlo a las demás direcciones (hasta 5): un **HTML** se muestra tal cual; una **imagen** (.png, .jpg, .webp, .gif) la describe un modelo en texto y queda como dirección sin prototipo, que puedes aprobar así o convertir en un prototipo interactivo con «Convertir en prototipo»; el **código React** (.jsx, .tsx) lo convierte el asistente en un prototipo HTML autocontenido.
 - **Saltar el diseño** e ir directo al plan.
+
+Si ya estás viendo la propuesta y no te convence el aspecto, pulsa **«Volver a las direcciones de diseño»**: vuelves a las mismas direcciones, con tu elección marcada, sin perder lo que generaste (la propuesta pendiente se descarta y se prepara una nueva al elegir). Si no habías pedido el diseño, el mismo botón dice **«Ver propuestas de diseño»** y las genera en ese momento con tus respuestas.
 
 Los prototipos se muestran aislados: funcionan sin Internet y no tienen acceso a tus datos ni al resto de la app. Si uno intenta cargar recursos de fuera, no se cargan y se te avisa; si intenta salir de su página o recargarse, la vista previa se detiene y puedes reiniciarla. Si tu proyecto es un programa de terminal, una librería o un servicio, déjalo sin marcar: no hace falta.
 

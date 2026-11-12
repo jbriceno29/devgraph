@@ -193,8 +193,10 @@ export function createWorkspaceCore(workspaceRoot:string,emit:WorkspaceEventEmit
     case 'inception:start': {const projectId=String(args[0]??'');return getInception(projectId).start(projectId,(args[1]??{}) as StartInceptionInput);}
     case 'inception:answer': {const projectId=String(args[0]??'');const options=args[3] as {exploreUi?:boolean}|undefined;return getInception(projectId).answer(projectId,(Array.isArray(args[1])?args[1]:[]) as InceptionAnswerDto[],typeof args[2]==='string'?args[2]:undefined,options&&typeof options==='object'?{exploreUi:options.exploreUi===true}:undefined);}
     case 'inception:import_prototype': {const projectId=String(args[0]??'');return getInception(projectId).importPrototype(projectId,(args[1]??{}) as {name:string;html:string});}
+    case 'inception:import_design': {const projectId=String(args[0]??'');return getInception(projectId).importDesign(projectId,(args[1]??{}) as {name:string;kind:'IMAGE'|'REACT';content:string});}
     case 'inception:revise_ui': {const projectId=String(args[0]??'');return getInception(projectId).reviseUiOption(projectId,String(args[1]??''),String(args[2]??''));}
     case 'inception:choose_ui': {const projectId=String(args[0]??'');return getInception(projectId).chooseUiOption(projectId,typeof args[1]==='string'?args[1]:null);}
+    case 'inception:reopen_design': {const projectId=String(args[0]??'');return getInception(projectId).reopenDesign(projectId);}
     case 'inception:get_ui_prototype': {const projectId=String(args[0]??'');return getInception(projectId).getUiPrototype(projectId,String(args[1]??''));}
     case 'inception:approve': {const projectId=String(args[0]??'');return getInception(projectId).approve(projectId);}
     case 'inception:restart': {const projectId=String(args[0]??'');return getInception(projectId).restart(projectId);}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
-import { MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_UI_OPTIONS, type InceptionIpcClient, type InceptionViewDto } from '../../../shared/contracts/inception-view.js';
+import { DESIGN_IMAGE_EXTENSIONS, MAX_INCEPTION_NOTE, MAX_PROTOTYPE_CHARS, MAX_REFERENCE_BYTES, MAX_UI_OPTIONS, type InceptionIpcClient, type InceptionViewDto } from '../../../shared/contracts/inception-view.js';
+import { readAsBase64 } from './ReferencesField.js';
 import { errorText } from '../errors.js';
 import { control, focusRing, primary, secondary } from '../ui.js';
 import { hardenPrototype } from './harden-prototype.js';
@@ -25,18 +26,23 @@ export function PrototypeFrame({ html }: { html: string }) {
 interface Props {
   client: InceptionIpcClient; projectId: string; view: InceptionViewDto; heading: RefObject<HTMLHeadingElement | null>; busy: boolean; eyebrow: string;
   onChoose(optionId: string | null): void; onRevise(optionId: string, notes: string): void; onImport(name: string, html: string): void;
+  /** A picture of a finished design (base64) or React code (text): a model describes or converts it, so the user waits. */
+  onImportDesign(name: string, kind: 'IMAGE' | 'REACT', content: string): void;
 }
+
+const CONVERT_NOTE = 'Conviértelo en un prototipo interactivo fiel a este diseño.';
+const extensionOf = (name: string) => (name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '');
 
 const card = 'rounded-xl border border-border bg-surface-raised p-5';
 
 /** Design directions with their prototypes: look at each, ask for changes, import one made elsewhere, approve one or skip the design. */
-export function VisualExplorationStep({ client, projectId, view, heading, busy, eyebrow, onChoose, onRevise, onImport }: Props) {
+export function VisualExplorationStep({ client, projectId, view, heading, busy, eyebrow, onChoose, onRevise, onImport, onImportDesign }: Props) {
   const id = useId();
   const { options } = view.ui;
   const [selectedId, setSelectedId] = useState<string>(() => view.ui.selectedOptionId ?? options[0]?.id ?? '');
   const [html, setHtml] = useState<{ key: string; value: string } | null>(null), [loadError, setLoadError] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState(false), [notes, setNotes] = useState('');
-  const [pasted, setPasted] = useState(''), [name, setName] = useState('Prototipo importado'), [importError, setImportError] = useState<string | null>(null);
+  const [pasted, setPasted] = useState(''), [pastedFormat, setPastedFormat] = useState<'HTML' | 'REACT'>('HTML'), [name, setName] = useState('Prototipo importado'), [importError, setImportError] = useState<string | null>(null);
   const known = useRef(options.length);
   const selected = options.find(option => option.id === selectedId) ?? options[0];
 
@@ -54,11 +60,18 @@ export function VisualExplorationStep({ client, projectId, view, heading, busy, 
   const readFile = async (file: File | undefined) => {
     setImportError(null);
     if (!file) return;
-    if (!/\.html?$/i.test(file.name)) { setImportError('Sube el archivo .html del prototipo.'); return; }
+    const extension = extensionOf(file.name);
+    if (DESIGN_IMAGE_EXTENSIONS.includes(extension)) {
+      if (file.size > MAX_REFERENCE_BYTES) { setImportError(`«${file.name}» pesa más de ${MAX_REFERENCE_BYTES / 1024 / 1024} MB.`); return; }
+      onImportDesign(file.name, 'IMAGE', await readAsBase64(file));
+      return;
+    }
+    const kind = /^(?:html?)$/.test(extension) ? 'HTML' : /^(?:jsx|tsx)$/.test(extension) ? 'REACT' : null;
+    if (!kind) { setImportError('Sube un archivo .html, una imagen (.png, .jpg, .webp, .gif) o el código de un componente React (.jsx, .tsx).'); return; }
     if (file.size > MAX_PROTOTYPE_CHARS * 4) { setImportError(`«${file.name}» es demasiado grande.`); return; }
     const text = await file.text();
     if (text.length > MAX_PROTOTYPE_CHARS) { setImportError(`«${file.name}» supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres.`); return; }
-    onImport(file.name, text);
+    if (kind === 'HTML') onImport(file.name, text); else onImportDesign(file.name, 'REACT', text);
   };
 
   return <section aria-labelledby={`${id}-title`} className={card}>
@@ -73,13 +86,14 @@ export function VisualExplorationStep({ client, projectId, view, heading, busy, 
         const checked = option.id === selected?.id;
         return <label key={option.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${checked ? 'border-accent bg-accent-soft text-fg' : 'border-border bg-surface-sunken text-fg-muted hover:border-border-strong hover:text-fg'}`}>
           <input type="radio" name={`${id}-option`} checked={checked} onChange={() => { setSelectedId(option.id); setAdjusting(false); }} className="mt-0.5 accent-[var(--accent)]" />
-          <span className="flex-1"><span className="font-medium text-fg">{option.title}</span>{option.source === 'IMPORTED' && <span className="ml-2 rounded bg-warning-soft px-1.5 text-[11px] font-medium text-warning">Importada</span>}<span className="mt-0.5 block leading-4">{option.summary}</span></span>
+          <span className="flex-1"><span className="font-medium text-fg">{option.title}</span>{option.source !== 'GENERATED' && <span className="ml-2 rounded bg-warning-soft px-1.5 text-[11px] font-medium text-warning">{option.source === 'IMAGE' ? 'Imagen' : 'Importada'}</span>}<span className="mt-0.5 block leading-4">{option.summary}</span></span>
         </label>;
       })}</div>
     </fieldset>
 
     {selected && <div className="mt-4 space-y-3">
       <PrototypeSlot html={html?.key === key ? html.value : null} error={loadError} />
+      {selected.source === 'IMAGE' && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-sunken p-3 text-xs text-fg-muted"><p className="min-w-0 flex-1">Esta dirección viene de una imagen: un modelo la describió en texto, pero aún no tiene prototipo que probar. Puedes aprobarla así (el plan se apoya en esa descripción) o convertirla en un prototipo interactivo.</p><button type="button" disabled={busy} onClick={() => onRevise(selected.id, CONVERT_NOTE)} className={`min-h-9 text-sm ${secondary}`}>Convertir en prototipo</button></div>}
       {selected.externalReferences.length > 0 && <p role="status" className="rounded-lg border border-warning/50 bg-warning-soft p-2 text-xs text-fg">Este prototipo intenta usar recursos externos ({selected.externalReferences.join(', ')}). No se cargarán: se muestra sin Internet.</p>}
       <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
         {selected.navigation && <><dt className="font-medium text-fg">Navegación</dt><dd className="text-fg-muted">{selected.navigation}</dd></>}
@@ -100,14 +114,15 @@ export function VisualExplorationStep({ client, projectId, view, heading, busy, 
     </div>
 
     <details className="mt-5 rounded-lg border border-border bg-surface-sunken">
-      <summary className={`min-h-9 cursor-pointer rounded-lg px-3 py-2.5 text-sm font-medium text-accent ${focusRing}`}>Importar un prototipo hecho en otra herramienta (HTML)</summary>
+      <summary className={`min-h-9 cursor-pointer rounded-lg px-3 py-2.5 text-sm font-medium text-accent ${focusRing}`}>Importar un diseño hecho en otra herramienta (HTML, imagen o React)</summary>
       <div className="space-y-3 border-t border-border p-3">
-        <p className="text-xs leading-5 text-fg-muted">Descarga o exporta el HTML desde Claude Artifacts, Claude Design u otra herramienta y súbelo o pégalo aquí. Se añade como una dirección más ({options.length} de {MAX_UI_OPTIONS}); podrás pedir que el asistente lo ajuste. Si el prototipo carga recursos de Internet, no se cargarán.</p>
-        <div><label htmlFor={`${id}-file`} className="mb-1 block text-xs font-medium text-fg">Subir un archivo .html</label><input id={`${id}-file`} type="file" accept=".html,.htm,text/html" disabled={busy || options.length >= MAX_UI_OPTIONS} onChange={event => { void readFile(event.target.files?.[0]); event.target.value = ''; }} className={`${control} py-1.5 file:mr-3 file:rounded file:border-0 file:bg-accent-soft file:px-2 file:py-1 file:text-xs file:text-accent`} /></div>
-        <div><label htmlFor={`${id}-paste`} className="mb-1 block text-xs font-medium text-fg">O pegar el HTML</label><textarea id={`${id}-paste`} rows={4} value={pasted} onChange={event => { setPasted(event.target.value); setImportError(null); }} spellCheck={false} className={`${control} py-2 font-mono text-[11px]`} /></div>
+        <p className="text-xs leading-5 text-fg-muted">Descarga o exporta tu diseño desde Claude Artifacts, Claude Design u otra herramienta y súbelo o pégalo aquí. Un **HTML** se muestra tal cual; una **imagen** la describe un modelo en texto (sin prototipo, hasta que pidas convertirla); el **código React** (.jsx, .tsx) lo convierte el asistente en un prototipo HTML autocontenido. Se añade como una dirección más ({options.length} de {MAX_UI_OPTIONS}); podrás pedir ajustes. Lo que cargue recursos de Internet no los cargará.</p>
+        <div><label htmlFor={`${id}-file`} className="mb-1 block text-xs font-medium text-fg">Subir un archivo (.html, imagen o .jsx/.tsx)</label><input id={`${id}-file`} type="file" accept=".html,.htm,.png,.jpg,.jpeg,.webp,.gif,.jsx,.tsx,text/html,image/*" disabled={busy || options.length >= MAX_UI_OPTIONS} onChange={event => { void readFile(event.target.files?.[0]); event.target.value = ''; }} className={`${control} py-1.5 file:mr-3 file:rounded file:border-0 file:bg-accent-soft file:px-2 file:py-1 file:text-xs file:text-accent`} /></div>
+        <div><label htmlFor={`${id}-format`} className="mb-1 block text-xs font-medium text-fg">Lo que pegas</label><select id={`${id}-format`} value={pastedFormat} onChange={event => setPastedFormat(event.target.value as 'HTML' | 'REACT')} className={`${control} max-w-xs`}><option value="HTML">HTML</option><option value="REACT">Código React (JSX)</option></select></div>
+        <div><label htmlFor={`${id}-paste`} className="mb-1 block text-xs font-medium text-fg">O pegar el código</label><textarea id={`${id}-paste`} rows={4} value={pasted} onChange={event => { setPasted(event.target.value); setImportError(null); }} spellCheck={false} className={`${control} py-2 font-mono text-[11px]`} /></div>
         <div><label htmlFor={`${id}-name`} className="mb-1 block text-xs font-medium text-fg">Nombre</label><input id={`${id}-name`} type="text" maxLength={80} value={name} onChange={event => setName(event.target.value)} className={`${control} max-w-xs`} /></div>
         {importError && <p role="alert" className="text-xs text-danger">{importError}</p>}
-        <button type="button" disabled={busy || !pasted.trim() || options.length >= MAX_UI_OPTIONS} onClick={() => { if (pasted.length > MAX_PROTOTYPE_CHARS) { setImportError(`El HTML supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres.`); return; } onImport(name.trim() || 'Prototipo importado', pasted); setPasted(''); }} className={`min-h-9 text-sm ${secondary}`}>Importar el HTML pegado</button>
+        <button type="button" disabled={busy || !pasted.trim() || options.length >= MAX_UI_OPTIONS} onClick={() => { if (pasted.length > MAX_PROTOTYPE_CHARS) { setImportError(`El HTML supera los ${MAX_PROTOTYPE_CHARS.toLocaleString('es')} caracteres.`); return; } const label = name.trim() || 'Prototipo importado'; if (pastedFormat === 'HTML') onImport(label, pasted); else onImportDesign(label, 'REACT', pasted); setPasted(''); }} className={`min-h-9 text-sm ${secondary}`}>{pastedFormat === 'HTML' ? 'Importar el HTML pegado' : 'Importar y convertir el código pegado'}</button>
       </div>
     </details>
   </section>;

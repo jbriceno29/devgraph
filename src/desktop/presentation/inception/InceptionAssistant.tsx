@@ -66,13 +66,13 @@ export function InceptionAssistant({projectId,nodes,onNavigate,onApplied}:Props)
   <ReferencesSummary references={view.references}/>
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel={designChecked?'Enviar respuestas y diseñar':'Enviar respuestas'} design={{checked:designChecked,onChange:setWantDesign}} onSubmit={answers=>void act(ipc=>designChecked||view.ui.wanted?ipc.answer(projectId,answers,undefined,{exploreUi:designChecked}):ipc.answer(projectId,answers))}>{restartButton}</QuestionsStep>
  </Screen>;
- else if(view.stage==='EXPLORE_UI')screen=<VisualExplorationStep client={client} projectId={projectId} view={view} heading={heading} busy={busy} eyebrow={eyebrowFor(true,'design')} onChoose={optionId=>void act(ipc=>ipc.chooseUiOption(projectId,optionId))} onRevise={(optionId,notes)=>void act(ipc=>ipc.reviseUiOption(projectId,optionId,notes))} onImport={(name,html)=>void act(ipc=>ipc.importPrototype(projectId,{name,html}))}/>;
+ else if(view.stage==='EXPLORE_UI')screen=<VisualExplorationStep client={client} projectId={projectId} view={view} heading={heading} busy={busy} eyebrow={eyebrowFor(true,'design')} onChoose={optionId=>void act(ipc=>ipc.chooseUiOption(projectId,optionId))} onRevise={(optionId,notes)=>void act(ipc=>ipc.reviseUiOption(projectId,optionId,notes))} onImport={(name,html)=>void act(ipc=>ipc.importPrototype(projectId,{name,html}))} onImportDesign={(name,kind,content)=>void act(ipc=>ipc.importDesign(projectId,{name,kind,content}))}/>;
  else if(view.stage==='PROPOSAL'&&mode==='revise')screen=<ReviseStep view={view} heading={heading} busy={busy} onSubmit={notes=>void act(ipc=>ipc.answer(projectId,view.answers,notes))} onChangeAnswers={()=>setMode('answers')} onCancel={()=>setMode('view')}/>;
  else if(view.stage==='PROPOSAL'&&mode==='answers')screen=<Screen heading={heading} eyebrow={eyebrowFor(design,'proposal')} title="Cambiar tus respuestas" intro="Cambia las respuestas que quieras. El asistente preparará una propuesta nueva y descartará la actual; los cambios que ya pediste se mantienen.">
   <QuestionsStep questions={view.questions} answers={view.answers} busy={busy} submitLabel="Generar otra propuesta" onSubmit={answers=>void act(ipc=>ipc.answer(projectId,answers))}><button type="button" onClick={()=>setMode('view')} className={`min-h-9 text-sm ${secondary}`}>Volver a la propuesta</button></QuestionsStep>
  </Screen>;
  else if(view.stage==='PROPOSAL'&&mode==='confirm'&&view.proposal)screen=<Confirm view={view} heading={heading} busy={busy} onCancel={()=>setMode('view')} onApprove={()=>void act(async ipc=>{const next=await ipc.approve(projectId);onApplied?.();return next;})}/>;
- else if(view.stage==='PROPOSAL')screen=<ProposalStep view={view} heading={heading} busy={busy} repository={repository} restartButton={restartButton} onApprove={()=>{setActionError(null);setMode('confirm');}} onRevise={()=>setMode('revise')}/>;
+ else if(view.stage==='PROPOSAL')screen=<ProposalStep view={view} heading={heading} busy={busy} repository={repository} restartButton={restartButton} onApprove={()=>{setActionError(null);setMode('confirm');}} onRevise={()=>setMode('revise')} onReopenDesign={()=>void act(ipc=>ipc.reopenDesign(projectId))}/>;
  else screen=<Done view={view} nodes={nodes} heading={heading} onNavigate={onNavigate}/>;
 
  return <Wrapper>
@@ -144,10 +144,10 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return ()=>clearInterval(timer);},[]);
  const elapsed=Math.max(0,now-since),slow=elapsed>=SLOW_AFTER_MS,seconds=Math.floor(elapsed/1000);
  const analysing=!proposing&&view.references.some(item=>item.status!=='TRANSLATED');
- const title=adjusting?'Ajustando el prototipo, puede tardar un par de minutos':designing?'Diseñando direcciones visuales, puede tardar unos minutos':proposing?'Preparando la propuesta, puede tardar un minuto':analysing?'Analizando tus referencias…':'Pensando el objetivo…';
+ const title=adjusting?'Trabajando en tu diseño, puede tardar un par de minutos':designing?'Diseñando direcciones visuales, puede tardar unos minutos':proposing?'Preparando la propuesta, puede tardar un minuto':analysing?'Analizando tus referencias…':'Pensando el objetivo…';
  return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,adjusting||designing?'design':proposing?'proposal':'goals')} title={title}>
   <div role="status" aria-live="polite" className="space-y-2 text-sm text-fg-muted">
-   <p>{adjusting?'El asistente está aplicando tus cambios a ese prototipo; las demás direcciones se quedan como están.':designing?'El asistente está diseñando 2 o 3 direcciones distintas, cada una con un prototipo que podrás probar.':proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':analysing?'Un modelo está describiendo en texto tus archivos; después el asistente leerá esa descripción junto con tu idea y preparará unas pocas preguntas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
+   <p>{adjusting?'El asistente está trabajando en lo que pediste (un ajuste, o describir o convertir lo que importaste); las demás direcciones se quedan como están.':designing?'El asistente está diseñando 2 o 3 direcciones distintas, cada una con un prototipo que podrás probar.':proposing?'El asistente está escribiendo la visión, el stack, las reglas y el plan inicial a partir de tus respuestas.':analysing?'Un modelo está describiendo en texto tus archivos; después el asistente leerá esa descripción junto con tu idea y preparará unas pocas preguntas.':'El asistente está leyendo tu idea y preparando unas pocas preguntas.'}</p>
    {slow&&<p className="font-medium text-fg">Sigue trabajando. Algunas respuestas tardan más; no hace falta que esperes aquí.</p>}
   </div>
   <div aria-hidden="true" className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full w-full animate-pulse rounded-full bg-accent/60 motion-reduce:animate-none"/></div>
@@ -155,7 +155,7 @@ function Working({view,heading}:{view:InceptionViewDto;heading:RefObject<HTMLHea
  </Screen>;
 }
 
-function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRevise}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void}) {
+function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRevise,onReopenDesign}:{view:InceptionViewDto;heading:RefObject<HTMLHeadingElement|null>;busy:boolean;repository:ReactNode;restartButton:ReactNode;onApprove():void;onRevise():void;onReopenDesign():void}) {
  const id=useId(),blockers=approvalBlockers(view),canApprove=view.nextAction==='APPROVE'&&!blockers.length;
  return <Screen heading={heading} eyebrow={eyebrowFor(view.ui.wanted,'proposal')} title={view.proposal?.title||'Revisa la propuesta'} intro="Léela con calma: al aprobarla se crean los documentos, la decisión de stack, las reglas y el plan.">
   <ReferencesSummary references={view.references}/>
@@ -166,6 +166,7 @@ function ProposalStep({view,heading,busy,repository,restartButton,onApprove,onRe
   <div className="mt-4 flex flex-wrap gap-3">
    <button type="button" disabled={busy||!canApprove} aria-describedby={canApprove?undefined:`${id}-blockers`} onClick={onApprove} className={`min-h-9 text-sm ${primary}`}>Aprobar y crear el plan</button>
    <button type="button" disabled={busy} onClick={onRevise} className={`min-h-9 text-sm ${secondary}`}>Pedir otra propuesta</button>
+   <button type="button" disabled={busy} onClick={onReopenDesign} className={`min-h-9 text-sm ${secondary}`}>{view.ui.options.length?'Volver a las direcciones de diseño':'Ver propuestas de diseño'}</button>
    {restartButton}
   </div>
  </Screen>;

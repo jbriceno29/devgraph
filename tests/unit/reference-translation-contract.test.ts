@@ -15,6 +15,12 @@ describe('normalizeTranslation: the rules of each kind are enforced in code', ()
   it('CONCEPTUAL keeps only the guiding idea', () => {
     expect(normalizeTranslation('CONCEPTUAL', everything)).toMatchObject({ ideas: ['Todo en una pantalla'], palette: [], screens: [], actions: [], flows: [], states: [], layout: '' });
   });
+  it('DESIGN keeps looks and behaviour together (a finished design imported as a direction), and still drops ideas', () => {
+    expect(normalizeTranslation('DESIGN', everything)).toMatchObject({ summary: 'Panel con barra lateral.', palette: ['azul #2255ff'], typography: 'Sans-serif', layout: 'Dos columnas', screens: ['Inicio'], actions: ['Crear tarea'], flows: ['Crear y listar'], states: ['vacío'], ideas: [] });
+    const prompt = buildReferencePrompt([{ id: 'design-1', kind: 'DESIGN', note: '', file: 'design-1.png' }]);
+    expect(prompt).toMatch(/DESIGN \(a finished design the user wants to evaluate as a design direction\)/);
+    expect(parseReferenceTranslations({ references: [{ ...everything, id: 'design-1' }] }, [{ id: 'design-1', kind: 'DESIGN' }])[0]).toMatchObject({ error: null, translation: { screens: ['Inicio'], palette: ['azul #2255ff'] } });
+  });
   it('caps lengths and ignores values of the wrong type', () => {
     const result = normalizeTranslation('FUNCTIONAL', { summary: 'x'.repeat(2000), screens: Array.from({ length: 20 }, (_, index) => `p${index}`), actions: [1, null, ' ok '], flows: 'no es lista' });
     expect(result.summary).toHaveLength(700);

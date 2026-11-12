@@ -83,7 +83,7 @@ export class GraphTopologyService {
     if (!valid)
       throw new DomainError(
         'INCOMPATIBLE_PARENT',
-        `${ENTITY_LABEL[entity.entityType] ?? entity.entityType} «${entity.title}» no puede ir dentro de ${parent ? `${ENTITY_LABEL[parent.entityType] ?? parent.entityType} «${parent.title}»` : 'la raíz sin padre'}.`,
+        `${capitalize(label(entity.entityType))} «${entity.title}» no puede ir ${parent ? `${withDe('dentro de', label(parent.entityType))} «${parent.title}»` : 'en la raíz sin padre'}.`,
       );
     let cursor = parent;
     const visited = new Set<string>([entity.id]);
@@ -153,10 +153,15 @@ const EDGE_LABEL: Record<GraphEdgeType, string> = {
   GENERATED_BY: 'generado por',
   SCOPED_IN: 'en el hito',
 };
-const plain = (type: KnowledgeEntityType) => (ENTITY_LABEL[type] ?? type).replace(/^(el|la) /, '');
+const label = (type: KnowledgeEntityType) => ENTITY_LABEL[type] ?? type;
+const plain = (type: KnowledgeEntityType) => label(type).replace(/^(el|la) /, '');
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** Spanish contractions: «de el» → «del», «a el» → «al». */
+const withDe = (preposition: string, noun: string) => `${preposition} ${noun}`.replace(/\bde el /, 'del ');
+const withA = (noun: string) => `a ${noun}`.replace(/^a el /, 'al ');
 function incompatibleEdgeMessage(type: GraphEdgeType, source: KnowledgeEntity, target: KnowledgeEntity): string {
   const allowed = EDGE_COMPATIBILITY[type].map(([from, to]) => `${plain(from)} → ${plain(to)}`).join(', ');
-  return `La relación «${EDGE_LABEL[type]}» no puede ir de ${ENTITY_LABEL[source.entityType] ?? source.entityType} «${source.title}» a ${ENTITY_LABEL[target.entityType] ?? target.entityType} «${target.title}». Se permite: ${allowed}.`;
+  return `La relación «${EDGE_LABEL[type]}» no puede ir ${withDe('de', label(source.entityType))} «${source.title}» ${withA(label(target.entityType))} «${target.title}». Se permite: ${allowed}.`;
 }
 
 /** The edge rules as the planner prompt states them: one clause per edge type the planner may create. */

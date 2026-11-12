@@ -35,7 +35,7 @@ describe('GraphTopologyService', () => {
       DomainError,
     );
     expect(() => service.validateEdge(base('m', 'MODULE'), base('r', 'REQUIREMENT'), 'DEPENDS_ON', [])).toThrowError(
-      /La relación «depende de» no puede ir de el módulo «m» a el requisito «r»\. Se permite: tarea → tarea, feature → feature, módulo → módulo\./,
+      /La relación «depende de» no puede ir del módulo «m» al requisito «r»\. Se permite: tarea → tarea, feature → feature, módulo → módulo\./,
     );
     expect(() => service.validateEdge(base('w', 'WORK_ITEM'), base('w', 'WORK_ITEM'), 'DEPENDS_ON', [])).toThrowError(
       /itself/,
@@ -63,7 +63,7 @@ describe('GraphTopologyService', () => {
       b = { ...base('b', 'MODULE'), parentId: 'a' };
     expect(() => service.validateParent(a, b, [a, b])).toThrowError(/cycle/i);
     expect(() => service.validateParent(base('f', 'FEATURE'), base('r', 'PROJECT_ROOT'), [])).toThrowError(
-      /la feature «f» no puede ir dentro de el proyecto «r»/i,
+      /La feature «f» no puede ir dentro del proyecto «r»/,
     );
   });
   it('describes planner edge rules directly from EDGE_COMPATIBILITY', () => {

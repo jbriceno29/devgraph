@@ -163,11 +163,13 @@ export class ChangeSetPlanningService {
     this.changes.save(result);
     return result;
   }
+  /** Open proposals are revalidated on read: a rule fixed after one was stored no longer blocks it (and a new one shows up). */
   list(projectId: string): ChangeSet[] {
-    return this.changes.list(projectId);
+    return this.changes.list(projectId).map(changeSet => this.refresh(changeSet));
   }
   find(id: string): ChangeSet | null {
-    return this.changes.findById(id);
+    const found = this.changes.findById(id);
+    return found ? this.refresh(found) : null;
   }
   reject(id: string): ChangeSet {
     const current = this.requireChangeSet(id);
@@ -177,21 +179,14 @@ export class ChangeSetPlanningService {
     return result;
   }
   async apply(id: string): Promise<{ changeSet: ChangeSet; revision: number; resolvedIds: Record<string, string> }> {
-    const current = this.requireChangeSet(id);
-    if (current.status !== 'VALIDATED') throw new Error('Valida la propuesta antes de aplicarla.');
-    const project = this.projects.findById(current.projectId);
+    const stored = this.requireChangeSet(id);
+    const project = this.projects.findById(stored.projectId);
     if (!project) throw new Error('Proyecto no encontrado.');
-    const validation = this.validator.validate(
-      current,
-      project.currentRevision,
-      this.graph.listEntities(current.projectId),
-      this.graph.listRelationships(current.projectId),
-    );
-    if (!validation.valid) {
-      const updated = { ...current, status: validation.status, validationIssues: validation.issues };
-      this.changes.save(updated);
+    // Checked against the graph as it is now: a stale base revision or a new issue stops it here.
+    const current = this.refresh(stored, project.currentRevision);
+    if (current.status === 'CONFLICTED' || (stored.status === 'VALIDATED' && current.status !== 'VALIDATED'))
       throw new Error('La propuesta entró en conflicto y debe revisarse.');
-    }
+    if (current.status !== 'VALIDATED') throw new Error('Valida la propuesta antes de aplicarla.');
     let applied: { revision: number; resolvedIds: Record<string, string> };
     try {
       applied = await this.applier.apply(current, this.repositoryPath(current.projectId));
@@ -221,6 +216,32 @@ export class ChangeSetPlanningService {
     };
     this.changes.save(result);
     return { changeSet: result, revision: applied.revision, resolvedIds: applied.resolvedIds };
+  }
+  /**
+   * Validates an open proposal again against the current graph and rules, keeping the UI spec problems found when it was
+   * planned; saves it only when the result changed. On read (`currentRevision` omitted) only the rules are checked: a
+   * graph that moved on is a conflict when the proposal is applied, as before, and a conflicted one waits for an edit.
+   */
+  private refresh(changeSet: ChangeSet, currentRevision?: number): ChangeSet {
+    const open: ChangeSet['status'][] =
+      currentRevision === undefined
+        ? ['PENDING_APPROVAL', 'VALIDATED']
+        : ['PENDING_APPROVAL', 'VALIDATED', 'CONFLICTED'];
+    if (!open.includes(changeSet.status)) return changeSet;
+    const kept = changeSet.validationIssues.filter(issue => issue.code === 'UI_SPEC_MISSING');
+    const validation = this.validator.validate(
+      changeSet,
+      currentRevision ?? changeSet.baseGraphRevision,
+      this.graph.listEntities(changeSet.projectId),
+      this.graph.listRelationships(changeSet.projectId),
+    );
+    const issues = [...validation.issues, ...kept];
+    const status = validation.status === 'VALIDATED' && kept.length ? ('PENDING_APPROVAL' as const) : validation.status;
+    if (status === changeSet.status && JSON.stringify(issues) === JSON.stringify(changeSet.validationIssues))
+      return changeSet;
+    const result = { ...changeSet, status, validationIssues: issues };
+    this.changes.save(result);
+    return result;
   }
   private requireChangeSet(id: string): ChangeSet {
     const found = this.changes.findById(id);

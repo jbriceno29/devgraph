@@ -40,6 +40,7 @@ describe('Context Engine pipeline', () => {
         included.some(source => source.authorityTier === 1 && source.extractedContent.includes('Never modify secrets')),
       ).toBe(true);
       expect(included.some(source => source.sourceId === 'adr-new' && source.authorityTier === 2)).toBe(true);
+      expect(included.some(source => source.sourceId === 'adr-ui' && source.authorityTier === 2)).toBe(true);
       expect(snapshot.excludedSources).toContainEqual(
         expect.objectContaining({ sourceId: 'adr-old', exclusionReason: 'SUPERSEDED_DECISION' }),
       );
@@ -116,6 +117,7 @@ async function fixture() {
   const specContent = '# Feature specification\n\ndisk specification wins',
     adrOld = '# ADR 1\n\nOld decision',
     adrNew = '# ADR 2\n\nCurrent decision',
+    adrUi = '# ADR 3\n\nButtons use the brand palette',
     prdContent = '# PRD\n\nGeneral product scope',
     code = '# current code\nexport const current = true;';
   await Promise.all(
@@ -123,6 +125,7 @@ async function fixture() {
       ['docs/spec.md', specContent],
       ['docs/ADR-001.md', adrOld],
       ['docs/ADR-002.md', adrNew],
+      ['docs/ADR-003.md', adrUi],
       ['docs/PRD.md', prdContent],
       ['src/feature.ts', code],
     ].map(([path, content]) => writeFile(join(repoPath, path!), content!)),
@@ -262,6 +265,11 @@ async function fixture() {
   db.prepare(
     `INSERT INTO decision_records(entity_id,adr_number,context_md,alternatives_md,decision_md,consequences_md,relative_path,content_hash,sync_status,decided_at) VALUES(?,2,'','','','','docs/ADR-002.md',?,'SYNCED',?)`,
   ).run('adr-new', hash.hashContent(adrNew), now);
+  // Affects the spec the feature is documented by, not the feature itself: it still reaches the feature's tasks.
+  insert('adr-ui', 'DECISION_RECORD', 'ADR-003', 'Brand palette for buttons', null, 'ACCEPTED');
+  db.prepare(
+    `INSERT INTO decision_records(entity_id,adr_number,context_md,alternatives_md,decision_md,consequences_md,relative_path,content_hash,sync_status,decided_at) VALUES(?,3,'','','','','docs/ADR-003.md',?,'SYNCED',?)`,
+  ).run('adr-ui', hash.hashContent(adrUi), now);
   insert('code-ref', 'CODE_REFERENCE', 'CODE-001', 'Vault recovery implementation', null);
   db.prepare(
     `INSERT INTO code_references(entity_id,repository_id,file_path,symbol_name,symbol_kind,line_start,line_end,commit_sha) VALUES(?,?,?,?,?,?,?,?)`,
@@ -280,6 +288,7 @@ async function fixture() {
   edge('affects-old', 'adr-old', 'feature', 'AFFECTS');
   edge('affects-new', 'adr-new', 'feature', 'AFFECTS');
   edge('supersedes', 'adr-new', 'adr-old', 'SUPERSEDES');
+  edge('affects-spec', 'adr-ui', 'spec', 'AFFECTS');
   edge('satisfies', 'feature', 'requirement-main', 'SATISFIES');
   edge('implements', 'task', 'requirement-main', 'IMPLEMENTS');
   edge('documented-by', 'feature', 'spec', 'DOCUMENTED_BY');
@@ -291,6 +300,7 @@ async function fixture() {
     ['prd', prdContent],
     ['adr-old', adrOld],
     ['adr-new', adrNew],
+    ['adr-ui', adrUi],
   ] as const)
     db.prepare('UPDATE fts_knowledge_index SET body_content=? WHERE entity_id=?').run(body, entityId);
   const repository = new SqliteContextRepository(db),

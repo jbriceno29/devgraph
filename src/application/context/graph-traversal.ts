@@ -53,8 +53,14 @@ export class GraphTraversal {
         const prior = context.candidates.findIndex(item => item.sourceId === entityId);
         if (prior < 0) context.candidates.push(candidate);
       };
+    // Documents the anchors are documented by (e.g. docs/UI_SPEC.md): a decision that AFFECTS one of them applies to them too.
+    const documenting = new Set(
+      relationships
+        .filter(edge => edge.edgeType === 'DOCUMENTED_BY' && anchorIds.has(edge.sourceId))
+        .map(edge => edge.targetId),
+    );
     for (const edge of relationships) {
-      if (edge.edgeType === 'AFFECTS' && anchorIds.has(edge.targetId)) {
+      if (edge.edgeType === 'AFFECTS' && (anchorIds.has(edge.targetId) || documenting.has(edge.targetId))) {
         const adr = context.entities.get(edge.sourceId);
         if (adr?.entity.entityType === 'DECISION_RECORD') {
           if (adr.entity.status === 'ACCEPTED')

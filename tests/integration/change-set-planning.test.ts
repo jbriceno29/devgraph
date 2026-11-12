@@ -218,6 +218,34 @@ describe('AI planning and transactional ChangeSets', () => {
     }
   });
 
+  it('revalidates stored open proposals: issues from rules fixed since no longer block them, UI spec problems stay', async () => {
+    const root = await setupRepository(),
+      f = setup();
+    try {
+      f.repositories.setPrimary(f.projectId, root);
+      const service = f.service(fakePlanner(), root),
+        proposal = await service.propose(f.projectId, 'Plan sign in');
+      expect(proposal.status).toBe('VALIDATED');
+      const stale = {
+        operationIndex: 0,
+        severity: 'ERROR' as const,
+        code: 'INVALID_RELATIONSHIP',
+        message: 'AFFECTS is not allowed from DECISION_RECORD to ARTIFACT.',
+      };
+      f.changes.save({ ...proposal, status: 'PENDING_APPROVAL', validationIssues: [stale] });
+      const listed = service.list(f.projectId).find(item => item.id === proposal.id)!;
+      expect(listed).toMatchObject({ status: 'VALIDATED', validationIssues: [] });
+      expect(f.changes.findById(proposal.id)?.status).toBe('VALIDATED');
+      const uiSpec = { operationIndex: -1, severity: 'ERROR' as const, code: 'UI_SPEC_MISSING', message: 'Falta.' };
+      f.changes.save({ ...proposal, status: 'PENDING_APPROVAL', validationIssues: [stale, uiSpec] });
+      expect(service.find(proposal.id)).toMatchObject({ status: 'PENDING_APPROVAL', validationIssues: [uiSpec] });
+      f.changes.save({ ...proposal, status: 'PENDING_APPROVAL', validationIssues: [stale] });
+      expect((await service.apply(proposal.id)).changeSet.status).toBe('APPLIED');
+    } finally {
+      closeDatabase(f.db);
+    }
+  });
+
   it('passes the sealed ContextSnapshot package through the application port to the planner', async () => {
     const f = setup();
     let receivedContext: string | undefined;

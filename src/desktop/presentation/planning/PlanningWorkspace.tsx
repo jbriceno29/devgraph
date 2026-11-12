@@ -161,7 +161,8 @@ export function PlanningWorkspace({ changeSetId }: { changeSetId?: string | null
         className="flex w-[clamp(17rem,36vw,24rem)] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface-raised"
         aria-label="Planificador de cambios"
       >
-        <div className="space-y-3 border-b border-border px-4 py-3">
+        {/* Never shrinks under its content (that painted it over the list); a tall context scrolls on its own. */}
+        <div className="max-h-[45%] shrink-0 space-y-3 overflow-y-auto border-b border-border px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-fg">Planificar con {engine?.name ?? 'el motor de IA'}</h2>
             <p className="mt-1 text-xs leading-5 text-fg-muted">

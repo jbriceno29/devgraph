@@ -6,6 +6,7 @@ Qué leer según lo que busques. Los documentos marcados como históricos se con
 
 | Documento | Para qué |
 | :--- | :--- |
+| [HOJA_DE_RUTA.md](HOJA_DE_RUTA.md) | **Empieza aquí.** Orden único de los planes vigentes (UX, arquitectura, capacidades) y su estado. |
 | [PLAN_DE_TRABAJO.md](PLAN_DE_TRABAJO.md) | Plan del núcleo: visión, hipótesis H1–H4, etapas y decisiones. Su sección 0 es el estado de un vistazo. |
 | [PLAN_STACKS_REGLAS_Y_SKILLS.md](PLAN_STACKS_REGLAS_Y_SKILLS.md) | Auditoría del 2026-11-11 y plan en curso: perfiles de stack, dependencias gestionadas por la app, prueba a escala, skills incluidas. |
 | [PLAN_CAPACIDADES_DEL_AGENTE.md](PLAN_CAPACIDADES_DEL_AGENTE.md) | Plan del 2026-11-12: lo que el agente necesita para desarrollar apps reales (documentación, secretos, servicios Docker, Supabase/Stripe, ver la app, verificación por stack, perfil Next.js). |

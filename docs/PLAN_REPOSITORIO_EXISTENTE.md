@@ -217,6 +217,21 @@ después: R5 detectar el trabajo hecho fuera de la app y «Poner al día el proy
 - Prueba del prompt con un repositorio con mapa.
 - Corrida real: el plan no contiene nada que el mapa marque como hecho.
 
+**Estado (2026-11-12): hecho.**
+
+- **Preguntas:** con repositorio, el guion (`prompts/questions-brownfield.ts`) ya no pregunta quién lo usa, qué problema resuelve ni la plataforma. Pregunta por el siguiente hito: qué lograr ahora, qué no se debe tocar, cuándo cuenta como terminado y, si el brief no lo dice, qué queda fuera.
+- **Visión:** se infiere del README como una inferencia más, de área nueva `VISION` («Visión del producto»), con su evidencia. El usuario la corrige en «Lo que se detectó en tu repositorio», como el resto.
+  - El mapa no llega a tiempo para las preguntas, porque corre en paralelo. Por eso la visión sale del README y no del mapa.
+- **Propuesta:**
+  - Una regla nueva (f): la visión describe el producto existente según esa inferencia, más el hito. Los objetivos y la definición de terminado son del hito, y lo que no se debe tocar va a `outOfScope` y a una regla.
+  - Con el mapa, la app comprueba la propuesta (`checkAgainstMap`): una tarea bajo una capacidad a medias que empiece por «Crear» pasa a «Completar», y una feature nueva que repite una capacidad hecha es un problema que impide aprobar hasta pedir otra propuesta.
+- **Corrida real con `haiku`** sobre una copia de la tienda del benchmark de R3 (cupones de porcentaje a medias), brief «terminar los cupones de porcentaje y poder cancelar pedidos»:
+  - Las preguntas fueron qué no tocar, cuándo está terminado y qué queda fuera, cada una con opciones concretas del código. La visión inferida citaba `README.md` y `package.json`.
+  - El mapa marcó «Cupón de porcentaje» y «Cancelar pedido» como parciales.
+  - La propuesta solo traía cuatro tareas «Completar…» bajo esas dos capacidades: nada de lo que el mapa marca como hecho.
+  - La primera tarea recibió como punteros `src/cart/discounts.js`, `src/shared/money.js`, `src/cart/cart.js` y su prueba.
+- **Pendiente:** R5 («Poner al día el proyecto»), que necesita F1.
+
 ### R5. El grafo al día con el repositorio (M, 1–2 días)
 
 - **Detectar el trabajo hecho fuera de la app.** Al abrir el proyecto, y cada cierto tiempo con la app

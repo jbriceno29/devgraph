@@ -47,8 +47,10 @@ export type RepositoryScanSummaryDto = Omit<RepositoryScanDto, 'files'> & {
 };
 
 /** What the assistant inferred from the scan. Every inference names its evidence: paths that exist in the scan (others are dropped in code). */
-export type RepositoryInferenceArea = 'STACK' | 'DESIGN_SYSTEM' | 'STRUCTURE' | 'TESTING';
+/** VISION (plan REP, R4): what the product is and who it is for, inferred from the README, so the questions ask about the next milestone instead. */
+export type RepositoryInferenceArea = 'VISION' | 'STACK' | 'DESIGN_SYSTEM' | 'STRUCTURE' | 'TESTING';
 export const REPOSITORY_INFERENCE_AREAS: readonly RepositoryInferenceArea[] = [
+  'VISION',
   'STACK',
   'DESIGN_SYSTEM',
   'STRUCTURE',

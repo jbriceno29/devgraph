@@ -125,3 +125,41 @@ export function withoutMapCollisions(operations: ChangeOperation[]): ChangeOpera
       !(op.type === 'UPDATE_ENTITY_STATUS' && op.entityId.startsWith(MAP_PREFIX)),
   );
 }
+
+const comparable = (title: string) =>
+  title
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * Plan REP, R4: the proposal checked against the map. A task that finishes a PARTIAL capability says «Completar», never
+ * «Crear»; a new feature that repeats a capability the map marks as done is a problem the user sees before approving.
+ */
+export function checkAgainstMap(
+  operations: ChangeOperation[],
+  survey: RepositorySurveyDto | null | undefined,
+): { operations: ChangeOperation[]; problems: string[] } {
+  if (!survey?.modules.length) return { operations, problems: [] };
+  const partial = new Set<string>(),
+    done = new Map<string, string>();
+  survey.modules.forEach((module, m) =>
+    module.capabilities.forEach((capability, c) => {
+      if (capability.status === 'PARTIAL') partial.add(mapFeatureId(m, c));
+      else done.set(comparable(capability.title), capability.title);
+    }),
+  );
+  const checked = operations.map(op =>
+    op.type === 'CREATE_WORK_ITEM' && partial.has(op.parentId) && /^crea(r)?\b/i.test(op.title.trim())
+      ? { ...op, title: op.title.trim().replace(/^crea(r)?\b/i, 'Completar') }
+      : op,
+  );
+  const problems = checked.flatMap(op =>
+    op.type === 'CREATE_FEATURE' && !op.tempId.startsWith(MAP_PREFIX) && done.has(comparable(op.title))
+      ? [`«${op.title}» ya existe según el mapa del código («${done.get(comparable(op.title))}»).`]
+      : [],
+  );
+  return { operations: checked, problems };
+}

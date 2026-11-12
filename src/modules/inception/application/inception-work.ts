@@ -17,7 +17,7 @@ import type {
 } from './ports/inception-port.js';
 import { withAgentAccess } from './repository-access.js';
 import { awaitSurvey } from './inception-survey.js';
-import { surveyOperations, withoutMapCollisions } from './survey-plan.js';
+import { checkAgainstMap, surveyOperations, withoutMapCollisions } from './survey-plan.js';
 
 export function launch(
   k: InceptionKernel,
@@ -194,11 +194,13 @@ export async function proposalWork(
     signal,
   });
   const map = survey?.survey ? surveyOperations(survey.survey, rootId) : [];
-  const plan = buildFoundationPlan(withoutMapCollisions(result.draft.operations), rootId, {
+  const built = buildFoundationPlan(withoutMapCollisions(result.draft.operations), rootId, {
     uiSpec: !!approvedDirection(k, record),
     brownfield: !!record.repository,
     mapped: map.length > 0,
   });
+  const checked = checkAgainstMap(built.operations, survey?.survey);
+  const plan = { operations: checked.operations, problems: [...built.problems, ...checked.problems] };
   const changeSet = k.deps.planning.submit(
     projectId,
     {

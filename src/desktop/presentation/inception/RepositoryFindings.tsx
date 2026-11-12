@@ -13,6 +13,7 @@ import { AgentAccessSection } from './AgentAccessSection.js';
 import { CodeMapStatus } from './CodeMapStatus.js';
 
 export const AREA_LABEL: Record<RepositoryInferenceArea, string> = {
+  VISION: 'Visión del producto',
   STACK: 'Stack',
   DESIGN_SYSTEM: 'Sistema de diseño',
   STRUCTURE: 'Estructura',

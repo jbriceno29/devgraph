@@ -181,6 +181,17 @@ Sin cambiar comportamiento ni el protocolo IPC (canales y argumentos iguales): l
 
 **Estado de A1 + A2 (2026-11-12): hecho.** 111 archivos movidos con `git mv` a 10 módulos, `src/platform/` y `src/bootstrap/`; cada módulo con `index.ts` (generado con lo que usan los demás) y `ipc.ts`. `workspace-core.ts` pasó de 1 258 líneas a 50: `container.ts` + `compose/*.ts` crean los adaptadores y `ipc-router.ts` une los canales (uno repetido falla al arrancar). El SQL que había en la composición pasó a `environment/infrastructure/sqlite-project-environment.ts` y `execution/infrastructure/sqlite-review-evidence.ts`. Benchmarks, `tsconfig.core.json`, la copia de migraciones y los alias de pruebas están al día. Quedaron para A1b `shared/kernel` y la serialización declarada por handler.
 
+**Estado de A3 (2026-11-12): en curso.**
+
+- **A3a, el orquestador (hecho):** `agent-orchestrator.ts` pasó de 1536 a unas 170 líneas.
+  - Queda como fachada con la misma API para la IPC, el piloto y la composición.
+  - Cada acción vive en su archivo y recibe el `ExecutionKernel`, que reúne los puertos y el estado de las ejecuciones en curso.
+  - Las funciones de más de 60 líneas se partieron en pasos con nombre: `start` en `planStart`, `prepareRun`, `launchRun` y `failStart`; `consume` en `followStream`, `validateRun` y `failConsumer`; `accept` en `acceptable`, `recordConflict` y `dropWorktree`.
+  - El prompt de la tarea pasó a `application/prompts/task-prompt.ts`.
+  - El orquestador ya no importa `node:crypto` (usa `globalThis.crypto`) y salió de la línea base.
+  - Comportamiento idéntico: pasan las 587 pruebas sin tocarlas. Las corridas reales con `haiku` de 3d (dos tareas, documentos, integración, 16 pruebas en `main`) y de C6 (instalación de Next.js, `next build`, integración) dan el mismo resultado que antes.
+- **Pendiente:** A3b, el repositorio de ejecuciones; A3c, el piloto; A3d, el inicio; A3e, el resto.
+
 **Estado de A1b (2026-11-12): hecho.** `src/shared/kernel/` (`graph.ts`, `artifacts.ts`) tiene el vocabulario común; el dominio ya no importa `shared/contracts` y los contratos lo reexportan. El informe de métricas pasó a `shared/contracts/metrics-view.ts` (los contratos ya no importan módulos). Cada `ipc.ts` marca con `serial(...)` los canales que mutan estado; el router expone `isSerialized` y el despachador ya no tiene lista propia. Pruebas nuevas: los canales serializados son exactamente los de antes y todo canal que llama el cliente de Tauri tiene handler. En la línea base de capas solo quedan los tres usos de `node:crypto`/`node:path` en `application/` (Clock/IdGenerator en A3).
 
 La reorganización de pantallas de la auditoría UX (sus fases F1–F3) va **después de A4**: con ViewModels, mover «Piloto» dentro de la feature o unir Ejecutar y Revisión es mover Views, no reescribir lógica.
